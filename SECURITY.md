@@ -16,25 +16,9 @@ dedicated to advancing Folding@home scientific research.
 We welcome responsible disclosure of security issues and will work with
 reporters to investigate, validate, and resolve legitimate vulnerabilities.
 
----
-
-# Security Philosophy
-
-Security is a design principle rather than an optional feature.
-
-FoldingOS follows several core principles:
-
-- secure by default
-- least privilege
-- minimal attack surface
-- explicit configuration
-- authenticated management
-- encrypted communication
-- conservative engineering
-
-Complexity is not considered a security feature.
-
-Simple, understandable systems are generally easier to verify and maintain.
+This file defines project security policy, vulnerability reporting, and secure
+development expectations. The technical security architecture is defined in the
+[security model](doc/security.md).
 
 ---
 
@@ -65,72 +49,6 @@ developed.
 
 ---
 
-# Security Goals
-
-The long-term security objectives for FoldingOS include:
-
-- minimal installed software
-- minimal running services
-- authenticated remote management
-- encrypted communications
-- reproducible builds
-- signed releases
-- verified updates
-- documented architecture
-- well-defined trust boundaries
-
----
-
-# Default Security Posture
-
-A default FoldingOS installation should:
-
-- expose only required services
-- minimize network attack surface
-- avoid unnecessary dependencies
-- avoid unnecessary privileges
-- avoid insecure default credentials
-- follow documented security practices
-
-Security should not depend upon obscurity.
-
----
-
-# Secrets
-
-Secrets must never be:
-
-- committed to source control
-- hardcoded into software
-- stored in public repositories
-- exposed through logs
-- exposed through diagnostics
-
-Examples include:
-
-- passwords
-- API keys
-- authentication tokens
-- private keys
-- certificates
-- encryption keys
-
----
-
-# Dependency Management
-
-Every dependency introduces:
-
-- maintenance burden
-- supply chain risk
-- attack surface
-
-Dependencies should be reviewed carefully before inclusion.
-
-Unnecessary dependencies should be avoided.
-
----
-
 # Secure Development
 
 Contributors are encouraged to:
@@ -143,51 +61,6 @@ Contributors are encouraged to:
 - document security-sensitive decisions
 
 Readable code is considered a security advantage.
-
----
-
-# Authentication
-
-Future management interfaces should support:
-
-- authenticated access
-- encrypted communication
-- configurable authentication mechanisms
-
-Unauthenticated management interfaces should be avoided.
-
----
-
-# Cryptography
-
-Where cryptography is required:
-
-- use well-established algorithms
-- use well-maintained libraries
-- avoid custom cryptographic implementations
-
-Cryptographic correctness should be preferred over novelty.
-
----
-
-# Future Security Objectives
-
-Future releases may include:
-
-- Secure Boot
-
-- TPM integration
-
-- measured boot
-
-- signed update verification
-
-- image integrity validation
-
-- hardware-backed identity
-
-Such capabilities should only be introduced when they provide measurable
-security and operational value.
 
 ---
 

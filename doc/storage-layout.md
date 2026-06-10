@@ -15,6 +15,11 @@ The objective is to provide a storage model that is:
 
 This document describes the logical architecture rather than a specific partition implementation.
 
+The v0.1.0 partition implementation, image size, and automatic data-partition
+expansion behavior are defined by
+[ADR-0004](adr/0004-partition-and-persistence-layout.md) and
+[ADR-0008](adr/0008-raw-image-size-and-data-expansion.md).
+
 ---
 
 # Design Goals

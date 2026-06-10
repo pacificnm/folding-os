@@ -36,15 +36,16 @@ Hardware support should grow deliberately.
 
 ---
 
-# Initial Target Platforms
+# Planned Target Platforms
 
-Primary targets:
+Platform sequence:
 
-- x86_64 UEFI systems
+- first implementation target: x86_64 UEFI systems
 
-- Raspberry Pi 5
+- next planned target: Raspberry Pi 5
 
-These represent the initial engineering focus.
+The roadmap defines when support work begins and when a platform becomes an
+officially supported release target.
 
 ---
 
@@ -78,7 +79,7 @@ Primary goals:
 
 - home Folding nodes
 
-Support initially targets:
+The first planned Raspberry Pi target is:
 
 - Raspberry Pi 5
 
@@ -151,11 +152,11 @@ Resource efficiency remains an important objective.
 
 # CPU Architecture
 
-Initial targets:
+Planned architecture sequence:
 
-- x86_64
+- first implementation architecture: x86_64
 
-- ARM64
+- next planned architecture: ARM64
 
 Future architecture support should require documented engineering
 justification.
@@ -174,21 +175,8 @@ Engineering resources should remain focused on supported platforms.
 
 # Validation
 
-Supported hardware should undergo validation for:
-
-- successful boot
-
-- networking
-
-- storage
-
-- Folding operation
-
-- long-term stability
-
-- recovery behavior
-
-Validation procedures are documented separately.
+Supported hardware must pass the validation requirements defined in the
+[testing strategy](testing-strategy.md).
 
 ---
 

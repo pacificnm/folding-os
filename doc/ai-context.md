@@ -1,261 +1,90 @@
 # FoldingOS AI Context
 
-> This document provides the authoritative context for AI assistants working on
-> the FoldingOS project.
+> This document is a concise navigation and operating guide for AI assistants.
+> It summarizes, but does not override, the project's governing documents,
+> accepted ADRs, architecture, or implementation specifications.
 
-Version: 0.1
+Version: 0.2
+
 Status: Living Document
 
 ---
 
-# Project Overview
+# Project Summary
 
-FoldingOS is an open-source, purpose-built operating system designed exclusively
-for running Folding@home compute nodes.
+FoldingOS is a purpose-built appliance operating system for Folding@home compute
+nodes. It prioritizes reliable scientific contribution, simple operation,
+security, maintainability, and reproducible engineering.
 
-The objective is not to create another Linux distribution.
-
-The objective is to create the best possible platform for contributing
-computational resources to Folding@home.
+It is not a general-purpose Linux distribution.
 
 ---
 
-# Mission
+# Read Before Working
 
-Maximize scientific contribution through:
+Use these sources according to their roles:
 
-- simplicity
-- reliability
-- security
-- maintainability
-- reproducibility
+1. [Project charter](../PROJECT_CHARTER.md) defines mission and scope.
+2. [Engineering principles](../PRINCIPLES.md) guide decisions.
+3. Accepted [ADRs](adr/README.md) govern technical choices.
+4. [Architecture](architecture.md) and subsystem documents describe intended
+   behavior.
+5. Implementation specifications define concrete mechanisms.
+6. [Roadmap](../ROADMAP.md) defines implementation sequence.
+7. [Coding standards](coding-standards.md) and
+   [testing strategy](testing-strategy.md) guide implementation work.
 
-while minimizing:
-
-- complexity
-- administration
-- attack surface
-- resource consumption
-
----
-
-# Core Philosophy
-
-FoldingOS is an appliance.
-
-It should behave more like:
-
-- a router
-- a firewall
-- an embedded controller
-
-than a desktop operating system.
-
-Users should deploy it and let it run.
+When documents disagree, stop and resolve the disagreement. Do not invent
+precedence or silently choose one statement.
 
 ---
 
-# Primary Goals
+# Engineering Rules
 
-- Fast deployment
-- Stable operation
-- Minimal maintenance
-- Secure by default
-- Fleet management
-- Long-term reliability
-
----
-
-# Non Goals
-
-FoldingOS is NOT:
-
-- Desktop Linux
-- Ubuntu replacement
-- Debian replacement
-- Development workstation
-- Gaming platform
-- NAS
-- Media server
-- Docker platform
-- Kubernetes platform
-- Browser platform
-
-Do not recommend features that move the project toward these goals.
+- Keep FoldingOS focused on Folding@home operation.
+- Prefer the simplest correct and maintainable solution.
+- Minimize dependencies, runtime services, privileges, and attack surface.
+- Preserve deterministic, explicit, and documented behavior.
+- Design for unattended operation and expected failures.
+- Keep node operation independent of FoldOps availability.
+- Preserve configuration and Folding@home work across recovery and updates.
+- Do not introduce undocumented behavior.
+- Update documentation with implementation changes.
+- Record significant technical decisions in ADRs.
 
 ---
 
-# Engineering Priorities
+# Current Direction
 
-Priority order:
+- Build framework: Buildroot, as defined by ADR-0001.
+- First implementation platform: x86_64 UEFI.
+- Next planned platform: Raspberry Pi 5 using ARM64.
+- Initial networking may be IPv4-only; IPv6 is a planned first-class
+  capability.
+- Initial remote administration uses OpenSSH with the `foldingos-admin` account
+  and public keys provisioned through the EFI System Partition.
+- FoldingOS images do not contain Folding@home client or FahCore binaries.
+  Nodes download a pinned, verified client directly from official Folding@home
+  infrastructure; FoldOps may coordinate approved manifests but does not proxy
+  the binaries.
+- Production updates must be authenticated, integrity-verified, and
+  recoverable once update capability is enabled.
+- Stable release artifacts must be reproducible and cryptographically
+  verifiable.
 
-1. Reliability
-
-2. Scientific contribution
-
-3. Security
-
-4. Simplicity
-
-5. Maintainability
-
-6. Performance
-
-7. Features
-
-Feature count is NOT a success metric.
-
----
-
-# Documentation Philosophy
-
-Documentation is authoritative.
-
-Implementation follows documentation.
-
-Architecture changes require documentation updates.
-
-Major decisions require ADRs.
-
-Never introduce undocumented behavior.
+Treat undecided implementation details as undecided. Do not convert expectations
+or future plans into accepted decisions.
 
 ---
 
-# Coding Philosophy
+# Working Expectations
 
-Prefer:
+Before changing the system:
 
-- simple code
+1. Read the relevant architecture and subsystem documents.
+2. Check for an accepted ADR governing the decision.
+3. Confirm whether the roadmap schedules the capability.
+4. Keep changes focused and testable.
+5. Update affected documentation and specifications.
 
-- readable code
-
-- maintainable code
-
-- deterministic behavior
-
-- explicit behavior
-
-Avoid:
-
-- unnecessary abstraction
-
-- unnecessary dependencies
-
-- clever implementations
-
-- framework bloat
-
-- magic behavior
-
-Humans should always be able to understand the code.
-
----
-
-# Security Philosophy
-
-Default to:
-
-- least privilege
-
-- minimal services
-
-- authenticated management
-
-- encrypted communications
-
-- secure defaults
-
-Security is not optional.
-
----
-
-# Build Philosophy
-
-Builds should be:
-
-- reproducible
-
-- deterministic
-
-- automated
-
-- version controlled
-
-No undocumented build process should exist.
-
----
-
-# Runtime Philosophy
-
-The operating system should:
-
-Boot
-
-↓
-
-Initialize
-
-↓
-
-Connect
-
-↓
-
-Fold
-
-↓
-
-Report Status
-
-↓
-
-Continue Folding
-
-No unnecessary runtime components should exist.
-
----
-
-# Failure Philosophy
-
-Recover whenever possible.
-
-Log failures clearly.
-
-Do not lose Folding progress unnecessarily.
-
-Graceful degradation is preferred over catastrophic failure.
-
----
-
-# AI Assistant Rules
-
-Before making architectural changes:
-
-- Read relevant documentation.
-
-- Read relevant ADRs.
-
-- Preserve project philosophy.
-
-- Avoid feature creep.
-
-- Explain tradeoffs.
-
-- Keep solutions simple.
-
-If uncertain:
-
-Ask.
-
-Do not invent architecture.
-
-Do not assume requirements.
-
----
-
-# Ultimate Objective
-
-Create the simplest, most reliable operating system dedicated to advancing
-Folding@home scientific research.
-
-Every design decision should reinforce that mission.
+The objective is reliable scientific contribution, not feature accumulation.

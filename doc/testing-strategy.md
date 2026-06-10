@@ -186,6 +186,53 @@ Boot regressions should block release.
 
 ---
 
+# Storage Expansion Validation
+
+Every release using automatic data-partition expansion should validate:
+
+- the raw image has the exact documented size
+
+- booting on a device equal to the image size performs no resize
+
+- booting on a larger device expands the final data partition and ext4
+  filesystem to the maximum usable aligned capacity
+
+- files written before expansion remain intact afterward
+
+- repeated expansion attempts make no further changes
+
+- an unexpected partition layout fails safely without shrinking, formatting,
+  or recreating persistent data
+
+Storage expansion regressions should block release.
+
+---
+
+# Folding@home Acquisition Validation
+
+Folding@home workload acquisition testing should verify:
+
+- release images contain no Folding@home client or FahCore binaries
+
+- the embedded approved manifest pins an exact version, origin, size, and
+  SHA-256 digest
+
+- nodes download only from the approved official upstream origin
+
+- hash, size, architecture, and manifest-schema mismatches fail closed
+
+- unverified artifacts are never installed or executed
+
+- verified versions are installed into versioned persistent application storage
+
+- activation preserves configuration, work units, and checkpoints
+
+- failed acquisition or activation preserves the last known-good client
+
+- FoldOps unavailability does not stop an already installed client
+
+---
+
 # Update Validation
 
 Future update testing should verify:
@@ -244,6 +291,8 @@ Supported hardware should undergo validation for:
 
 - Folding operation
 
+- recovery behavior
+
 Hardware compatibility should be documented separately.
 
 ---
@@ -265,6 +314,19 @@ Security validation should include:
 - dependency review
 
 Security testing should become part of normal release validation.
+
+Administrator provisioning tests should verify:
+
+- release images contain no administrator credentials
+- SSH is inaccessible before a valid administrator key is provisioned
+- valid public keys are imported from the EFI provisioning path
+- malformed provisioning files do not replace existing valid keys
+- successful import applies restrictive ownership and permissions
+- successful import replaces the complete authorized-key set
+- provisioning files are removed after successful import
+- direct root SSH login remains disabled
+- SSH password authentication remains disabled
+- key recovery works without FoldOps
 
 ---
 

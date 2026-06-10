@@ -62,9 +62,12 @@ Configuration should remain explicit and documented.
 
 # IPv6
 
-IPv6 support should be considered a first-class capability.
+IPv6 is a planned first-class capability.
 
-Operation should remain functional in:
+The first bootable x86_64 implementation may support IPv4 only. IPv6 support is
+not required to complete the initial bootable-base milestone.
+
+When IPv6 support is implemented, operation should remain functional in:
 
 - IPv4-only
 - IPv6-only

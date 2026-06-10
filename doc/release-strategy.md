@@ -142,7 +142,7 @@ Before release:
 
 # Release Artifacts
 
-A release may include:
+Any release may include:
 
 - bootable images
 
@@ -158,7 +158,9 @@ A release may include:
 
 - build metadata
 
-Future requirements may evolve.
+Stable releases must include checksums and cryptographic signatures. Signing is
+planned alongside the update system and is not required for early development
+artifacts.
 
 ---
 
@@ -194,7 +196,7 @@ Reproducibility remains a strategic objective.
 
 # Security
 
-Future releases should support:
+Stable releases must support:
 
 - cryptographic signatures
 

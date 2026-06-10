@@ -11,6 +11,12 @@ Status: Living Document
 This document defines the coding standards and engineering expectations for
 all FoldingOS source code.
 
+Contributor workflow and community expectations are defined in
+[CONTRIBUTING.md](../CONTRIBUTING.md).
+
+Project-wide decision guidance is defined in the
+[engineering principles](../PRINCIPLES.md).
+
 Consistency is considered a feature.
 
 Readable code is preferred over clever code.
@@ -226,7 +232,8 @@ Tests should be:
 
 - understandable
 
-Testing strategy is documented separately.
+Testing requirements are defined in the
+[testing strategy](testing-strategy.md).
 
 ---
 
@@ -243,37 +250,3 @@ Significant implementation changes should update:
 Documentation should never be allowed to drift from implementation.
 
 ---
-
-# Pull Request Expectations
-
-Every pull request should strive to:
-
-- improve clarity
-
-- improve maintainability
-
-- improve reliability
-
-Avoid unnecessary code churn.
-
-Avoid unrelated formatting changes.
-
-Keep changes focused.
-
----
-
-# Engineering Philosophy
-
-When faced with multiple possible solutions:
-
-Choose the one that is:
-
-- simpler
-
-- easier to understand
-
-- easier to maintain
-
-- easier to verify
-
-Long-term quality is always preferred over short-term convenience.s

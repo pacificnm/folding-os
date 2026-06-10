@@ -18,7 +18,7 @@ and Semantic Versioning where practical.
 - Roadmap
 - Vision documentation
 - Architecture documentation
-- Design Principles
+- Engineering Principles
 - Build System specification
 - Boot Process specification
 - Storage Layout specification

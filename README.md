@@ -4,3 +4,6 @@ A lightweight, purpose-built operating system designed exclusively for Folding@h
 
 ## Status
 Early planning and architecture.
+
+See the [documentation index](doc/README.md) for project, architecture, and
+engineering documentation.

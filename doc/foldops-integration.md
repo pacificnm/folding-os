@@ -140,7 +140,16 @@ FoldOps may coordinate:
 
 - deployment status
 
-Actual update implementation is documented separately.
+- selection and rollout of approved Folding@home workload manifests
+
+Actual update behavior is defined in the
+[update system specification](update-system.md).
+
+For Folding@home client updates, FoldOps distributes only approved version
+policy and manifest metadata. Nodes download pinned artifacts directly from
+official Folding@home infrastructure and verify them locally. FoldOps does not
+host or proxy Folding@home binaries under the non-redistribution model defined
+by [ADR-0009](adr/0009-fah-acquisition-and-update-model.md).
 
 ---
 

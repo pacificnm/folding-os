@@ -100,7 +100,8 @@ Responsible for:
 - restart policies
 - shutdown
 
-Selection of the init implementation will be documented through an Architecture Decision Record (ADR).
+FoldingOS uses systemd for init and service supervision, as defined by
+[ADR-0002](adr/0002-init-and-service-supervision.md).
 
 ---
 
@@ -113,9 +114,12 @@ Provides:
 - static IP configuration
 - DNS
 - NTP
-- optional IPv6
+- planned first-class IPv6 support
 
 Networking should require minimal configuration while remaining predictable and reliable.
+
+The first bootable x86_64 implementation may support IPv4 only. IPv6 support
+should be added without changing the intended networking architecture.
 
 ---
 
@@ -131,6 +135,9 @@ Remote administration should be:
 - encrypted
 - minimal
 - secure by default
+
+Initial administrator and SSH-key provisioning is defined by
+[ADR-0007](adr/0007-first-boot-administrator-and-ssh-provisioning.md).
 
 No local desktop environment is planned.
 
@@ -152,6 +159,11 @@ Responsibilities:
 
 The Folding@home client represents the primary computational purpose of the operating system.
 
+The client is acquired after deployment from an approved official upstream
+origin and is not contained in the FoldingOS release image. FoldingOS verifies
+and activates a pinned version according to
+[ADR-0009](adr/0009-fah-acquisition-and-update-model.md).
+
 ---
 
 ## FoldOps Agent
@@ -166,6 +178,7 @@ Potential responsibilities include:
 - version reporting
 - remote configuration
 - update coordination
+- approved Folding@home client-version rollout coordination
 - inventory reporting
 
 Communication should occur using authenticated and encrypted protocols.
@@ -192,21 +205,25 @@ Retention policies should minimize unnecessary disk usage.
 
 ## Update System
 
-The update architecture should emphasize:
+The update architecture must emphasize:
 
 - reliability
 - rollback capability
-- signed releases
+- authenticated and integrity-verified update artifacts
 - reproducibility
 
-Future versions may implement:
+The initial update implementation is planned for a later milestone. Once
+production updates are enabled, unsigned update artifacts must not be accepted.
+
+The implementation may include:
 
 - image-based updates
 - A/B partitions
 - automatic rollback
 - staged deployments
 
-Final implementation will be documented separately.
+The concrete implementation will be defined in the
+[update system specification](update-system.md).
 
 ---
 
@@ -243,6 +260,10 @@ Time Synchronization
 ↓
 
 FoldOps Agent
+
+↓
+
+Folding@home Acquisition
 
 ↓
 
@@ -283,7 +304,7 @@ Security principles include:
 - signed updates
 - reproducible builds
 
-Security architecture is documented separately in `security.md`.
+Security architecture is defined in the [security model](security.md).
 
 ---
 
@@ -302,10 +323,10 @@ Centralized management through FoldOps should eliminate the need for per-node ad
 
 # Hardware Targets
 
-Initial support targets:
+Platform sequence:
 
-- x86_64 UEFI systems
-- Raspberry Pi 5
+- first implementation target: x86_64 UEFI systems
+- next planned target: Raspberry Pi 5
 
 Future support will be based on engineering requirements rather than broad hardware compatibility.
 

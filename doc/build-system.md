@@ -85,7 +85,7 @@ No important configuration should exist only on developer workstations.
 
 # Build Framework
 
-The initial implementation is expected to utilize Buildroot.
+FoldingOS uses Buildroot as its primary build system.
 
 Reasons include:
 
@@ -95,7 +95,8 @@ Reasons include:
 - embedded focus
 - active maintenance
 
-The formal selection rationale will be documented through an Architecture Decision Record.
+The selection rationale is defined by
+[ADR-0001](adr/0001-use-buildroot.md).
 
 ---
 
@@ -104,13 +105,17 @@ The formal selection rationale will be documented through an Architecture Decisi
 The build system should be capable of generating:
 
 - x86_64 bootable images
-- Raspberry Pi images
 - release artifacts
 - checksum files
-- signed manifests
 - version metadata
 
-Future release formats may evolve as project requirements change.
+Planned capabilities include:
+
+- Raspberry Pi images
+- signed manifests
+
+Signing capability must be available before the first stable release. Future
+release formats may evolve as project requirements change.
 
 ---
 
@@ -137,7 +142,7 @@ tools/
 
 Documentation remains separate under:
 
-docs/
+doc/
 
 ---
 
@@ -157,7 +162,7 @@ CI should become the authoritative verification mechanism for releases.
 
 # Release Philosophy
 
-Release artifacts should be:
+Published stable release artifacts should be:
 
 - deterministic
 - versioned
@@ -174,7 +179,6 @@ Users should have confidence that published images correspond directly to the pu
 Potential future capabilities include:
 
 - multi-platform builds
-- release signing
 - automated release publication
 - SBOM generation
 - supply-chain verification

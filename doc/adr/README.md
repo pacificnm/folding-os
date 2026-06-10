@@ -36,6 +36,20 @@ design decisions years after they were originally made.
 
 ---
 
+# Accepted Decisions
+
+- [ADR-0001: Use Buildroot as the FoldingOS Build System](0001-use-buildroot.md)
+- [ADR-0002: Use systemd for Init and Service Supervision](0002-init-and-service-supervision.md)
+- [ADR-0003: x86_64 Bootloader and Image Format](0003-x86_64-bootloader-and-image-format.md)
+- [ADR-0004: Partition and Persistence Layout](0004-partition-and-persistence-layout.md)
+- [ADR-0005: Configuration Ownership and Precedence](0005-configuration-ownership-and-precedence.md)
+- [ADR-0006: Folding@home Packaging and Privilege Model](0006-fah-packaging-and-privilege-model.md)
+- [ADR-0007: First-Boot Administrator and SSH-Key Provisioning](0007-first-boot-administrator-and-ssh-provisioning.md)
+- [ADR-0008: Raw Image Size and Data-Partition Expansion](0008-raw-image-size-and-data-expansion.md)
+- [ADR-0009: Folding@home Acquisition and Update Model](0009-fah-acquisition-and-update-model.md)
+
+---
+
 # When To Create An ADR
 
 An ADR should be created whenever a decision significantly affects:

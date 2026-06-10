@@ -13,6 +13,9 @@ Security is a core design principle of FoldingOS, not an optional feature.
 The objective is to minimize attack surface while providing a reliable platform
 for scientific computation and centralized fleet management.
 
+Vulnerability reporting, disclosure, and project security policy are defined in
+[SECURITY.md](../SECURITY.md).
+
 ---
 
 # Design Principles
@@ -54,9 +57,13 @@ Requirements:
 
 - encrypted communication
 - authenticated access
-- configurable key-based authentication
-- configurable password policy
+- public-key authentication by default
+- no direct root SSH login
+- no SSH password authentication for v0.1.0
 - future MFA support through external systems where appropriate
+
+Initial administrator provisioning is defined by
+[ADR-0007](adr/0007-first-boot-administrator-and-ssh-provisioning.md).
 
 ---
 
@@ -87,7 +94,7 @@ Configuration should support secure secret injection where appropriate.
 
 # Updates
 
-Future update mechanisms should support:
+Production update mechanisms must support:
 
 - cryptographic signing
 - authenticity verification
@@ -95,6 +102,9 @@ Future update mechanisms should support:
 - rollback capability
 
 Unsigned update mechanisms should not be trusted.
+
+Updates are not part of the initial bootable-base milestone. These requirements
+become mandatory when production update capability is introduced.
 
 ---
 
@@ -131,6 +141,18 @@ Dependencies should be minimized and reviewed carefully.
 
 ---
 
+# Cryptography
+
+Where cryptography is required:
+
+- use well-established algorithms
+- use well-maintained libraries
+- avoid custom cryptographic implementations
+
+Cryptographic correctness should be preferred over novelty.
+
+---
+
 # Future Considerations
 
 Potential future capabilities:
@@ -140,10 +162,6 @@ Potential future capabilities:
 - TPM integration
 
 - measured boot
-
-- signed images
-
-- image verification
 
 - hardware-backed identity
 

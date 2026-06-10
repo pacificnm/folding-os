@@ -20,6 +20,8 @@ FoldingOS is being developed as a purpose-built appliance operating system for F
 - Establish persistent storage layout
 - Add basic service supervision
 
+Milestones 1 and 2 together define the first working v0.1.0 release scope.
+
 ## Milestone 2: Folding@home Integration
 
 - Package Folding@home client
@@ -57,4 +59,6 @@ FoldingOS is being developed as a purpose-built appliance operating system for F
 - Complete installation documentation
 - Publish hardware compatibility list
 - Publish security model
+- Validate IPv4-only, IPv6-only, and dual-stack networking
+- Verify stable release signatures
 - Publish release images

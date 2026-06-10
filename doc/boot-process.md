@@ -82,6 +82,11 @@ FoldOps Agent Startup
     │
     ▼
 
+Folding@home Acquisition
+
+    │
+    ▼
+
 Folding@home Startup
 
     │
@@ -117,9 +122,8 @@ Responsibilities include:
 - loading the initial ramdisk if required
 - passing kernel parameters
 
-Boot loader implementation is intentionally unspecified at this stage.
-
-Selection will be documented through an Architecture Decision Record.
+The initial x86_64 implementation uses GRUB 2 on UEFI systems, as defined by
+[ADR-0003](adr/0003-x86_64-bootloader-and-image-format.md).
 
 ---
 
@@ -163,7 +167,8 @@ The init system becomes responsible for:
 - shutdown sequencing
 - system supervision
 
-The implementation remains intentionally unspecified pending ADR approval.
+FoldingOS uses systemd for init and service supervision, as defined by
+[ADR-0002](adr/0002-init-and-service-supervision.md).
 
 ---
 
@@ -232,6 +237,8 @@ Fatal errors should be clearly logged.
 
 The FoldOps Agent initializes.
 
+This stage is skipped when the FoldOps Agent is not installed or enabled.
+
 Potential responsibilities include:
 
 - node registration
@@ -245,7 +252,21 @@ Failure of the FoldOps Agent should not necessarily prevent Folding@home from op
 
 ---
 
-# Stage 11 - Folding@home
+# Stage 11 - Folding@home Acquisition
+
+If no verified Folding@home client is installed, FoldingOS downloads the exact
+pinned artifact from the approved official upstream origin and verifies it
+before installation.
+
+FoldOps is not required for acquisition. Failure must not cause an unverified
+artifact to be installed or executed.
+
+Acquisition behavior is defined by
+[ADR-0009](adr/0009-fah-acquisition-and-update-model.md).
+
+---
+
+# Stage 12 - Folding@home
 
 The Folding@home client starts.
 
