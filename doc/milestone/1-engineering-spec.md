@@ -263,7 +263,8 @@ Required built-in capabilities include:
 - x86_64 and SMP
 - EFI boot and EFI variables
 - GPT partition support
-- ext4 and vfat filesystems
+- ext4 and vfat filesystems, including the EFI FAT filesystem's codepage 437
+  and ISO 8859-1 I/O charset
 - device mapper support required by systemd tooling
 - virtio PCI, block, and network for the QEMU reference platform
 - NVMe
@@ -413,13 +414,15 @@ The EFI System Partition contains:
 /foldingos/provision/
 ```
 
-GRUB loads the kernel and optional initramfs from the root filesystem using
-filesystem labels rather than device names.
+GRUB locates the kernel on the root filesystem using its filesystem label.
+Because v0.1.0 does not require an initramfs, GRUB passes the root
+partition's fixed GPT partition UUID to the kernel rather than a filesystem
+label or device name.
 
 Required kernel command-line properties:
 
 ```text
-root=LABEL=FOLDINGOS_ROOT
+root=PARTUUID=464f4c44-494e-474f-5352-4f4f54000001
 rootwait
 ro
 ```
