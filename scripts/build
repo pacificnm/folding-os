@@ -29,15 +29,12 @@ cd "${BUILDROOT_DIR}"
 
 echo "Applying FoldingOS defconfig"
 make \
-  FOLDINGOS_PROJECT_ROOT="${PROJECT_ROOT}" \
   O="${PROJECT_ROOT}/build/output" \
   BR2_DEFCONFIG="${DEFCONFIG}" \
   defconfig
 
 echo "Building FoldingOS"
-make \
-  FOLDINGOS_PROJECT_ROOT="${PROJECT_ROOT}" \
-  O="${PROJECT_ROOT}/build/output"
+make O="${PROJECT_ROOT}/build/output"
 
 echo
 echo "Build complete."
