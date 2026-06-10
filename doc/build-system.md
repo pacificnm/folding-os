@@ -32,7 +32,7 @@ Every released image should be reproducible from source using the documented bui
 
 No undocumented manual steps should exist.
 
-FoldingOS v0.1.0 pins Buildroot 2025.02.14 LTS. Release reproducibility requires
+FoldingOS v0.1.0 pins Buildroot 2026.02.2 LTS. Release reproducibility requires
 two independent clean builds with byte-identical required artifacts, as defined
 by [ADR-0012](adr/0012-reproducible-build-environment-and-verification.md).
 

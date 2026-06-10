@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+BUILDROOT_VERSION="2026.02.2"
+BUILDROOT_FILE="buildroot-${BUILDROOT_VERSION}.tar.xz"
+BUILDROOT_URL="https://buildroot.org/downloads/${BUILDROOT_FILE}"
+
+CACHE_DIR="${PROJECT_ROOT}/build/buildroot"
+WORK_DIR="${PROJECT_ROOT}/build/work"
+BUILDROOT_DIR="${WORK_DIR}/buildroot-${BUILDROOT_VERSION}"
+
+mkdir -p "${CACHE_DIR}"
+mkdir -p "${WORK_DIR}"
+
+echo "FoldingOS source fetch"
+echo "Buildroot version: ${BUILDROOT_VERSION}"
+
+cd "${CACHE_DIR}"
+
+if [ ! -f "${BUILDROOT_FILE}" ]; then
+  echo "Downloading ${BUILDROOT_FILE}"
+  wget "${BUILDROOT_URL}"
+else
+  echo "Using cached ${BUILDROOT_FILE}"
+fi
+
+if [ ! -f "${BUILDROOT_FILE}.sign" ]; then
+  echo "Downloading ${BUILDROOT_FILE}.sign"
+  wget "${BUILDROOT_URL}.sign"
+else
+  echo "Using cached ${BUILDROOT_FILE}.sign"
+fi
+
+echo "Recording SHA256"
+sha256sum "${BUILDROOT_FILE}" > "${BUILDROOT_FILE}.sha256"
+
+echo "Extracting Buildroot"
+rm -rf "${BUILDROOT_DIR}"
+tar -xf "${BUILDROOT_FILE}" -C "${WORK_DIR}"
+
+echo "Buildroot ready:"
+echo "${BUILDROOT_DIR}"

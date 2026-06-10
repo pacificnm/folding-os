@@ -60,7 +60,7 @@ precedence or silently choose one statement.
 # Current Direction
 
 - Build framework: Buildroot, as defined by ADR-0001.
-- v0.1.0 pins Buildroot 2025.02.14 LTS and requires two independent clean builds
+- v0.1.0 pins Buildroot 2026.02.2 LTS and requires two independent clean builds
   with byte-identical required release artifacts.
 - The v0.1.0 build-host baseline is Debian 13 on amd64.
 - First implementation platform: x86_64 UEFI.

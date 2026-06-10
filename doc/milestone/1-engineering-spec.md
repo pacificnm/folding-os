@@ -56,8 +56,8 @@ The implementation will use:
 ```text
 build/
   buildroot/
-    buildroot-2025.02.14.tar.xz.sha256
-    buildroot-2025.02.14.tar.xz.sign
+    buildroot-2026.02.2.tar.xz.sha256
+    buildroot-2026.02.2.tar.xz.sign
   host/
     debian-13-packages.txt
 
@@ -168,7 +168,7 @@ inside Buildroot.
 Pinned Buildroot release:
 
 ```text
-2025.02.14
+2026.02.2
 ```
 
 The upstream tarball, PGP signature, and SHA-256 digest are verified by
@@ -216,7 +216,7 @@ BR2_TARGET_ROOTFS_EXT2=y
 BR2_TARGET_ROOTFS_EXT2_4=y
 ```
 
-The generated defconfig from Buildroot 2025.02.14 is authoritative when an
+The generated defconfig from Buildroot 2026.02.2 is authoritative when an
 option name differs from this minimum capability list.
 
 The initial target kernel is Linux `6.12.90`. Its archive and hash must be

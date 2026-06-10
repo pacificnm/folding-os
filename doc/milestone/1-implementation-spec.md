@@ -92,7 +92,7 @@ documented.
 
 Build framework:
 
-Buildroot 2025.02.14 LTS
+Buildroot 2026.02.2 LTS
 
 Build-host baseline:
 

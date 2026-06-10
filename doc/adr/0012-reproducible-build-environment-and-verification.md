@@ -2,7 +2,7 @@
 
 **Status:** Accepted
 
-**Version:** 1.0
+**Version:** 1.1
 
 **Date:** 2026-06-10
 
@@ -28,8 +28,8 @@ repository rather than existing only as machine state.
 
 # Decision
 
-FoldingOS v0.1.0 will use Buildroot `2025.02.14`, selected and pinned from the
-Buildroot 2025.02 LTS series.
+FoldingOS v0.1.0 will use Buildroot `2026.02.2`, selected and pinned from the
+Buildroot 2026.02 LTS series.
 
 The v0.1.0 build-host baseline is Debian 13 on x86_64 (`amd64`).
 

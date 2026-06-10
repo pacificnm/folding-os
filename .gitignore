@@ -1,0 +1,40 @@
+# Build outputs, downloaded sources, and release artifacts
+/build/
+/output/
+/artifacts/
+/release/
+
+# Generated OS images and archives
+*.img
+*.img.*
+*.iso
+*.raw
+*.qcow2
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Logs and temporary files
+*.log
+*.tmp
+*.swp
+*.swo
+*~
+
+# Editor and operating-system metadata
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Common tool caches and test output
+.cache/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+__pycache__/
+*.py[cod]
+.coverage
+coverage/
