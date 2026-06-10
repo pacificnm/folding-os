@@ -52,6 +52,11 @@ For v0.1.0, the approved manifest is embedded in the FoldingOS image and is
 trusted as part of that image. Future update mechanisms may deliver externally
 signed manifests.
 
+The provisional v0.1.0 client version family is Folding@home 8.5, matching the
+version currently operated in the project's Debian-based farm. The exact
+upstream 8.5 artifact remains subject to runtime compatibility testing and must
+be pinned by URL, size, and SHA-256 digest before release.
+
 FahCore binaries remain managed and downloaded directly by the Folding@home
 client from Folding@home infrastructure. FoldingOS will not bundle, mirror, or
 proxy them.
@@ -73,8 +78,9 @@ The manifest must identify at least:
 
 The manifest must be version controlled and included in release metadata.
 
-An engineering specification will define its serialization format, signature
-format, and exact validation procedure.
+The v0.1.0 serialization format and exact validation procedure are defined by
+the [v0.1.0 engineering specification](../milestone/1-engineering-spec.md).
+External-manifest signatures remain a future update-system decision.
 
 ---
 
@@ -87,8 +93,8 @@ Folding@home work:
 /data/apps/fah/<version>/
 ```
 
-The active version will be selected atomically through an implementation-defined
-reference under:
+The active version will be selected atomically through the relative `current`
+symlink defined by the v0.1.0 engineering specification under:
 
 ```text
 /data/apps/fah/
@@ -98,7 +104,7 @@ Configuration, work units, checkpoints, and runtime state remain under their
 existing persistent locations, including:
 
 ```text
-/data/config/foldinghome/
+/data/config/foldinghome.toml
 /data/fah/
 ```
 
@@ -251,7 +257,7 @@ path.
 
 - [ADR-0005: Configuration Ownership and Precedence](0005-configuration-ownership-and-precedence.md)
 - [ADR-0006: Folding@home Packaging and Privilege Model](0006-fah-packaging-and-privilege-model.md)
+- [ADR-0011: TOML Configuration Validation And Migration](0011-toml-configuration-validation-and-migration.md)
 - [FoldOps Integration](../foldops-integration.md)
 - [Update System](../update-system.md)
 - [v0.1.0 Scope Specification](../milestone/1-implementation-spec.md)
-

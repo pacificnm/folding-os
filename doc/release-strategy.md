@@ -190,7 +190,10 @@ Given:
 
 another engineer should be able to reproduce release artifacts.
 
-Reproducibility remains a strategic objective.
+Release candidates require two independent clean builds of the same source
+revision. Required artifacts must match byte for byte or release publication is
+blocked. The complete procedure is defined by
+[ADR-0012](adr/0012-reproducible-build-environment-and-verification.md).
 
 ---
 

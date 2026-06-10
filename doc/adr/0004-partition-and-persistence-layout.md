@@ -52,7 +52,6 @@ For Milestone 1, the recommended logical layout is:
 | Persistent Data                                      |
 |                                                      |
 | - Node Configuration                                 |
-| - FoldOps State                                      |
 | - Folding@home Configuration                         |
 | - Folding@home Work Units                            |
 | - Folding Checkpoints                                |
@@ -129,11 +128,11 @@ Examples include:
 
 * networking
 
-* FoldOps configuration
-
 * SSH configuration
 
 * local settings
+
+Future FoldOps integration may add persistent FoldOps configuration and state.
 
 ---
 
@@ -161,6 +160,9 @@ Persistent logs should support:
 
 Retention policies should balance operational usefulness with storage
 consumption.
+
+For v0.1.0, persistent journal storage and its bounded retention policy are
+defined by [ADR-0010](0010-persistent-logging-and-retention.md).
 
 ---
 
@@ -408,6 +410,8 @@ These decisions should extend rather than replace this architecture.
 * [ADR-0003: x86_64 Bootloader and Image Format](0003-x86_64-bootloader-and-image-format.md)
 
 * [ADR-0008: Raw Image Size and Data-Partition Expansion](0008-raw-image-size-and-data-expansion.md)
+
+* [ADR-0010: Persistent Logging And Retention](0010-persistent-logging-and-retention.md)
 
 ---
 

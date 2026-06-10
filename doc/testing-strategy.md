@@ -233,6 +233,67 @@ Folding@home workload acquisition testing should verify:
 
 ---
 
+# Persistent Logging Validation
+
+Persistent logging testing should verify:
+
+- logs from boot and managed services are available through `systemd-journald`
+
+- journal records survive reboot during normal operation
+
+- early-boot volatile records flush to persistent storage when possible
+
+- persistent journal usage remains at or below 256 MiB
+
+- journal growth does not reduce free space on `/data` below the configured
+  512 MiB reserve
+
+- records older than 14 days are eligible for automatic removal
+
+- journal rotation and vacuuming require no administrator intervention
+
+- log flooding is rate limited
+
+- persistent logging failure degrades to volatile logging
+
+- full or unavailable journal storage does not stop Folding@home
+
+- logs do not expose configured test secrets
+
+---
+
+# Configuration Validation
+
+Configuration testing should verify:
+
+- valid TOML for every configuration domain parses deterministically
+
+- malformed TOML, missing or unsupported schema versions, unknown keys,
+  incorrect types, invalid values, and security-invalid settings are rejected
+
+- TOML configuration does not contain secret values
+
+- rejected candidates never replace active configuration
+
+- activation is atomic during simulated interruption and power loss
+
+- active configuration can recover from a valid last-known-good copy
+
+- safe image defaults are used when no valid persistent configuration exists
+
+- one invalid optional domain does not unnecessarily stop unrelated services
+
+- when FoldOps integration is implemented, invalid FoldOps configuration does
+  not stop Folding@home
+
+- SSH recovery remains available when safe
+
+- forward migrations preserve the original and activate only validated output
+
+- newer unsupported schema versions are not modified
+
+---
+
 # Update Validation
 
 Future update testing should verify:
@@ -294,6 +355,34 @@ Supported hardware should undergo validation for:
 - recovery behavior
 
 Hardware compatibility should be documented separately.
+
+For a physical x86_64 UEFI system to be listed as validated for a release, it
+must complete the release acceptance criteria and additionally:
+
+- boot from the release image using UEFI without legacy BIOS compatibility
+
+- detect and use its installation storage
+
+- expand and mount the persistent data partition
+
+- acquire Ethernet DHCP networking and DNS
+
+- provision and use SSH administrator access
+
+- acquire, verify, install, and run the approved Folding@home client
+
+- preserve configuration, checkpoints, and journal records across reboot
+
+- shut down and restart cleanly
+
+- recover after an unexpected power interruption
+
+- remain operational under Folding@home workload for at least 24 continuous
+  hours
+
+The validation report must record the release version, system model, firmware
+version, CPU, memory, storage controller and device, Ethernet controller, and
+known limitations.
 
 ---
 
@@ -418,6 +507,9 @@ Manual testing should supplement automation rather than replace it.
 A production release should not occur unless:
 
 - all required tests pass
+
+- two independent clean builds produce byte-identical required release
+  artifacts
 
 - no known critical regressions exist
 

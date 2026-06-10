@@ -48,7 +48,9 @@ The default experience should require minimal user intervention.
 
 # Static Configuration
 
-Where required, administrators should be able to configure:
+Static networking is out of scope for v0.1.0.
+
+A future release may allow administrators to configure:
 
 - static IP
 - subnet

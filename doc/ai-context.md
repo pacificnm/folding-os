@@ -47,6 +47,9 @@ precedence or silently choose one statement.
 - Preserve deterministic, explicit, and documented behavior.
 - Design for unattended operation and expected failures.
 - Keep node operation independent of FoldOps availability.
+- Treat [pacificnm/foldops](https://github.com/pacificnm/foldops) as the
+  authoritative FoldOps code repository and coordinate cross-repository
+  contract changes explicitly.
 - Preserve configuration and Folding@home work across recovery and updates.
 - Do not introduce undocumented behavior.
 - Update documentation with implementation changes.
@@ -57,16 +60,28 @@ precedence or silently choose one statement.
 # Current Direction
 
 - Build framework: Buildroot, as defined by ADR-0001.
+- v0.1.0 pins Buildroot 2025.02.14 LTS and requires two independent clean builds
+  with byte-identical required release artifacts.
+- The v0.1.0 build-host baseline is Debian 13 on amd64.
 - First implementation platform: x86_64 UEFI.
+- The required v0.1.0 reference platform is QEMU with OVMF; physical x86_64
+  systems are validated per release rather than universally supported.
 - Next planned platform: Raspberry Pi 5 using ARM64.
 - Initial networking may be IPv4-only; IPv6 is a planned first-class
   capability.
+- v0.1.0 networking uses Ethernet DHCP; static networking is out of scope.
 - Initial remote administration uses OpenSSH with the `foldingos-admin` account
   and public keys provisioned through the EFI System Partition.
 - FoldingOS images do not contain Folding@home client or FahCore binaries.
   Nodes download a pinned, verified client directly from official Folding@home
   infrastructure; FoldOps may coordinate approved manifests but does not proxy
   the binaries.
+- Persistent logging uses bounded `systemd-journald` storage under
+  `/data/logs/journal` and must not stop Folding@home when unavailable or full.
+- Structured configuration uses schema-versioned TOML files by ownership
+  domain, with strict validation and atomic activation.
+- The approved v0.1.0 implementation blueprint is
+  [Milestone 1 engineering specification](milestone/1-engineering-spec.md).
 - Production updates must be authenticated, integrity-verified, and
   recoverable once update capability is enabled.
 - Stable release artifacts must be reproducible and cryptographically

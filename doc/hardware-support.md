@@ -65,6 +65,23 @@ Primary use cases:
 
 Preference should be given to widely supported hardware.
 
+For v0.1.0, the mandatory x86_64 reference platform is:
+
+- QEMU virtual machine
+- OVMF UEFI firmware
+- virtual Ethernet supported by the release image
+- virtual disk larger than or equal to the release image
+
+The QEMU/OVMF reference platform must pass the complete automated release test
+suite.
+
+A physical x86_64 UEFI system becomes validated for a release only after it
+passes the documented hardware acceptance test and is listed in that release's
+compatibility documentation.
+
+Unlisted x86_64 UEFI systems may work but are not considered supported or
+validated.
+
 ---
 
 # Raspberry Pi
@@ -177,6 +194,13 @@ Engineering resources should remain focused on supported platforms.
 
 Supported hardware must pass the validation requirements defined in the
 [testing strategy](testing-strategy.md).
+
+Hardware status uses these categories:
+
+- **Reference:** required platform for automated release validation
+- **Validated:** physical hardware that passed the documented acceptance test
+  for a specific release
+- **Unvalidated:** hardware that may work but carries no support claim
 
 ---
 

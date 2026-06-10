@@ -108,8 +108,8 @@ Release validation must verify:
 - existing files survive expansion
 - repeated expansion attempts make no further changes
 
-The engineering specification will select the concrete partition and filesystem
-resize tooling.
+The concrete partition and filesystem resize tooling is defined by the
+[v0.1.0 engineering specification](../milestone/1-engineering-spec.md).
 
 ---
 

@@ -47,6 +47,9 @@ design decisions years after they were originally made.
 - [ADR-0007: First-Boot Administrator and SSH-Key Provisioning](0007-first-boot-administrator-and-ssh-provisioning.md)
 - [ADR-0008: Raw Image Size and Data-Partition Expansion](0008-raw-image-size-and-data-expansion.md)
 - [ADR-0009: Folding@home Acquisition and Update Model](0009-fah-acquisition-and-update-model.md)
+- [ADR-0010: Persistent Logging And Retention](0010-persistent-logging-and-retention.md)
+- [ADR-0011: TOML Configuration Validation And Migration](0011-toml-configuration-validation-and-migration.md)
+- [ADR-0012: Reproducible Build Environment And Verification](0012-reproducible-build-environment-and-verification.md)
 
 ---
 

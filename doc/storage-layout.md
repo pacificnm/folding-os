@@ -118,6 +118,10 @@ Examples:
 
 Configuration should survive operating system replacement.
 
+Structured persistent configuration uses versioned TOML files by ownership
+domain. Secrets and opaque configuration data remain separate as defined by
+[ADR-0011](adr/0011-toml-configuration-validation-and-migration.md).
+
 ---
 
 ## Folding@home Data
@@ -143,6 +147,10 @@ Local logs should support:
 Retention policies should minimize unnecessary storage consumption.
 
 Future centralized log collection may reduce local retention requirements.
+
+For v0.1.0, bounded persistent journal storage resides under
+`/data/logs/journal` as defined by
+[ADR-0010](adr/0010-persistent-logging-and-retention.md).
 
 ---
 

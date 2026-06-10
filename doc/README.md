@@ -20,11 +20,15 @@ This index groups the project's documentation by purpose.
 - [Storage layout](storage-layout.md) - logical storage and persistence model
 - [Security model](security.md) - runtime security architecture
 - [FoldOps integration](foldops-integration.md) - fleet-management relationship
+  with the separate [pacificnm/foldops](https://github.com/pacificnm/foldops)
+  repository
 
 ## Implementation Specifications
 
-- [v0.1.0 scope specification](milestone/1-implementation-spec.md) - draft scope
+- [v0.1.0 scope specification](milestone/1-implementation-spec.md) - approved scope
   combining roadmap Milestones 1 and 2
+- [v0.1.0 engineering specification](milestone/1-engineering-spec.md) - concrete
+  implementation blueprint for the first release
 - [Installer](installer.md) - draft installation and first-boot scope
 - [Update system](update-system.md) - draft update requirements and trust model
 

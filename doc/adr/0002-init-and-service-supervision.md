@@ -285,7 +285,8 @@ Service logs should support:
 
 Sensitive information should never be exposed through logs.
 
-Log retention policies are documented separately.
+Persistent logging, retention, and disk-full behavior are defined by
+[ADR-0010](0010-persistent-logging-and-retention.md).
 
 ---
 

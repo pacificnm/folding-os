@@ -201,6 +201,11 @@ Logs should support:
 
 Retention policies should minimize unnecessary disk usage.
 
+FoldingOS uses `systemd-journald` with bounded persistent storage under
+`/data/logs/journal`. Persistent logging failure degrades to volatile logging
+and does not stop Folding@home. See
+[ADR-0010](adr/0010-persistent-logging-and-retention.md).
+
 ---
 
 ## Update System

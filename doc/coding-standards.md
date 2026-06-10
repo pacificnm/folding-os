@@ -156,6 +156,20 @@ Logs should:
 
 Sensitive information must never be logged.
 
+Services should use the system journal and must not create independent
+persistent log files without an approved architectural requirement. Persistent
+logging and retention are defined by
+[ADR-0010](adr/0010-persistent-logging-and-retention.md).
+
+---
+
+# Configuration
+
+Structured configuration must use the approved domain TOML files and schemas.
+Code must reject unknown keys and invalid values, keep secrets outside TOML,
+and never edit active configuration files in place. See
+[ADR-0011](adr/0011-toml-configuration-validation-and-migration.md).
+
 ---
 
 # Dependencies

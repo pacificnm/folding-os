@@ -77,11 +77,6 @@ Configuration Validation
     │
     ▼
 
-FoldOps Agent Startup
-
-    │
-    ▼
-
 Folding@home Acquisition
 
     │
@@ -195,7 +190,7 @@ Networking is initialized.
 Typical responsibilities:
 
 - Ethernet initialization
-- DHCP or static configuration
+- DHCP configuration
 - DNS configuration
 - IPv6 (where enabled)
 - route establishment
@@ -222,37 +217,25 @@ Time synchronization should occur automatically whenever possible.
 
 Before application startup, FoldingOS validates:
 
-- local configuration
+- each structured TOML configuration domain
+- configuration schema versions, keys, types, values, and security invariants
+- the resulting effective configuration
 - required directories
 - storage availability
 - required runtime state
 
-Recoverable problems should be corrected automatically where practical.
+Invalid active configuration falls back to valid last-known-good configuration
+or safe image defaults where available. Failure should prevent only the
+affected service from starting while preserving SSH recovery access when safe.
 
 Fatal errors should be clearly logged.
 
----
-
-# Stage 10 - FoldOps Agent
-
-The FoldOps Agent initializes.
-
-This stage is skipped when the FoldOps Agent is not installed or enabled.
-
-Potential responsibilities include:
-
-- node registration
-- health reporting
-- metrics reporting
-- inventory reporting
-- remote management
-- update coordination
-
-Failure of the FoldOps Agent should not necessarily prevent Folding@home from operating.
+Configuration validation and recovery are defined by
+[ADR-0011](adr/0011-toml-configuration-validation-and-migration.md).
 
 ---
 
-# Stage 11 - Folding@home Acquisition
+# Stage 10 - Folding@home Acquisition
 
 If no verified Folding@home client is installed, FoldingOS downloads the exact
 pinned artifact from the approved official upstream origin and verifies it
@@ -266,7 +249,7 @@ Acquisition behavior is defined by
 
 ---
 
-# Stage 12 - Folding@home
+# Stage 11 - Folding@home
 
 The Folding@home client starts.
 

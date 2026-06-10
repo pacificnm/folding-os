@@ -32,6 +32,13 @@ Every released image should be reproducible from source using the documented bui
 
 No undocumented manual steps should exist.
 
+FoldingOS v0.1.0 pins Buildroot 2025.02.14 LTS. Release reproducibility requires
+two independent clean builds with byte-identical required artifacts, as defined
+by [ADR-0012](adr/0012-reproducible-build-environment-and-verification.md).
+
+The v0.1.0 build-host baseline is Debian 13 on amd64. Exact kernel and installed
+build-package versions are captured in release metadata.
+
 ---
 
 ## Automation
@@ -153,7 +160,7 @@ Future CI systems should automatically:
 - validate builds
 - perform static analysis
 - execute automated tests
-- verify reproducibility where practical
+- verify release-candidate reproducibility using independent clean builds
 - generate release artifacts
 
 CI should become the authoritative verification mechanism for releases.

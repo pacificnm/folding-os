@@ -14,6 +14,16 @@ for FoldingOS deployments.
 This document defines the intended architectural relationship between FoldingOS
 and FoldOps.
 
+FoldOps is developed in a separate repository:
+
+```text
+https://github.com/pacificnm/foldops
+```
+
+Changes to the node-management protocol, enrollment workflow, configuration
+contract, workload-manifest coordination, or update reporting must be
+coordinated with that repository.
+
 ---
 
 # Design Philosophy

@@ -24,7 +24,7 @@ Milestones 1 and 2 together define the first working v0.1.0 release scope.
 
 ## Milestone 2: Folding@home Integration
 
-- Package Folding@home client
+- Implement verified Folding@home client acquisition
 - Configure automatic startup
 - Persist work unit and checkpoint data
 - Define FAH configuration management

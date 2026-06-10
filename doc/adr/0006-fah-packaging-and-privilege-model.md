@@ -186,21 +186,16 @@ The service should have write access only to the locations it requires.
 
 Service logs should integrate with system logging.
 
-Persistent logs may additionally be stored under:
+Persistent service logs are managed by `systemd-journald` under:
 
 ```text
-/var/log
+/data/logs/journal
 ```
-
-or
-
-```text
-/data/logs
-```
-
-depending on future logging architecture.
 
 Sensitive information should never be logged.
+
+Retention and disk-full behavior are defined by
+[ADR-0010](0010-persistent-logging-and-retention.md).
 
 ---
 
@@ -211,13 +206,16 @@ Configuration should be stored separately from binaries.
 Recommended location:
 
 ```text
-/data/config/foldinghome
+/data/config/foldinghome.toml
 ```
 
 Configuration should survive operating system replacement.
 
 Configuration ownership and precedence are defined by
 [ADR-0005](0005-configuration-ownership-and-precedence.md).
+
+TOML format, validation, and secret separation are defined by
+[ADR-0011](0011-toml-configuration-validation-and-migration.md).
 
 ---
 
@@ -416,6 +414,10 @@ engineering value.
 * [ADR-0004: Partition and Persistence Layout](0004-partition-and-persistence-layout.md)
 
 * [ADR-0009: Folding@home Acquisition and Update Model](0009-fah-acquisition-and-update-model.md)
+
+* [ADR-0010: Persistent Logging And Retention](0010-persistent-logging-and-retention.md)
+
+* [ADR-0011: TOML Configuration Validation And Migration](0011-toml-configuration-validation-and-migration.md)
 
 ---
 

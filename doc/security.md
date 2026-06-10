@@ -90,6 +90,12 @@ Secrets must never:
 
 Configuration should support secure secret injection where appropriate.
 
+Structured TOML configuration must contain references to secrets rather than
+secret values. Secrets reside under `/data/config/secrets/` or a future
+designated secure store. Configuration updates must pass local validation and
+cannot override security invariants. See
+[ADR-0011](adr/0011-toml-configuration-validation-and-migration.md).
+
 ---
 
 # Updates
@@ -118,6 +124,11 @@ Logs should:
 - avoid exposing authentication tokens
 
 Sensitive information must be protected.
+
+FoldingOS uses bounded persistent `systemd-journald` storage. Services must
+redact sensitive values before logging, and persistent logging failure must not
+cause unsafe data deletion or stop Folding@home. See
+[ADR-0010](adr/0010-persistent-logging-and-retention.md).
 
 ---
 

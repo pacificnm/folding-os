@@ -2,7 +2,7 @@
 
 **Version:** 1.0
 
-**Status:** Draft
+**Status:** Approved
 
 **Target Release:** v0.1.0
 
@@ -13,6 +13,9 @@
 This document defines the intended implementation scope for the first working
 release of FoldingOS. It combines roadmap Milestone 1, Bootable Base System,
 and Milestone 2, Folding@home Integration, into the v0.1.0 release scope.
+
+Concrete implementation is defined by the
+[v0.1.0 engineering specification](1-engineering-spec.md).
 
 The objective is not to build a feature-rich operating system.
 
@@ -66,13 +69,22 @@ No unnecessary services.
 
 Supported:
 
-* x86_64 UEFI
+* x86_64 UEFI virtual machines using QEMU and OVMF
+
+* physical x86_64 UEFI systems explicitly listed as validated for the release
 
 Future:
 
 * Raspberry Pi 5
 
-Only x86_64 is required for v0.1.0.
+Only x86_64 UEFI is required for v0.1.0.
+
+The QEMU/OVMF reference platform must pass the complete automated release test
+suite. A physical system is considered validated only after passing the
+documented hardware acceptance test for that release.
+
+Other x86_64 UEFI systems may work but are not supported until validated and
+documented.
 
 ---
 
@@ -80,13 +92,24 @@ Only x86_64 is required for v0.1.0.
 
 Build framework:
 
-Buildroot
+Buildroot 2025.02.14 LTS
+
+Build-host baseline:
+
+```text
+Debian 13 amd64
+```
 
 Reference:
 
 [ADR-0001](../adr/0001-use-buildroot.md)
 
-Build should produce reproducible release artifacts.
+Release candidates require two independent clean builds that produce
+byte-identical required release artifacts.
+
+Reference:
+
+[ADR-0012](../adr/0012-reproducible-build-environment-and-verification.md)
 
 ---
 
@@ -199,8 +222,6 @@ Examples:
 ```text
 /data/config
 
-/data/foldops
-
 /data/fah
 
 /data/logs
@@ -222,7 +243,7 @@ Default:
 
 IPv6 is not required for v0.1.0 and may be absent from the initial image.
 
-Static configuration support may be added after initial implementation.
+Static networking is explicitly out of scope for v0.1.0.
 
 ---
 
@@ -323,27 +344,35 @@ Reference:
 
 # FoldOps
 
-v0.1.0:
+v0.1.0 contains no FoldOps agent, placeholder service, enrollment workflow, or
+remote-management components.
 
-Not required.
-
-A placeholder service may exist.
-
-Remote management is not required for release.
+FoldOps integration begins in roadmap Milestone 3. FoldingOS must remain
+compatible with adding it later without making FoldOps required for node
+operation.
 
 ---
 
 # Logging
 
-Minimum requirements:
+Implementation:
 
-* boot diagnostics
+* `systemd-journald`
 
-* service diagnostics
+* persistent journal under `/data/logs/journal`
 
-* Folding service logs
+* 256 MiB maximum persistent journal usage
 
-Persistent logs should survive reboot.
+* 512 MiB minimum free space preserved on `/data`
+
+* 14-day maximum retention
+
+Persistent logging failure degrades to volatile logging and must not block boot
+or Folding@home operation.
+
+Reference:
+
+[ADR-0010](../adr/0010-persistent-logging-and-retention.md)
 
 ---
 
@@ -358,8 +387,23 @@ Persistent configuration resides under:
 Configuration must survive reboot. The architecture keeps configuration
 separate so future replacement tooling can preserve it.
 
+Structured configuration uses schema-versioned TOML files separated by domain:
+
+```text
+/data/config/system.toml
+/data/config/network.toml
+/data/config/foldinghome.toml
+```
+
+Configuration updates must be validated before atomic activation. Invalid
+updates must not replace active configuration. Secrets remain outside TOML
+files under `/data/config/secrets/`.
+
 Configuration precedence is defined by
 [ADR-0005](../adr/0005-configuration-ownership-and-precedence.md).
+
+Format, validation, activation, and migration are defined by
+[ADR-0011](../adr/0011-toml-configuration-validation-and-migration.md).
 
 ---
 
@@ -455,6 +499,14 @@ v0.1.0 does NOT include:
 
 * FoldOps management
 
+* FoldOps agent or placeholder service
+
+* static networking
+
+* FoldOps configuration or runtime state
+
+* GPU Folding@home support
+
 * TPM integration
 
 * Secure Boot
@@ -487,18 +539,14 @@ Future releases may additionally produce:
 
 ---
 
-# Open Decisions Blocking Approval
+# Remaining Release Validation
 
-This scope specification remains Draft until the following decisions are
-resolved:
+No architecture decisions currently block this approved scope.
 
-1. Select and validate the exact official upstream Folding@home client artifact
-   for v0.1.0, then record its version, URL, size, SHA-256 digest, runtime
-   compatibility, and upstream terms reference in the approved manifest.
-2. Define persistent logging implementation, retention, and disk-full behavior.
-3. Define the measurable reproducible-build procedure and success condition.
-4. Define the configuration file format and the mechanism that validates and
-   applies effective configuration.
+The exact Folding@home 8.5 upstream artifact remains an implementation
+validation item. Before release, its exact version, URL, size, SHA-256 digest,
+runtime compatibility, and upstream terms reference must be recorded in the
+approved workload manifest.
 
 ---
 
@@ -510,7 +558,8 @@ A v0.1.0 build is considered successful if it can:
 
 2. Produce a bootable image
 
-3. Boot successfully on supported x86_64 hardware
+3. Boot successfully on the QEMU/OVMF reference platform and every physical
+   x86_64 UEFI system claimed as validated for the release
 
 4. Mount all expected filesystems
 
@@ -549,6 +598,23 @@ A v0.1.0 build is considered successful if it can:
 
 20. Continue running the last verified Folding@home client when FoldOps is
     unavailable
+
+21. Preserve journal diagnostics across reboot during normal operation
+
+22. Keep journal usage within its configured limits without stopping
+    Folding@home when persistent logging is unavailable or full
+
+23. Reject malformed, unknown, unsupported, or security-invalid TOML
+    configuration without replacing the active configuration
+
+24. Recover from invalid active configuration using valid last-known-good
+    configuration or safe image defaults while preserving SSH recovery access
+
+25. Atomically activate valid configuration and isolate failures to affected
+    services
+
+26. Produce byte-identical required release artifacts from two independent
+    clean builds
 
 ---
 

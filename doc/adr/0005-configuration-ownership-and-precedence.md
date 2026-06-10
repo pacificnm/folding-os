@@ -190,19 +190,22 @@ Owns:
 
 - Folding@home username
 - team number
-- passkey
+- passkey secret reference
 - client configuration
 - work directory configuration
 
 Recommended persistent location:
 
 ```text
-/data/config/foldinghome/
+/data/config/foldinghome.toml
 ```
 
 ---
 
 ## FoldOps
+
+This ownership domain applies when FoldOps integration is implemented after
+v0.1.0. The initial release contains no FoldOps configuration or runtime state.
 
 Owns:
 
@@ -215,7 +218,7 @@ Owns:
 Recommended persistent location:
 
 ```text
-/data/config/foldops/
+/data/config/foldops.toml
 ```
 
 Runtime FoldOps state may live under:
@@ -260,10 +263,10 @@ folding-XXXXXX
 Where `XXXXXX` is generated from the node identity or another persistent
 random value.
 
-The generated hostname should be persisted under:
+The generated hostname should be persisted in:
 
 ```text
-/data/config/hostname
+/data/config/system.toml
 ```
 
 ---
@@ -291,13 +294,13 @@ Folding@home configuration may include:
 
 - username
 - team number
-- passkey
+- passkey secret reference
 - client options
 
 Recommended location:
 
 ```text
-/data/config/foldinghome/
+/data/config/foldinghome.toml
 ```
 
 This configuration should survive operating system replacement.
@@ -316,7 +319,7 @@ Enrollment data should be stored persistently.
 Recommended location:
 
 ```text
-/data/config/foldops/
+/data/config/foldops.toml
 ```
 
 ---
@@ -379,25 +382,13 @@ Manual recovery should be possible through SSH or future recovery tooling.
 
 # Configuration File Format
 
-The specific configuration format is not defined by this ADR.
+Structured FoldingOS configuration uses versioned TOML files separated by
+ownership domain. Schema validation, unknown-key rejection, atomic activation,
+last-known-good recovery, and migration behavior are defined by
+[ADR-0011](0011-toml-configuration-validation-and-migration.md).
 
-Acceptable future options include:
-
-- simple key-value files
-- TOML
-- YAML
-- JSON
-- structured directories
-
-The selected format should be:
-
-- human-readable
-- easy to parse
-- deterministic
-- suitable for embedded systems
-- difficult to misinterpret
-
-A future ADR may define the exact format.
+Opaque data such as SSH authorized keys, generated node identity, and secrets
+remain in dedicated files or directories.
 
 ---
 
@@ -418,8 +409,8 @@ Sensitive values include:
 - API credentials
 - SSH private keys
 
-Secrets should be stored only in persistent configuration or designated
-secure storage.
+Secrets should be stored only under `/data/config/secrets/` or in future
+designated secure storage, never directly in TOML configuration.
 
 ---
 
@@ -471,7 +462,6 @@ Hardcoded configuration prevents reliable fleet management and recovery.
 
 Future ADRs may define:
 
-- exact configuration file format
 - secret storage mechanism
 - remote configuration synchronization
 - FoldOps configuration authority
@@ -487,6 +477,7 @@ Future ADRs may define:
 - [FoldOps integration](../foldops-integration.md)
 - [Installer and first-boot scope](../installer.md)
 - [ADR-0004: Partition and Persistence Layout](0004-partition-and-persistence-layout.md)
+- [ADR-0011: TOML Configuration Validation And Migration](0011-toml-configuration-validation-and-migration.md)
 
 ---
 
