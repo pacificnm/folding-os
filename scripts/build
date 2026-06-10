@@ -17,6 +17,7 @@ BUILDROOT_ASSETS=(
   "../../../packages/foldingosctl/foldingosctl.mk"
   "../../../packages/foldingosctl/src/go.mod"
   "../../../packages/foldingosctl/src/main.go"
+  "../../../packages/foldingosctl/src/main_test.go"
 )
 
 echo "FoldingOS build"
