@@ -1,0 +1,315 @@
+# Architecture Decision Records (ADR)
+
+Version: 1.0
+
+Status: Active
+
+---
+
+# Purpose
+
+Architecture Decision Records (ADRs) document significant technical and
+architectural decisions made throughout the FoldingOS project.
+
+Their purpose is to preserve engineering knowledge and explain not only
+*what* decisions were made, but *why* they were made.
+
+An ADR captures the reasoning behind a decision at a specific point in time.
+
+---
+
+# Philosophy
+
+Software evolves.
+
+Requirements evolve.
+
+Understanding evolves.
+
+Without documentation, architectural knowledge becomes tribal knowledge and
+eventually disappears.
+
+ADRs provide a permanent engineering history for the project.
+
+Future contributors should be able to understand the reasoning behind major
+design decisions years after they were originally made.
+
+---
+
+# When To Create An ADR
+
+An ADR should be created whenever a decision significantly affects:
+
+- architecture
+
+- security
+
+- build system
+
+- storage
+
+- networking
+
+- update strategy
+
+- deployment
+
+- APIs
+
+- major dependencies
+
+- long-term maintainability
+
+Minor implementation details generally do not require ADRs.
+
+---
+
+# ADR Lifecycle
+
+An ADR may have one of the following statuses:
+
+## Proposed
+
+The decision is under discussion.
+
+No implementation commitment has been made.
+
+---
+
+## Accepted
+
+The decision has been approved and represents the current project direction.
+
+Implementation may already exist or be planned.
+
+---
+
+## Superseded
+
+A newer ADR replaces this decision.
+
+Historical information remains valuable and should not be deleted.
+
+---
+
+## Deprecated
+
+The decision is no longer recommended but may remain in historical use.
+
+---
+
+## Rejected
+
+The proposal was evaluated but intentionally not adopted.
+
+Rejected ADRs help prevent repeated discussion of previously evaluated ideas.
+
+---
+
+# Naming Convention
+
+Files should follow the format:
+
+0001-short-title.md
+
+Examples:
+
+0001-buildroot.md
+
+0002-init-system.md
+
+0003-headless-operation.md
+
+0004-update-strategy.md
+
+Numbers should never be reused.
+
+Deleted ADR numbers should remain retired.
+
+---
+
+# ADR Format
+
+Every ADR should contain:
+
+```text
+# ADR-0001
+
+Title
+
+Status
+
+Date
+
+Authors
+
+---
+
+## Context
+
+Describe the problem.
+
+---
+
+## Decision
+
+Describe the selected approach.
+
+---
+
+## Alternatives Considered
+
+Describe competing solutions.
+
+---
+
+## Consequences
+
+Positive outcomes.
+
+Negative outcomes.
+
+Tradeoffs.
+
+---
+
+## Future Considerations
+
+Potential future evolution.
+
+---
+
+## References
+
+Optional supporting material.
+```
+
+Consistency across ADRs is strongly encouraged.
+
+---
+
+# Engineering Expectations
+
+An ADR should explain:
+
+- why the decision exists
+
+- alternatives considered
+
+- expected benefits
+
+- expected drawbacks
+
+- implementation implications
+
+The objective is understanding rather than justification.
+
+---
+
+# Modifying ADRs
+
+Accepted ADRs should generally not be rewritten.
+
+If project direction changes:
+
+Create a new ADR.
+
+Mark the previous ADR as:
+
+Superseded
+
+or
+
+Deprecated
+
+Historical engineering decisions should remain visible.
+
+---
+
+# Relationship To Documentation
+
+High-level documentation describes the intended architecture.
+
+ADRs document the reasoning behind major engineering decisions.
+
+Source code implements those decisions.
+
+Together they provide a complete understanding of the project.
+
+---
+
+# Relationship To Implementation
+
+Implementation should follow accepted ADRs.
+
+If implementation and ADRs disagree:
+
+- update implementation
+
+or
+
+- create a new ADR
+
+Undocumented architectural drift should be avoided.
+
+---
+
+# Decision Quality
+
+Good ADRs are:
+
+- concise
+
+- understandable
+
+- evidence-based
+
+- technically honest
+
+- transparent about tradeoffs
+
+No technology is perfect.
+
+Good engineering acknowledges tradeoffs explicitly.
+
+---
+
+# Example ADR Topics
+
+Examples include:
+
+- Buildroot selection
+
+- Init system selection
+
+- Boot loader selection
+
+- Immutable filesystem
+
+- Update architecture
+
+- A/B partitioning
+
+- FoldOps communication
+
+- Security architecture
+
+- Logging strategy
+
+- Identity management
+
+- Package management philosophy
+
+- Dependency policy
+
+---
+
+# Closing Principle
+
+The purpose of an ADR is not to prove that a decision was perfect.
+
+The purpose is to ensure that future contributors understand why the decision
+was made.
+
+Well-documented engineering decisions are an investment in the long-term
+maintainability of FoldingOS.
