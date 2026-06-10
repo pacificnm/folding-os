@@ -41,6 +41,22 @@ precedence or silently choose one statement.
 
 # Engineering Rules
 
+- Implementation agents must read the relevant approved documentation before
+  making implementation changes.
+- Implementation agents must follow accepted ADRs and approved implementation
+  specifications exactly.
+- Do not introduce or substitute an alternate architecture pattern unless an
+  accepted ADR or approved engineering specification explicitly authorizes it.
+- Do not introduce Buildroot external-tree architecture unless an accepted ADR
+  or approved engineering specification explicitly authorizes it.
+- Do not substitute common practice, convention, or a perceived best practice
+  for a documented project decision.
+- When documentation and common practice conflict, approved project
+  documentation wins.
+- When approved documents conflict, or when a required architectural decision
+  is undocumented, stop implementation and surface the issue for resolution.
+- Architecture changes require an ADR or specification update before
+  implementation.
 - Keep FoldingOS focused on Folding@home operation.
 - Prefer the simplest correct and maintainable solution.
 - Minimize dependencies, runtime services, privileges, and attack surface.
