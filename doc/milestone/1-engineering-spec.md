@@ -1190,6 +1190,7 @@ Required user-facing commands:
 
 ```bash
 ./scripts/check-host-tools
+./scripts/clean
 ./scripts/fetch-sources
 ./scripts/build
 ./scripts/test-qemu
@@ -1199,6 +1200,12 @@ Required user-facing commands:
 `scripts/check-host-tools` verifies the Debian 13 amd64 build-host baseline,
 all required build and test tools, and the OVMF firmware files. It reports the
 Debian package names needed for any missing requirements.
+
+`scripts/clean` removes disposable Buildroot output, the extracted Buildroot
+working tree, and QEMU test-working files. It preserves the downloaded
+Buildroot source cache under `build/buildroot/` and the build-host records under
+`build/host/`. After cleaning, `scripts/build` performs a complete build from
+an empty Buildroot output directory.
 
 `scripts/build`:
 

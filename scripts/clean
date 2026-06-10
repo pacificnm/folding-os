@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DRY_RUN=false
+
+usage() {
+  echo "Usage: ./scripts/clean [--dry-run]"
+  echo
+  echo "Removes disposable build output, extracted sources, and QEMU test files."
+  echo "Preserves build/buildroot/ and build/host/."
+}
+
+if [ "$#" -gt 1 ]; then
+  usage >&2
+  exit 2
+fi
+
+if [ "$#" -eq 1 ]; then
+  case "$1" in
+    --dry-run)
+      DRY_RUN=true
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "ERROR: Unknown option: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+fi
+
+if [ ! -f "${PROJECT_ROOT}/scripts/build" ] ||
+   [ ! -f "${PROJECT_ROOT}/configs/foldingos_x86_64_defconfig" ]; then
+  echo "ERROR: Refusing to clean because the FoldingOS project root was not found." >&2
+  exit 1
+fi
+
+CLEAN_PATHS=(
+  "${PROJECT_ROOT}/build/output"
+  "${PROJECT_ROOT}/build/work"
+  "${PROJECT_ROOT}/build/test-qemu"
+)
+
+echo "FoldingOS clean"
+echo "Project root: ${PROJECT_ROOT}"
+echo
+
+for path in "${CLEAN_PATHS[@]}"; do
+  if [ ! -e "${path}" ]; then
+    echo "Already clean: ${path}"
+    continue
+  fi
+
+  if [ "${DRY_RUN}" = true ]; then
+    echo "Would remove: ${path}"
+  else
+    echo "Removing: ${path}"
+    rm -rf -- "${path}"
+  fi
+done
+
+echo
+echo "Preserved:"
+echo "${PROJECT_ROOT}/build/buildroot"
+echo "${PROJECT_ROOT}/build/host"
+
+if [ "${DRY_RUN}" = true ]; then
+  echo
+  echo "Dry run complete. No files were removed."
+else
+  echo
+  echo "Clean complete. Run ./scripts/build for a complete rebuild."
+fi
