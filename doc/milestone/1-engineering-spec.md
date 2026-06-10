@@ -86,6 +86,7 @@ packages/
 
 scripts/
   build
+  check-host-tools
   clean
   fetch-sources
   test-qemu
@@ -1185,11 +1186,16 @@ At minimum, CI and release verification implement:
 Required user-facing commands:
 
 ```bash
+./scripts/check-host-tools
 ./scripts/fetch-sources
 ./scripts/build
 ./scripts/test-qemu
 ./scripts/verify-reproducible
 ```
+
+`scripts/check-host-tools` verifies the Debian 13 amd64 build-host baseline,
+all required build and test tools, and the OVMF firmware files. It reports the
+Debian package names needed for any missing requirements.
 
 `scripts/build`:
 

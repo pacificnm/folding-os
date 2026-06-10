@@ -1,0 +1,178 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export LC_ALL=C
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+IMAGES_DIR="${PROJECT_ROOT}/build/output/images"
+HOST_DIR="${PROJECT_ROOT}/build/output/host"
+TEST_DIR="${PROJECT_ROOT}/build/test-qemu"
+RELEASE_IMAGE="${1:-${IMAGES_DIR}/foldingos-x86_64-0.1.0.img}"
+TEST_IMAGE="${TEST_DIR}/foldingos-x86_64-0.1.0-test.img"
+SERIAL_LOG="${TEST_DIR}/serial.log"
+EXPECTED_IMAGE_SIZE=4294967296
+
+find_tool() {
+  local name="$1"
+  local candidate
+
+  for candidate in \
+    "${HOST_DIR}/bin/${name}" \
+    "${HOST_DIR}/sbin/${name}"
+  do
+    if [ -x "${candidate}" ]; then
+      printf '%s\n' "${candidate}"
+      return
+    fi
+  done
+
+  command -v "${name}" 2>/dev/null || {
+    echo "ERROR: Required test tool is unavailable: ${name}" >&2
+    exit 1
+  }
+}
+
+find_ovmf_file() {
+  local name="$1"
+  local candidate
+
+  for candidate in \
+    "/usr/share/OVMF/${name}" \
+    "/usr/share/ovmf/${name}" \
+    "/usr/share/edk2/ovmf/${name}"
+  do
+    if [ -f "${candidate}" ]; then
+      printf '%s\n' "${candidate}"
+      return
+    fi
+  done
+
+  echo "ERROR: Required OVMF firmware file is unavailable: ${name}" >&2
+  exit 1
+}
+
+assert_contains() {
+  local content="$1"
+  local expected="$2"
+  local description="$3"
+
+  if ! grep -Fq "${expected}" <<<"${content}"; then
+    echo "ERROR: ${description}" >&2
+    echo "Expected to find: ${expected}" >&2
+    exit 1
+  fi
+}
+
+verify_filesystem() {
+  local offset="$1"
+  local size="$2"
+  local label="$3"
+  local uuid="$4"
+  local type="$5"
+  local output
+
+  output="$("${BLKID}" -p -O "${offset}" -S "${size}" "${RELEASE_IMAGE}")"
+  assert_contains "${output}" "LABEL=\"${label}\"" "Missing filesystem label ${label}."
+  assert_contains "${output}" "UUID=\"${uuid}\"" "Unexpected UUID for ${label}."
+  assert_contains "${output}" "TYPE=\"${type}\"" "Unexpected filesystem type for ${label}."
+}
+
+if [ ! -f "${RELEASE_IMAGE}" ]; then
+  echo "ERROR: Release image does not exist: ${RELEASE_IMAGE}" >&2
+  exit 1
+fi
+
+FDISK="$(find_tool fdisk)"
+BLKID="$(find_tool blkid)"
+
+echo "Verifying FoldingOS release image"
+echo "Image: ${RELEASE_IMAGE}"
+
+actual_size="$(stat -c '%s' "${RELEASE_IMAGE}")"
+if [ "${actual_size}" -ne "${EXPECTED_IMAGE_SIZE}" ]; then
+  echo "ERROR: Expected a 4 GiB image, found ${actual_size} bytes." >&2
+  exit 1
+fi
+
+partition_table="$("${FDISK}" -l \
+  -o Device,Start,End,Sectors,Size,Type-UUID,UUID,Name \
+  "${RELEASE_IMAGE}")"
+
+assert_contains "${partition_table}" \
+  "Disk identifier: 464F4C44-494E-474F-5344-49534B000001" \
+  "Unexpected disk GUID."
+assert_contains "${partition_table}" \
+  "2048 1050623 1048576  512M" \
+  "Unexpected EFI partition geometry."
+assert_contains "${partition_table}" \
+  "C12A7328-F81F-11D2-BA4B-00A0C93EC93B 464F4C44-494E-474F-5345-464900000001 FOLDINGOS_EFI" \
+  "Unexpected EFI partition."
+assert_contains "${partition_table}" \
+  "1050624 5244927 4194304    2G" \
+  "Unexpected root partition geometry."
+assert_contains "${partition_table}" \
+  "4F68BCE3-E8CD-4DB1-96E7-FBCAF984B709 464F4C44-494E-474F-5352-4F4F54000001 FOLDINGOS_ROOT" \
+  "Unexpected root partition."
+assert_contains "${partition_table}" \
+  "5244928 8386559 3141632  1.5G" \
+  "Unexpected data partition geometry."
+assert_contains "${partition_table}" \
+  "0FC63DAF-8483-4772-8E79-3D69D8477DE4 464F4C44-494E-474F-5344-415441000001 FOLDINGOS_DATA" \
+  "Unexpected data partition."
+
+verify_filesystem 1048576 536870912 \
+  FOLDING_EFI 464F-5345 vfat
+verify_filesystem 537919488 2147483648 \
+  FOLDINGOS_ROOT 464f4c44-494e-474f-5352-4f4f54000001 ext4
+verify_filesystem 2685403136 1608515584 \
+  FOLDINGOS_DATA 464f4c44-494e-474f-5344-415441000001 ext4
+
+echo "Image structure verified."
+
+QEMU="$(find_tool qemu-system-x86_64)"
+OVMF_CODE="$(find_ovmf_file OVMF_CODE_4M.fd)"
+OVMF_VARS="$(find_ovmf_file OVMF_VARS_4M.fd)"
+
+mkdir -p "${TEST_DIR}"
+cp --reflink=auto --sparse=always "${RELEASE_IMAGE}" "${TEST_IMAGE}"
+cp "${OVMF_VARS}" "${TEST_DIR}/OVMF_VARS_4M.fd"
+rm -f "${SERIAL_LOG}"
+
+echo "Booting an exact-size image with QEMU/OVMF"
+set +e
+timeout --signal=TERM --kill-after=10s 120s \
+  "${QEMU}" \
+  -machine q35,accel=tcg \
+  -cpu max \
+  -smp 2 \
+  -m 2048 \
+  -drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
+  -drive "if=pflash,format=raw,file=${TEST_DIR}/OVMF_VARS_4M.fd" \
+  -drive "if=virtio,format=raw,file=${TEST_IMAGE}" \
+  -nic user,model=virtio-net-pci \
+  -display none \
+  -monitor none \
+  -serial "file:${SERIAL_LOG}" \
+  -no-reboot
+qemu_status=$?
+set -e
+
+if [ "${qemu_status}" -ne 0 ] && [ "${qemu_status}" -ne 124 ]; then
+  echo "ERROR: QEMU exited unexpectedly with status ${qemu_status}." >&2
+  echo "Serial log: ${SERIAL_LOG}" >&2
+  exit 1
+fi
+
+if ! grep -Fq "Linux version" "${SERIAL_LOG}"; then
+  echo "ERROR: Linux did not start." >&2
+  echo "Serial log: ${SERIAL_LOG}" >&2
+  exit 1
+fi
+
+if ! grep -Eq 'Reached target .*Multi-User|Reached target Multi-User System' "${SERIAL_LOG}"; then
+  echo "ERROR: systemd did not reach the multi-user target." >&2
+  echo "Serial log: ${SERIAL_LOG}" >&2
+  exit 1
+fi
+
+echo "QEMU/OVMF boot verified."
+echo "Serial log: ${SERIAL_LOG}"

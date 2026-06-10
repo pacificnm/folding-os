@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export LC_ALL=C
+
+missing_packages=()
+failures=0
+
+add_missing_package() {
+  local package="$1"
+  local existing
+
+  for existing in "${missing_packages[@]:-}"; do
+    if [ "${existing}" = "${package}" ]; then
+      return
+    fi
+  done
+
+  missing_packages+=("${package}")
+}
+
+check_command() {
+  local package="$1"
+  local command_name="$2"
+  local command_path
+
+  command_path="$(command -v "${command_name}" 2>/dev/null || true)"
+  if [ -z "${command_path}" ] && [ -x "/usr/sbin/${command_name}" ]; then
+    command_path="/usr/sbin/${command_name}"
+  fi
+  if [ -z "${command_path}" ] && [ -x "/sbin/${command_name}" ]; then
+    command_path="/sbin/${command_name}"
+  fi
+
+  if [ -n "${command_path}" ]; then
+    printf 'OK      %-20s %s\n' "${package}" "${command_path}"
+    return
+  fi
+
+  printf 'MISSING %-20s %s\n' "${package}" "${command_name}"
+  add_missing_package "${package}"
+  failures=$((failures + 1))
+}
+
+check_file() {
+  local package="$1"
+  local description="$2"
+  shift 2
+
+  local path
+  for path in "$@"; do
+    if [ -f "${path}" ]; then
+      printf 'OK      %-20s %s\n' "${package}" "${path}"
+      return
+    fi
+  done
+
+  printf 'MISSING %-20s %s\n' "${package}" "${description}"
+  add_missing_package "${package}"
+  failures=$((failures + 1))
+}
+
+echo "FoldingOS build-host tool check"
+echo
+echo "Host baseline"
+
+host_id=""
+host_version=""
+if [ -r /etc/os-release ]; then
+  # shellcheck disable=SC1091
+  . /etc/os-release
+  host_id="${ID:-}"
+  host_version="${VERSION_ID:-}"
+fi
+
+if [ "${host_id}" = "debian" ] && [ "${host_version}" = "13" ]; then
+  printf 'OK      %-20s Debian 13\n' "operating system"
+else
+  printf 'MISSING %-20s Debian 13 required; found %s %s\n' \
+    "operating system" "${host_id:-unknown}" "${host_version:-unknown}"
+  failures=$((failures + 1))
+fi
+
+host_arch="$(uname -m)"
+if [ "${host_arch}" = "x86_64" ]; then
+  printf 'OK      %-20s x86_64\n' "architecture"
+else
+  printf 'MISSING %-20s x86_64 required; found %s\n' "architecture" "${host_arch}"
+  failures=$((failures + 1))
+fi
+
+echo
+echo "Required commands and files"
+
+check_command bash bash
+check_command bc bc
+check_command binutils as
+check_command binutils ld
+check_command build-essential gcc
+check_command build-essential g++
+check_command bzip2 bzip2
+check_file ca-certificates "CA certificate bundle" \
+  /etc/ssl/certs/ca-certificates.crt
+check_command cpio cpio
+check_command diffutils diff
+check_command dosfstools mkfs.fat
+check_command e2fsprogs mkfs.ext4
+check_command e2fsprogs debugfs
+check_command file file
+check_command findutils find
+check_command gawk gawk
+check_command git git
+check_command gzip gzip
+check_command make make
+check_command mtools mcopy
+check_file ovmf "OVMF_CODE_4M.fd" \
+  /usr/share/OVMF/OVMF_CODE_4M.fd \
+  /usr/share/ovmf/OVMF_CODE_4M.fd \
+  /usr/share/edk2/ovmf/OVMF_CODE_4M.fd
+check_file ovmf "OVMF_VARS_4M.fd" \
+  /usr/share/OVMF/OVMF_VARS_4M.fd \
+  /usr/share/ovmf/OVMF_VARS_4M.fd \
+  /usr/share/edk2/ovmf/OVMF_VARS_4M.fd
+check_command patch patch
+check_command perl perl
+check_command python3 python3
+check_command qemu-system-x86 qemu-system-x86_64
+check_command rsync rsync
+check_command sed sed
+check_command tar tar
+check_command unzip unzip
+check_command wget wget
+check_command xz-utils xz
+
+echo
+if [ "${failures}" -eq 0 ]; then
+  echo "Build host has all required tools."
+  exit 0
+fi
+
+echo "Build host is missing ${failures} requirement(s)."
+if [ "${#missing_packages[@]}" -gt 0 ]; then
+  echo
+  echo "Install the missing Debian packages with:"
+  printf 'sudo apt-get install'
+  printf ' %q' "${missing_packages[@]}"
+  printf '\n'
+fi
+
+exit 1
