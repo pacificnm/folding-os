@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+BUILDROOT_VERSION="2026.02.2"
+WORK_DIR="${PROJECT_ROOT}/build/work"
+BUILDROOT_DIR="${WORK_DIR}/buildroot-${BUILDROOT_VERSION}"
+DEFCONFIG="${PROJECT_ROOT}/configs/foldingos_x86_64_defconfig"
+
+echo "FoldingOS build"
+echo "Project root: ${PROJECT_ROOT}"
+echo "Buildroot: ${BUILDROOT_VERSION}"
+
+if [ "$(id -u)" -eq 0 ]; then
+  echo "ERROR: Do not run this build as root."
+  exit 1
+fi
+
+if [ ! -f "${DEFCONFIG}" ]; then
+  echo "ERROR: Missing defconfig:"
+  echo "${DEFCONFIG}"
+  exit 1
+fi
+
+"${PROJECT_ROOT}/scripts/fetch-sources"
+
+cd "${BUILDROOT_DIR}"
+
+echo "Applying FoldingOS defconfig"
+make \
+  BR2_EXTERNAL="${PROJECT_ROOT}" \
+  O="${PROJECT_ROOT}/build/output" \
+  BR2_DEFCONFIG="${DEFCONFIG}" \
+  defconfig
+
+echo "Building FoldingOS"
+make O="${PROJECT_ROOT}/build/output"
+
+echo
+echo "Build complete."
+echo "Output directory:"
+echo "${PROJECT_ROOT}/build/output/images"
