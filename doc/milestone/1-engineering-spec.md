@@ -228,6 +228,9 @@ BR2_PACKAGE_LIBCURL_CURL=y
 BR2_PACKAGE_E2FSPROGS=y
 BR2_PACKAGE_E2FSPROGS_RESIZE2FS=y
 BR2_PACKAGE_GPTFDISK=y
+BR2_PACKAGE_HOST_DOSFSTOOLS=y
+BR2_PACKAGE_HOST_GENIMAGE=y
+BR2_PACKAGE_HOST_MTOOLS=y
 BR2_PACKAGE_OPENSSH=y
 BR2_PACKAGE_SUDO=y
 BR2_PACKAGE_UTIL_LINUX=y
@@ -384,7 +387,7 @@ The image uses GPT with these fixed labels:
 
 | Number | GPT Name | Filesystem Label | Filesystem | Initial Size |
 | --- | --- | --- | --- | --- |
-| 1 | `FOLDINGOS_EFI` | `FOLDINGOS_EFI` | vfat | 512 MiB |
+| 1 | `FOLDINGOS_EFI` | `FOLDING_EFI` | vfat | 512 MiB |
 | 2 | `FOLDINGOS_ROOT` | `FOLDINGOS_ROOT` | ext4 | 2 GiB |
 | 3 | `FOLDINGOS_DATA` | `FOLDINGOS_DATA` | ext4 | remaining image capacity |
 
@@ -433,7 +436,7 @@ the v0.1.0 security model.
 Required mounts:
 
 ```text
-/boot/efi  LABEL=FOLDINGOS_EFI  vfat
+/boot/efi  LABEL=FOLDING_EFI    vfat
 /          LABEL=FOLDINGOS_ROOT ext4
 /data      LABEL=FOLDINGOS_DATA ext4
 ```
