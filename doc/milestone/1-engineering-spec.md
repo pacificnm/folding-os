@@ -177,6 +177,25 @@ The upstream tarball, PGP signature, and SHA-256 digest are verified by
 Buildroot is extracted into a disposable working directory. Project
 customizations remain outside the upstream tree.
 
+Buildroot configuration paths are resolved relative to the extracted Buildroot
+source directory:
+
+```text
+build/work/buildroot-2026.02.2/
+```
+
+With the approved repository layout, the committed defconfig uses these paths:
+
+```text
+BR2_ROOTFS_OVERLAY="../../../overlay"
+BR2_ROOTFS_POST_BUILD_SCRIPT="../../../board/foldingos/x86_64/post-build.sh"
+BR2_ROOTFS_POST_IMAGE_SCRIPT="../../../board/foldingos/x86_64/post-image.sh"
+BR2_LINUX_KERNEL_CUSTOM_CONFIG_FILE="../../../configs/linux-x86_64.config"
+```
+
+The build wrapper must verify that these paths resolve before starting the
+build. FoldingOS does not use a Buildroot external tree.
+
 Required Buildroot configuration direction:
 
 ```text
@@ -202,6 +221,7 @@ BR2_LINUX_KERNEL=y
 BR2_LINUX_KERNEL_CUSTOM_VERSION=y
 BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="6.12.90"
 BR2_LINUX_KERNEL_USE_CUSTOM_CONFIG=y
+BR2_LINUX_KERNEL_NEEDS_HOST_LIBELF=y
 BR2_PACKAGE_CA_CERTIFICATES=y
 BR2_PACKAGE_LIBCURL=y
 BR2_PACKAGE_LIBCURL_CURL=y

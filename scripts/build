@@ -7,6 +7,12 @@ BUILDROOT_VERSION="2026.02.2"
 WORK_DIR="${PROJECT_ROOT}/build/work"
 BUILDROOT_DIR="${WORK_DIR}/buildroot-${BUILDROOT_VERSION}"
 DEFCONFIG="${PROJECT_ROOT}/configs/foldingos_x86_64_defconfig"
+BUILDROOT_ASSETS=(
+  "../../../overlay"
+  "../../../board/foldingos/x86_64/post-build.sh"
+  "../../../board/foldingos/x86_64/post-image.sh"
+  "../../../configs/linux-x86_64.config"
+)
 
 echo "FoldingOS build"
 echo "Project root: ${PROJECT_ROOT}"
@@ -26,6 +32,15 @@ fi
 "${PROJECT_ROOT}/scripts/fetch-sources"
 
 cd "${BUILDROOT_DIR}"
+
+echo "Checking Buildroot project paths"
+for asset in "${BUILDROOT_ASSETS[@]}"; do
+  if [ ! -e "${asset}" ]; then
+    echo "ERROR: Buildroot project path does not resolve:"
+    echo "${asset}"
+    exit 1
+  fi
+done
 
 echo "Applying FoldingOS defconfig"
 make \
