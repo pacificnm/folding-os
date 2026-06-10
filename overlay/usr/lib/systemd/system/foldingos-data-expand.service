@@ -1,0 +1,14 @@
+[Unit]
+Description=Expand FoldingOS persistent data partition
+DefaultDependencies=no
+Requires=boot-efi.mount
+After=boot-efi.mount
+Before=data.mount
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/foldingosctl storage expand-data
+RemainAfterExit=yes
+
+[Install]
+WantedBy=local-fs.target

@@ -7,9 +7,15 @@ IMAGES_DIR="${PROJECT_ROOT}/build/output/images"
 HOST_DIR="${PROJECT_ROOT}/build/output/host"
 TEST_DIR="${PROJECT_ROOT}/build/test-qemu"
 RELEASE_IMAGE="${1:-${IMAGES_DIR}/foldingos-x86_64-0.1.0.img}"
-TEST_IMAGE="${TEST_DIR}/foldingos-x86_64-0.1.0-test.img"
-SERIAL_LOG="${TEST_DIR}/serial.log"
+EXACT_IMAGE="${TEST_DIR}/foldingos-x86_64-0.1.0-exact.img"
+LARGER_IMAGE="${TEST_DIR}/foldingos-x86_64-0.1.0-larger.img"
+EXACT_SERIAL_LOG="${TEST_DIR}/exact-serial.log"
+LARGER_SERIAL_LOG="${TEST_DIR}/larger-serial.log"
+REPEAT_SERIAL_LOG="${TEST_DIR}/repeat-serial.log"
 EXPECTED_IMAGE_SIZE=4294967296
+LARGER_IMAGE_SIZE=6442450944
+LARGER_DATA_END=12580863
+BOOT_TIMEOUT=120
 
 find_tool() {
   local name="$1"
@@ -63,17 +69,104 @@ assert_contains() {
 }
 
 verify_filesystem() {
-  local offset="$1"
-  local size="$2"
-  local label="$3"
-  local uuid="$4"
-  local type="$5"
+  local image="$1"
+  local offset="$2"
+  local size="$3"
+  local label="$4"
+  local uuid="$5"
+  local type="$6"
   local output
 
-  output="$("${BLKID}" -p -O "${offset}" -S "${size}" "${RELEASE_IMAGE}")"
+  output="$("${BLKID}" -p -O "${offset}" -S "${size}" "${image}")"
   assert_contains "${output}" "LABEL=\"${label}\"" "Missing filesystem label ${label}."
   assert_contains "${output}" "UUID=\"${uuid}\"" "Unexpected UUID for ${label}."
   assert_contains "${output}" "TYPE=\"${type}\"" "Unexpected filesystem type for ${label}."
+}
+
+boot_image() {
+  local description="$1"
+  local image="$2"
+  local serial_log="$3"
+  local vars_file="${serial_log%.log}-OVMF_VARS_4M.fd"
+  local qemu_pid
+  local qemu_status
+  local seconds
+
+  cp "${OVMF_VARS}" "${vars_file}"
+  rm -f "${serial_log}"
+
+  echo "Booting ${description} with QEMU/OVMF"
+  set +e
+  timeout --signal=TERM --kill-after=10s "${BOOT_TIMEOUT}s" \
+    "${QEMU}" \
+    -machine q35,accel=tcg \
+    -cpu max \
+    -smp 2 \
+    -m 2048 \
+    -drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
+    -drive "if=pflash,format=raw,file=${vars_file}" \
+    -drive "if=virtio,format=raw,file=${image}" \
+    -nic user,model=virtio-net-pci \
+    -display none \
+    -monitor none \
+    -serial "file:${serial_log}" \
+    -no-reboot &
+  qemu_pid=$!
+  set -e
+
+  for ((seconds = 0; seconds < BOOT_TIMEOUT; seconds++)); do
+    if [ -f "${serial_log}" ] &&
+      grep -Eq 'Reached target .*Multi-User|Reached target Multi-User System' "${serial_log}"
+    then
+      kill -TERM "${qemu_pid}" 2>/dev/null || true
+      break
+    fi
+    if ! kill -0 "${qemu_pid}" 2>/dev/null; then
+      break
+    fi
+    sleep 1
+  done
+
+  set +e
+  wait "${qemu_pid}"
+  qemu_status=$?
+  set -e
+
+  if [ "${qemu_status}" -ne 0 ] &&
+    [ "${qemu_status}" -ne 124 ] &&
+    [ "${qemu_status}" -ne 143 ]
+  then
+    echo "ERROR: QEMU exited unexpectedly with status ${qemu_status}." >&2
+    echo "Serial log: ${serial_log}" >&2
+    exit 1
+  fi
+
+  if ! grep -Fq "Linux version" "${serial_log}"; then
+    echo "ERROR: Linux did not start." >&2
+    echo "Serial log: ${serial_log}" >&2
+    exit 1
+  fi
+
+  if ! grep -Eq 'Reached target .*Multi-User|Reached target Multi-User System' "${serial_log}"; then
+    echo "ERROR: systemd did not reach the multi-user target." >&2
+    echo "Serial log: ${serial_log}" >&2
+    exit 1
+  fi
+}
+
+assert_expansion_service_succeeded() {
+  local serial_log="$1"
+
+  if grep -Eq 'Failed to start .*Expand FoldingOS persistent data partition' "${serial_log}"; then
+    echo "ERROR: Data expansion service failed." >&2
+    echo "Serial log: ${serial_log}" >&2
+    exit 1
+  fi
+  if ! grep -Eq 'Finished .*Expand FoldingOS persistent data partition' "${serial_log}"; then
+    echo "ERROR: Data expansion service did not finish successfully." >&2
+    echo "Serial log: ${serial_log}" >&2
+    exit 1
+  fi
 }
 
 if [ ! -f "${RELEASE_IMAGE}" ]; then
@@ -119,11 +212,11 @@ assert_contains "${partition_table}" \
   "0FC63DAF-8483-4772-8E79-3D69D8477DE4 464F4C44-494E-474F-5344-415441000001 FOLDINGOS_DATA" \
   "Unexpected data partition."
 
-verify_filesystem 1048576 536870912 \
+verify_filesystem "${RELEASE_IMAGE}" 1048576 536870912 \
   FOLDING_EFI 464F-5345 vfat
-verify_filesystem 537919488 2147483648 \
+verify_filesystem "${RELEASE_IMAGE}" 537919488 2147483648 \
   FOLDINGOS_ROOT 464f4c44-494e-474f-5352-4f4f54000001 ext4
-verify_filesystem 2685403136 1608515584 \
+verify_filesystem "${RELEASE_IMAGE}" 2685403136 1608515584 \
   FOLDINGOS_DATA 464f4c44-494e-474f-5344-415441000001 ext4
 
 echo "Image structure verified."
@@ -133,46 +226,41 @@ OVMF_CODE="$(find_ovmf_file OVMF_CODE_4M.fd)"
 OVMF_VARS="$(find_ovmf_file OVMF_VARS_4M.fd)"
 
 mkdir -p "${TEST_DIR}"
-cp --reflink=auto --sparse=always "${RELEASE_IMAGE}" "${TEST_IMAGE}"
-cp "${OVMF_VARS}" "${TEST_DIR}/OVMF_VARS_4M.fd"
-rm -f "${SERIAL_LOG}"
+cp --reflink=auto --sparse=always "${RELEASE_IMAGE}" "${EXACT_IMAGE}"
+boot_image "an exact-size image" "${EXACT_IMAGE}" "${EXACT_SERIAL_LOG}"
+assert_expansion_service_succeeded "${EXACT_SERIAL_LOG}"
+exact_partition_table="$("${FDISK}" -l \
+  -o Device,Start,End,Sectors,Size,Type-UUID,UUID,Name \
+  "${EXACT_IMAGE}")"
+assert_contains "${exact_partition_table}" \
+  "5244928 8386559" \
+  "Exact-size disk expansion was not a no-op."
 
-echo "Booting an exact-size image with QEMU/OVMF"
-set +e
-timeout --signal=TERM --kill-after=10s 120s \
-  "${QEMU}" \
-  -machine q35,accel=tcg \
-  -cpu max \
-  -smp 2 \
-  -m 2048 \
-  -drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
-  -drive "if=pflash,format=raw,file=${TEST_DIR}/OVMF_VARS_4M.fd" \
-  -drive "if=virtio,format=raw,file=${TEST_IMAGE}" \
-  -nic user,model=virtio-net-pci \
-  -display none \
-  -monitor none \
-  -serial "file:${SERIAL_LOG}" \
-  -no-reboot
-qemu_status=$?
-set -e
+cp --reflink=auto --sparse=always "${RELEASE_IMAGE}" "${LARGER_IMAGE}"
+truncate -s "${LARGER_IMAGE_SIZE}" "${LARGER_IMAGE}"
+boot_image "a larger image" "${LARGER_IMAGE}" "${LARGER_SERIAL_LOG}"
+assert_expansion_service_succeeded "${LARGER_SERIAL_LOG}"
 
-if [ "${qemu_status}" -ne 0 ] && [ "${qemu_status}" -ne 124 ]; then
-  echo "ERROR: QEMU exited unexpectedly with status ${qemu_status}." >&2
-  echo "Serial log: ${SERIAL_LOG}" >&2
+larger_partition_table="$("${FDISK}" -l \
+  -o Device,Start,End,Sectors,Size,Type-UUID,UUID,Name \
+  "${LARGER_IMAGE}")"
+assert_contains "${larger_partition_table}" \
+  "5244928 ${LARGER_DATA_END}" \
+  "Expanded data partition does not occupy the expected aligned capacity."
+assert_contains "${larger_partition_table}" \
+  "464F4C44-494E-474F-5344-415441000001 FOLDINGOS_DATA" \
+  "Expanded data partition identity changed."
+
+partition_table_before_repeat="${larger_partition_table}"
+boot_image "the already-expanded larger image" "${LARGER_IMAGE}" "${REPEAT_SERIAL_LOG}"
+assert_expansion_service_succeeded "${REPEAT_SERIAL_LOG}"
+partition_table_after_repeat="$("${FDISK}" -l \
+  -o Device,Start,End,Sectors,Size,Type-UUID,UUID,Name \
+  "${LARGER_IMAGE}")"
+if [ "${partition_table_before_repeat}" != "${partition_table_after_repeat}" ]; then
+  echo "ERROR: Repeated expansion changed the partition table." >&2
   exit 1
 fi
 
-if ! grep -Fq "Linux version" "${SERIAL_LOG}"; then
-  echo "ERROR: Linux did not start." >&2
-  echo "Serial log: ${SERIAL_LOG}" >&2
-  exit 1
-fi
-
-if ! grep -Eq 'Reached target .*Multi-User|Reached target Multi-User System' "${SERIAL_LOG}"; then
-  echo "ERROR: systemd did not reach the multi-user target." >&2
-  echo "Serial log: ${SERIAL_LOG}" >&2
-  exit 1
-fi
-
-echo "QEMU/OVMF boot verified."
-echo "Serial log: ${SERIAL_LOG}"
+echo "QEMU/OVMF boot and storage expansion verified."
+echo "Serial logs: ${EXACT_SERIAL_LOG}, ${LARGER_SERIAL_LOG}, ${REPEAT_SERIAL_LOG}"

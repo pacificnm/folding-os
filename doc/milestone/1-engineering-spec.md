@@ -197,6 +197,13 @@ BR2_LINUX_KERNEL_CUSTOM_CONFIG_FILE="../../../configs/linux-x86_64.config"
 The build wrapper must verify that these paths resolve before starting the
 build. FoldingOS does not use a Buildroot external tree.
 
+Before applying the defconfig, `scripts/build` may stage repository-local
+Buildroot package definitions from `packages/` into the disposable extracted
+Buildroot tree and register them in its package menu. Staging is allowed only
+under `build/work/buildroot-<version>/`, must be repeatable and idempotent, and
+must not modify committed upstream Buildroot source. This mechanism does not
+use `BR2_EXTERNAL`.
+
 Required Buildroot configuration direction:
 
 ```text
@@ -228,6 +235,7 @@ BR2_PACKAGE_LIBCURL=y
 BR2_PACKAGE_LIBCURL_CURL=y
 BR2_PACKAGE_E2FSPROGS=y
 BR2_PACKAGE_E2FSPROGS_RESIZE2FS=y
+BR2_PACKAGE_FOLDINGOSCTL=y
 BR2_PACKAGE_GPTFDISK=y
 BR2_PACKAGE_HOST_DOSFSTOOLS=y
 BR2_PACKAGE_HOST_GENIMAGE=y

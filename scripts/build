@@ -7,11 +7,16 @@ BUILDROOT_VERSION="2026.02.2"
 WORK_DIR="${PROJECT_ROOT}/build/work"
 BUILDROOT_DIR="${WORK_DIR}/buildroot-${BUILDROOT_VERSION}"
 DEFCONFIG="${PROJECT_ROOT}/configs/foldingos_x86_64_defconfig"
+FOLDINGOSCTL_PACKAGE="${PROJECT_ROOT}/packages/foldingosctl"
 BUILDROOT_ASSETS=(
   "../../../overlay"
   "../../../board/foldingos/x86_64/post-build.sh"
   "../../../board/foldingos/x86_64/post-image.sh"
   "../../../configs/linux-x86_64.config"
+  "../../../packages/foldingosctl/Config.in"
+  "../../../packages/foldingosctl/foldingosctl.mk"
+  "../../../packages/foldingosctl/src/go.mod"
+  "../../../packages/foldingosctl/src/main.go"
 )
 
 echo "FoldingOS build"
@@ -41,6 +46,15 @@ for asset in "${BUILDROOT_ASSETS[@]}"; do
     exit 1
   fi
 done
+
+echo "Staging repository-local Buildroot packages"
+rm -rf "${BUILDROOT_DIR}/package/foldingosctl"
+cp -a "${FOLDINGOSCTL_PACKAGE}" "${BUILDROOT_DIR}/package/foldingosctl"
+if ! grep -Fq 'source "package/foldingosctl/Config.in"' "${BUILDROOT_DIR}/package/Config.in"; then
+  sed -i \
+    '/menu "Target packages"/a\	source "package/foldingosctl/Config.in"' \
+    "${BUILDROOT_DIR}/package/Config.in"
+fi
 
 echo "Applying FoldingOS defconfig"
 make \

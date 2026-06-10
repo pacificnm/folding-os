@@ -13,3 +13,8 @@ ln -snf /run/systemd/resolve/stub-resolv.conf "${TARGET_DIR}/etc/resolv.conf"
 
 # Host keys are generated on the node and must not be embedded in the image.
 rm -f "${TARGET_DIR}"/etc/ssh/ssh_host_*_key*
+
+mkdir -p "${TARGET_DIR}/etc/systemd/system/local-fs.target.wants"
+ln -snf \
+  /usr/lib/systemd/system/foldingos-data-expand.service \
+  "${TARGET_DIR}/etc/systemd/system/local-fs.target.wants/foldingos-data-expand.service"
