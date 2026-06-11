@@ -1,0 +1,14 @@
+[Unit]
+Description=FoldingOS persistent journal
+Requires=foldingos-persistent-dirs.service
+After=foldingos-persistent-dirs.service
+Before=foldingos-journal-flush.service
+
+[Mount]
+What=/data/logs/journal
+Where=/var/log/journal
+Type=none
+Options=bind
+
+[Install]
+WantedBy=local-fs.target

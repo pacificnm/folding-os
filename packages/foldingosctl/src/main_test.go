@@ -37,11 +37,53 @@ func TestPartitionDevice(t *testing.T) {
 		"/dev/vda":     "/dev/vda3",
 		"/dev/sda":     "/dev/sda3",
 		"/dev/nvme0n1": "/dev/nvme0n1p3",
-		"/dev/mmcblk0":  "/dev/mmcblk0p3",
+		"/dev/mmcblk0": "/dev/mmcblk0p3",
 	}
 	for disk, expected := range tests {
 		if got := partitionDevice(disk, dataPartitionNumber); got != expected {
 			t.Fatalf("partitionDevice(%q) = %q, want %q", disk, got, expected)
 		}
+	}
+}
+
+func TestParseAndRenderSystemConfig(t *testing.T) {
+	config := "schema_version = 1\n\n[identity]\nhostname = \"folding-node\"\n"
+	values, err := parseDomain("system", config, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := renderDomain("system", values); got != config {
+		t.Fatalf("rendered config:\n%s", got)
+	}
+}
+
+func TestRejectUnknownConfigKey(t *testing.T) {
+	config := "schema_version = 1\n\n[ethernet]\ndhcp = true\nrequired_for_online = true\naddress = \"192.0.2.1\"\n"
+	if _, err := parseDomain("network", config, true); err == nil {
+		t.Fatal("unknown network key was accepted")
+	}
+}
+
+func TestRejectUnsupportedFoldingHomeConfig(t *testing.T) {
+	config := domainConfig{
+		"schema_version":          {kind: "int", ival: 1},
+		"identity.username":       {kind: "string", text: "Anonymous"},
+		"identity.team":           {kind: "int", ival: 0},
+		"identity.passkey_secret": {kind: "string", text: "../secret"},
+		"resources.cpus":          {kind: "int", ival: 0},
+		"resources.gpus":          {kind: "bool", bval: false},
+	}
+	if err := validateDomain("foldinghome", config); err == nil {
+		t.Fatal("unsafe secret reference was accepted")
+	}
+}
+
+func TestNewUUID(t *testing.T) {
+	value, err := newUUID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !uuidPattern.MatchString(value) {
+		t.Fatalf("invalid UUIDv4: %s", value)
 	}
 }

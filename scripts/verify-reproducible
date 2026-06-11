@@ -1,0 +1,155 @@
+#!/usr/bin/env python3
+"""Compare two independently produced FoldingOS artifact directories."""
+
+import hashlib
+import json
+import sys
+from pathlib import Path
+
+
+VERSION = "0.1.0"
+BASE_NAME = f"foldingos-x86_64-{VERSION}"
+REQUIRED_FILES = (
+    f"{BASE_NAME}.img",
+    f"{BASE_NAME}.img.sha256",
+    f"{BASE_NAME}.metadata.json",
+    f"{BASE_NAME}.source-inputs.json",
+    f"{BASE_NAME}.build-host.json",
+)
+DETERMINISTIC_FILES = REQUIRED_FILES[:-1]
+COMPATIBLE_ARCHITECTURES = {"amd64", "x86_64"}
+
+
+class VerificationError(Exception):
+    """A reproducibility verification failure."""
+
+
+def fail(message):
+    raise VerificationError(message)
+
+
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for block in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def load_json(path):
+    try:
+        with path.open("r", encoding="utf-8") as source:
+            value = json.load(source)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        fail(f"{path.name} is not valid JSON: {error}")
+
+    if not isinstance(value, dict):
+        fail(f"{path.name} must contain a JSON object")
+    return value
+
+
+def require_string(record, key, filename):
+    value = record.get(key)
+    if not isinstance(value, str) or not value:
+        fail(f"{filename} must contain a non-empty {key!r} string")
+    return value
+
+
+def validate_host(record, filename):
+    version = str(record.get("debian_version", ""))
+    architecture = require_string(record, "architecture", filename)
+
+    if version != "13" and not version.startswith("13."):
+        fail(f"{filename} reports incompatible Debian version {version!r}")
+    if architecture not in COMPATIBLE_ARCHITECTURES:
+        fail(f"{filename} reports incompatible architecture {architecture!r}")
+
+
+def validate_directory(directory, label):
+    if not directory.is_dir():
+        fail(f"{label} directory does not exist: {directory}")
+
+    for filename in REQUIRED_FILES:
+        if not (directory / filename).is_file():
+            fail(f"{label} is missing required file: {filename}")
+
+    metadata = load_json(directory / f"{BASE_NAME}.metadata.json")
+    source_inputs = load_json(directory / f"{BASE_NAME}.source-inputs.json")
+    build_host = load_json(directory / f"{BASE_NAME}.build-host.json")
+    git_revision = require_string(
+        metadata, "git_revision", f"{BASE_NAME}.metadata.json"
+    )
+    validate_host(build_host, f"{BASE_NAME}.build-host.json")
+
+    digests = {
+        filename: sha256_file(directory / filename)
+        for filename in DETERMINISTIC_FILES
+    }
+    return git_revision, source_inputs, digests
+
+
+def main():
+    if len(sys.argv) != 3:
+        print(
+            "Usage: ./scripts/verify-reproducible <build-a-dir> <build-b-dir>",
+            file=sys.stderr,
+        )
+        return 2
+
+    project_root = Path(__file__).resolve().parent.parent
+    result_path = (
+        project_root
+        / "build"
+        / "verification"
+        / "result"
+        / f"{BASE_NAME}.reproducibility.json"
+    )
+    result_path.unlink(missing_ok=True)
+
+    build_a = Path(sys.argv[1])
+    build_b = Path(sys.argv[2])
+
+    revision_a, sources_a, digests_a = validate_directory(build_a, "build-a")
+    revision_b, sources_b, digests_b = validate_directory(build_b, "build-b")
+
+    if revision_a != revision_b:
+        fail("builds used different Git revisions")
+    if sources_a != sources_b:
+        fail("builds used different pinned source inputs")
+
+    for filename in DETERMINISTIC_FILES:
+        if digests_a[filename] != digests_b[filename]:
+            fail(f"deterministic artifact differs: {filename}")
+
+    result = {
+        "artifact_digests": {
+            "build_a": digests_a,
+            "build_b": digests_b,
+        },
+        "compatible_build_host": {
+            "architecture": "amd64",
+            "debian_major_version": "13",
+        },
+        "foldingos_version": VERSION,
+        "git_revision": revision_a,
+        "result": "pass",
+        "schema_version": 1,
+    }
+
+    result_path.parent.mkdir(parents=True, exist_ok=True)
+    result_path.write_text(
+        json.dumps(result, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    print("FoldingOS reproducibility verification passed.")
+    print(f"Result: {result_path}")
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except VerificationError as error:
+        print(f"ERROR: {error}", file=sys.stderr)
+        sys.exit(1)

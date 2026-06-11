@@ -1,0 +1,10 @@
+schema_version = 1
+
+[identity]
+username = "Anonymous"
+team = 0
+passkey_secret = ""
+
+[resources]
+cpus = 0
+gpus = false

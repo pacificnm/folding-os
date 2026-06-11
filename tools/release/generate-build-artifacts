@@ -1,0 +1,227 @@
+#!/usr/bin/env python3
+"""Generate FoldingOS build metadata and verification artifacts."""
+
+import hashlib
+import json
+import platform
+import subprocess
+import sys
+from pathlib import Path
+
+
+FOLDINGOS_VERSION = "0.1.0"
+BUILDROOT_VERSION = "2026.02.2"
+LINUX_VERSION = "6.12.90"
+BASE_NAME = f"foldingos-x86_64-{FOLDINGOS_VERSION}"
+SOURCE_PATHS = (
+    "board",
+    "configs",
+    "overlay",
+    "packages",
+    "scripts/build",
+    "scripts/fetch-sources",
+    "tools/release/generate-build-artifacts",
+    "build/host/debian-13-packages.txt",
+)
+
+
+class ArtifactError(Exception):
+    """A build-artifact generation failure."""
+
+
+def fail(message):
+    raise ArtifactError(message)
+
+
+def run(command, cwd=None):
+    try:
+        return subprocess.run(
+            command,
+            cwd=cwd,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError) as error:
+        detail = getattr(error, "stderr", "") or str(error)
+        fail(f"command failed: {' '.join(command)}: {detail.strip()}")
+
+
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for block in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def write_json(path, value):
+    path.write_text(
+        json.dumps(value, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def read_os_release():
+    values = {}
+    try:
+        for line in Path("/etc/os-release").read_text(encoding="utf-8").splitlines():
+            if "=" not in line or line.startswith("#"):
+                continue
+            key, value = line.split("=", 1)
+            values[key] = value.strip().strip('"')
+    except OSError as error:
+        fail(f"cannot read /etc/os-release: {error}")
+    return values
+
+
+def collect_source_files(project_root):
+    files = []
+    for relative in SOURCE_PATHS:
+        path = project_root / relative
+        if path.is_file():
+            files.append(path)
+        elif path.is_dir():
+            files.extend(candidate for candidate in path.rglob("*") if candidate.is_file())
+        else:
+            fail(f"missing required source input: {relative}")
+    return sorted(set(files), key=lambda path: path.relative_to(project_root).as_posix())
+
+
+def collect_installed_packages(package_manifest):
+    package_names = [
+        line.strip()
+        for line in package_manifest.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
+    ]
+    packages = []
+    for package_name in package_names:
+        version = run(
+            [
+                "dpkg-query",
+                "-W",
+                "-f=${binary:Package}\t${Version}",
+                package_name,
+            ]
+        )
+        actual_name, separator, actual_version = version.partition("\t")
+        if not separator or not actual_name or not actual_version:
+            fail(f"cannot determine installed version for package: {package_name}")
+        packages.append({"name": actual_name, "version": actual_version})
+    return sorted(packages, key=lambda package: package["name"])
+
+
+def main():
+    if len(sys.argv) != 3:
+        print(
+            "Usage: generate-build-artifacts <project-root> <images-dir>",
+            file=sys.stderr,
+        )
+        return 2
+
+    project_root = Path(sys.argv[1]).resolve()
+    images_dir = Path(sys.argv[2]).resolve()
+    image_path = images_dir / f"{BASE_NAME}.img"
+    checksum_path = images_dir / f"{BASE_NAME}.img.sha256"
+    metadata_path = images_dir / f"{BASE_NAME}.metadata.json"
+    source_inputs_path = images_dir / f"{BASE_NAME}.source-inputs.json"
+    build_host_path = images_dir / f"{BASE_NAME}.build-host.json"
+    buildroot_archive = (
+        project_root
+        / "build"
+        / "buildroot"
+        / f"buildroot-{BUILDROOT_VERSION}.tar.xz"
+    )
+    package_manifest = project_root / "build/host/debian-13-packages.txt"
+    defconfig = project_root / "configs/foldingos_x86_64_defconfig"
+
+    for path in (image_path, buildroot_archive, package_manifest, defconfig):
+        if not path.is_file():
+            fail(f"missing required build input: {path}")
+
+    git_revision = run(["git", "rev-parse", "HEAD"], cwd=project_root)
+    source_timestamp = int(run(["git", "show", "-s", "--format=%ct", "HEAD"], cwd=project_root))
+
+    image_digest = sha256_file(image_path)
+    checksum_path.write_text(
+        f"{image_digest}  {image_path.name}\n",
+        encoding="utf-8",
+    )
+
+    source_inputs = {
+        "buildroot": {
+            "file": buildroot_archive.name,
+            "sha256": sha256_file(buildroot_archive),
+            "version": BUILDROOT_VERSION,
+        },
+        "files": {
+            path.relative_to(project_root).as_posix(): sha256_file(path)
+            for path in collect_source_files(project_root)
+        },
+        "git_revision": git_revision,
+        "schema_version": 1,
+    }
+    write_json(source_inputs_path, source_inputs)
+
+    os_release = read_os_release()
+    debian_version = os_release.get("VERSION_ID", "")
+    architecture = run(["dpkg", "--print-architecture"])
+    if os_release.get("ID") != "debian" or (
+        debian_version != "13" and not debian_version.startswith("13.")
+    ):
+        fail(f"build host must be Debian 13; found {os_release.get('ID')} {debian_version}")
+    if architecture != "amd64":
+        fail(f"build host must use amd64 architecture; found {architecture}")
+
+    build_host = {
+        "architecture": architecture,
+        "debian_version": debian_version,
+        "installed_packages": collect_installed_packages(package_manifest),
+        "kernel_release": platform.release(),
+        "schema_version": 1,
+    }
+    write_json(build_host_path, build_host)
+
+    metadata = {
+        "approved_fah_manifest_sha256": None,
+        "artifact_digests": {
+            image_path.name: image_digest,
+            checksum_path.name: sha256_file(checksum_path),
+            source_inputs_path.name: sha256_file(source_inputs_path),
+            build_host_path.name: sha256_file(build_host_path),
+        },
+        "build_type": "development",
+        "build_host_baseline": {
+            "architecture": "amd64",
+            "debian_major_version": "13",
+            "package_manifest_sha256": sha256_file(package_manifest),
+        },
+        "buildroot": {
+            "sha256": sha256_file(buildroot_archive),
+            "version": BUILDROOT_VERSION,
+        },
+        "buildroot_defconfig_sha256": sha256_file(defconfig),
+        "foldingos_version": FOLDINGOS_VERSION,
+        "git_revision": git_revision,
+        "linux_kernel_version": LINUX_VERSION,
+        "physical_validation_complete": False,
+        "release_eligible": False,
+        "schema_version": 1,
+        "source_inputs_manifest_sha256": sha256_file(source_inputs_path),
+        "source_revision_timestamp": source_timestamp,
+    }
+    write_json(metadata_path, metadata)
+
+    print("Generated FoldingOS build artifacts:")
+    for path in (image_path, checksum_path, metadata_path, source_inputs_path, build_host_path):
+        print(path)
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except ArtifactError as error:
+        print(f"ERROR: {error}", file=sys.stderr)
+        sys.exit(1)

@@ -1,5 +1,8 @@
 # Build outputs, downloaded sources, and release artifacts
-/build/
+/build/*
+!/build/host/
+/build/host/*
+!/build/host/debian-13-packages.txt
 /output/
 /artifacts/
 /release/

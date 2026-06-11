@@ -1,0 +1,13 @@
+[Unit]
+Description=Provision FoldingOS SSH access
+Requires=boot-efi.mount foldingos-persistent-dirs.service
+After=boot-efi.mount foldingos-persistent-dirs.service
+Before=sshd.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/foldingosctl provision ssh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=local-fs.target

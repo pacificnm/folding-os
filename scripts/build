@@ -12,12 +12,17 @@ BUILDROOT_ASSETS=(
   "../../../overlay"
   "../../../board/foldingos/x86_64/post-build.sh"
   "../../../board/foldingos/x86_64/post-image.sh"
+  "../../../board/foldingos/x86_64/users.txt"
   "../../../configs/linux-x86_64.config"
   "../../../packages/foldingosctl/Config.in"
   "../../../packages/foldingosctl/foldingosctl.mk"
   "../../../packages/foldingosctl/src/go.mod"
+  "../../../packages/foldingosctl/src/config.go"
+  "../../../packages/foldingosctl/src/files.go"
+  "../../../packages/foldingosctl/src/identity.go"
   "../../../packages/foldingosctl/src/main.go"
   "../../../packages/foldingosctl/src/main_test.go"
+  "../../../packages/foldingosctl/src/provision.go"
 )
 
 echo "FoldingOS build"
@@ -65,6 +70,11 @@ make \
 
 echo "Building FoldingOS"
 make O="${PROJECT_ROOT}/build/output"
+
+echo "Generating FoldingOS build artifacts"
+"${PROJECT_ROOT}/tools/release/generate-build-artifacts" \
+  "${PROJECT_ROOT}" \
+  "${PROJECT_ROOT}/build/output/images"
 
 echo
 echo "Build complete."

@@ -26,16 +26,38 @@ var (
 	partitionPattern  = regexp.MustCompile(`(?m)^\s*([0-9]+)\s+([0-9]+)\s+([0-9]+)\s+`)
 )
 
-func main() {
-	if len(os.Args) != 3 || os.Args[1] != "storage" || os.Args[2] != "expand-data" {
-		fmt.Fprintln(os.Stderr, "usage: foldingosctl storage expand-data")
-		os.Exit(2)
-	}
+var execCommand = exec.Command
 
-	if err := expandData(); err != nil {
-		fmt.Fprintf(os.Stderr, "foldingosctl: storage expansion failed: %v\n", err)
+func main() {
+	if err := dispatch(os.Args[1:]); err != nil {
+		fmt.Fprintf(os.Stderr, "foldingosctl: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func dispatch(args []string) error {
+	if len(args) == 2 && args[0] == "storage" && args[1] == "expand-data" {
+		return expandData()
+	}
+	if len(args) == 2 && args[0] == "identity" && args[1] == "ensure" {
+		return ensureIdentity()
+	}
+	if len(args) == 2 && args[0] == "provision" && args[1] == "ssh" {
+		return provisionSSH()
+	}
+	if len(args) == 3 && args[0] == "config" && args[1] == "validate" {
+		return validateConfig(args[2])
+	}
+	if len(args) == 3 && args[0] == "config" && args[1] == "effective" {
+		return printEffectiveConfig(args[2])
+	}
+	if len(args) == 4 && args[0] == "config" && args[1] == "activate" {
+		return activateConfig(args[2], args[3])
+	}
+
+	fmt.Fprintln(os.Stderr, "usage: foldingosctl <config|identity|provision|storage> <command> [arguments]")
+	os.Exit(2)
+	return nil
 }
 
 func expandData() error {

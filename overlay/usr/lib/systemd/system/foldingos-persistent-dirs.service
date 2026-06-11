@@ -1,0 +1,13 @@
+[Unit]
+Description=Create FoldingOS persistent directories
+Requires=data.mount
+After=data.mount
+Before=var-log-journal.mount foldingos-identity.service foldingos-config-validate.service foldingos-ssh-provision.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemd-tmpfiles --create /usr/lib/tmpfiles.d/foldingos.conf
+RemainAfterExit=yes
+
+[Install]
+WantedBy=local-fs.target

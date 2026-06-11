@@ -1,0 +1,20 @@
+mkdir -p build/manual-qemu
+
+cp --reflink=auto --sparse=always \
+  build/output/images/foldingos-x86_64-0.1.0.img \
+  build/manual-qemu/foldingos.img
+
+cp /usr/share/OVMF/OVMF_VARS_4M.fd \
+  build/manual-qemu/OVMF_VARS_4M.fd
+
+qemu-system-x86_64 \
+  -machine q35,accel=tcg \
+  -cpu max \
+  -smp 2 \
+  -m 2048 \
+  -drive if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd \
+  -drive if=pflash,format=raw,file=build/manual-qemu/OVMF_VARS_4M.fd \
+  -drive if=virtio,format=raw,file=build/manual-qemu/foldingos.img \
+  -nic user,model=virtio-net-pci \
+  -nographic \
+  -no-reboot

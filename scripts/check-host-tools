@@ -108,6 +108,7 @@ check_command e2fsprogs debugfs
 check_command file file
 check_command findutils find
 check_command gawk gawk
+check_command gdisk sgdisk
 check_command git git
 check_command gzip gzip
 check_command make make
@@ -122,6 +123,8 @@ check_file ovmf "OVMF_VARS_4M.fd" \
   /usr/share/edk2/ovmf/OVMF_VARS_4M.fd
 check_command patch patch
 check_command perl perl
+check_command openssh-client ssh
+check_command openssh-client ssh-keygen
 check_command python3 python3
 check_command qemu-system-x86 qemu-system-x86_64
 check_command rsync rsync

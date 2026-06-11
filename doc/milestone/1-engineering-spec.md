@@ -73,6 +73,7 @@ board/
       grub.cfg
       post-build.sh
       post-image.sh
+      users.txt
 
 overlay/
   etc/
@@ -119,12 +120,16 @@ Debian kernel package 6.12.90-2
 x86_64 GNU/Linux
 ```
 
-Required Debian build and test packages must be captured with exact installed
-versions in:
+Required Debian build and test package names are captured as a deterministic
+baseline in:
 
 ```text
 build/host/debian-13-packages.txt
 ```
+
+The baseline contains package names only. Each build records the actual
+installed package names and versions separately in
+`foldingos-x86_64-0.1.0.build-host.json`.
 
 The initial package set must include at least:
 
@@ -225,6 +230,9 @@ BR2_TOOLCHAIN_BUILDROOT_GLIBC=y
 BR2_INIT_SYSTEMD=y
 BR2_ROOTFS_DEVICE_CREATION_DYNAMIC_EUDEV=y
 BR2_REPRODUCIBLE=y
+BR2_TARGET_GENERIC_HOSTNAME="foldingos"
+BR2_TARGET_GENERIC_ISSUE="Welcome to FoldingOS"
+BR2_ROOTFS_USERS_TABLES="../../../board/foldingos/x86_64/users.txt"
 BR2_LINUX_KERNEL=y
 BR2_LINUX_KERNEL_CUSTOM_VERSION=y
 BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="6.12.90"
@@ -257,6 +265,21 @@ pinned in the Buildroot configuration before the first build.
 
 The committed defconfig is authoritative. Interactive `menuconfig` changes
 must be saved back to the defconfig before review.
+
+The target operating-system identity is published through
+`/usr/lib/os-release` with these exact v0.1.0 values:
+
+```text
+NAME="FoldingOS"
+ID=foldingos
+VERSION="0.1.0"
+VERSION_ID="0.1.0"
+PRETTY_NAME="FoldingOS 0.1.0"
+```
+
+`/etc/os-release` remains the standard relative symlink to
+`../usr/lib/os-release`. The target must not publish Buildroot as its operating
+system identity.
 
 ---
 
@@ -1246,6 +1269,7 @@ Deterministic metadata JSON produced by both clean builds contains:
 
 ```text
 FoldingOS version
+build type and release eligibility
 Git commit and source timestamp
 Buildroot version and digest
 Linux kernel version
@@ -1255,34 +1279,170 @@ Buildroot defconfig digest
 source-input digest manifest
 artifact digests
 approved FAH manifest digest
+physical hardware validation status
 ```
 
 Metadata key ordering and formatting must be deterministic.
+`foldingos-x86_64-0.1.0.metadata.json` records SHA-256 digests for:
+
+```text
+foldingos-x86_64-0.1.0.img
+foldingos-x86_64-0.1.0.img.sha256
+foldingos-x86_64-0.1.0.source-inputs.json
+foldingos-x86_64-0.1.0.build-host.json
+```
+
+The metadata does not record its own digest. Until an approved Folding@home
+acquisition manifest exists, metadata records:
+
+```json
+"approved_fah_manifest_sha256": null
+```
+
+Release publication remains blocked while this value is `null`.
+
+Until both mandatory release gates defined below are satisfied, metadata must
+record:
+
+```json
+{
+  "approved_fah_manifest_sha256": null,
+  "build_type": "development",
+  "physical_validation_complete": false,
+  "release_eligible": false
+}
+```
+
+Any build carrying these values is a development build only and is not eligible
+for public release. `scripts/build` emits development-build metadata. It must
+not accept an unaudited flag or environment variable that merely asserts
+release eligibility.
+
+Only after both mandatory release gates are satisfied may metadata record:
+
+```json
+{
+  "build_type": "release",
+  "release_eligible": true
+}
+```
+
+The mechanism that verifies the approved Folding@home acquisition manifest and
+physical validation record before emitting release metadata must be documented
+and approved before implementation.
 
 Each clean build also emits a non-release verification record containing its
 actual hostname-independent kernel version and installed package versions.
 Those records are compared and retained for diagnostics but are not required
-to be byte-identical release artifacts.
+to be byte-identical release artifacts. Because deterministic metadata records
+the build-host record digest, differing build-host records cause the required
+metadata artifacts to differ and therefore fail reproducibility verification.
 
 After both builds match, `verify-reproducible` creates the deterministic
 reproducibility JSON report that records both required-artifact digest sets and
 the pass result. The report must not contain hostnames, usernames, workspace
 paths, or wall-clock timestamps.
 
+`scripts/verify-reproducible` does not create or orchestrate build
+environments. The operator prepares and runs two independent Debian 13 amd64
+build environments and supplies their completed artifact directories. For
+v0.1.0, the environments should be separate Debian 13 virtual machines or
+physical systems. Containers are not approved unless ADR-0012 is amended.
+
+Command:
+
+```bash
+./scripts/verify-reproducible <build-a-dir> <build-b-dir>
+```
+
+The operator may use this artifact handoff layout:
+
+```text
+build/verification/
+  build-a/
+  build-b/
+  result/
+```
+
+Each input directory must contain:
+
+```text
+foldingos-x86_64-0.1.0.img
+foldingos-x86_64-0.1.0.img.sha256
+foldingos-x86_64-0.1.0.metadata.json
+foldingos-x86_64-0.1.0.source-inputs.json
+foldingos-x86_64-0.1.0.build-host.json
+```
+
+The metadata JSON supplies the `git_revision` string. The build-host JSON
+supplies `debian_version` and `architecture`; compatible v0.1.0 hosts report
+Debian major version `13` and architecture `amd64` or `x86_64`.
+
+The comparison script:
+
+1. Fails if either input directory or any required file is missing.
+2. Confirms both builds used the same Git revision.
+3. Confirms both builds used the same pinned source inputs.
+4. Confirms both builds used compatible Debian 13 amd64 hosts.
+5. Compares the SHA-256 digest of every required deterministic artifact. The
+   build-host verification records are compatibility-checked but are not
+   required to be byte-identical.
+6. Writes a deterministic successful result to:
+
+   ```text
+   build/verification/result/foldingos-x86_64-0.1.0.reproducibility.json
+   ```
+
+The required deterministic comparison artifacts are the image, image checksum
+manifest, metadata JSON, and source-inputs JSON.
+
 ---
 
 # Release Gates
 
-v0.1.0 publication is blocked until:
+## Mandatory Gate: Folding@home Acquisition Manifest
 
-1. All placeholders in the approved FAH 8.5 manifest are replaced.
-2. The FAH artifact runs successfully on FoldingOS and passes compatibility
-   tests.
-3. QEMU/OVMF acceptance tests pass.
-4. Every claimed physical validated system passes its hardware acceptance test.
-5. Security and failure-injection tests pass.
-6. Two independent clean builds produce byte-identical required artifacts.
-7. Documentation and release notes match the implementation.
+A FoldingOS release must not be published until an approved Folding@home
+acquisition manifest has been created, reviewed, and committed. The manifest
+must contain no unresolved placeholders, and its approved Folding@home artifact
+must run successfully on FoldingOS and pass compatibility tests.
+
+Until this gate is satisfied, `approved_fah_manifest_sha256` must be `null`.
+Any build produced while that value is `null` is a development build only and
+is not eligible for public release.
+
+## Mandatory Gate: Physical Hardware Validation
+
+A FoldingOS release must not be published until successful validation has been
+completed on approved physical target hardware. QEMU validation alone is
+insufficient for release.
+
+Physical validation must verify, at minimum:
+
+- UEFI boot
+- GPT partition layout
+- root filesystem mount
+- data partition creation and expansion
+- network initialization
+- systemd service startup
+- SSH accessibility
+- journald operation
+- FoldingOS service startup
+- Folding@home installation and acquisition behavior
+- graceful shutdown and reboot
+
+Until this gate is satisfied, `physical_validation_complete` must be `false`.
+Any build produced while that value is `false` is a development build only and
+is not eligible for public release.
+
+## Additional Release Gates
+
+v0.1.0 publication also remains blocked until:
+
+1. QEMU/OVMF acceptance tests pass.
+2. Security and failure-injection tests pass.
+3. Two independent clean builds produce byte-identical required artifacts.
+4. Documentation and release notes match the implementation.
 
 ---
 

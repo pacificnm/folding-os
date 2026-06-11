@@ -1,0 +1,12 @@
+[Unit]
+Description=Flush FoldingOS journal to persistent storage
+Requires=var-log-journal.mount
+After=var-log-journal.mount
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/journalctl --flush
+RemainAfterExit=yes
+
+[Install]
+WantedBy=local-fs.target

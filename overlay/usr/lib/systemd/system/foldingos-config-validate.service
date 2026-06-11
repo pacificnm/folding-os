@@ -1,0 +1,13 @@
+[Unit]
+Description=Validate FoldingOS configuration
+Requires=foldingos-identity.service
+After=foldingos-identity.service
+Before=systemd-networkd.service systemd-networkd-wait-online.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/foldingosctl config validate --all
+RemainAfterExit=yes
+
+[Install]
+WantedBy=local-fs.target

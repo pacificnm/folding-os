@@ -6,15 +6,86 @@ TARGET_DIR="${1:?target directory argument is required}"
 mkdir -p \
   "${TARGET_DIR}/boot/efi" \
   "${TARGET_DIR}/data" \
-  "${TARGET_DIR}/etc/systemd/network"
+  "${TARGET_DIR}/etc/systemd/network" \
+  "${TARGET_DIR}/usr/lib"
+
+cat > "${TARGET_DIR}/usr/lib/os-release" <<'EOF'
+NAME="FoldingOS"
+ID=foldingos
+VERSION="0.1.0"
+VERSION_ID="0.1.0"
+PRETTY_NAME="FoldingOS 0.1.0"
+EOF
+ln -snf ../usr/lib/os-release "${TARGET_DIR}/etc/os-release"
 
 # systemd-resolved owns the runtime resolver file.
 ln -snf /run/systemd/resolve/stub-resolv.conf "${TARGET_DIR}/etc/resolv.conf"
 
 # Host keys are generated on the node and must not be embedded in the image.
 rm -f "${TARGET_DIR}"/etc/ssh/ssh_host_*_key*
+chmod 0440 "${TARGET_DIR}/etc/sudoers.d/foldingos-admin"
 
 mkdir -p "${TARGET_DIR}/etc/systemd/system/local-fs.target.wants"
 ln -snf \
   /usr/lib/systemd/system/foldingos-data-expand.service \
   "${TARGET_DIR}/etc/systemd/system/local-fs.target.wants/foldingos-data-expand.service"
+ln -snf \
+  /usr/lib/systemd/system/foldingos-persistent-dirs.service \
+  "${TARGET_DIR}/etc/systemd/system/local-fs.target.wants/foldingos-persistent-dirs.service"
+ln -snf \
+  /usr/lib/systemd/system/var-log-journal.mount \
+  "${TARGET_DIR}/etc/systemd/system/local-fs.target.wants/var-log-journal.mount"
+ln -snf \
+  /usr/lib/systemd/system/foldingos-journal-flush.service \
+  "${TARGET_DIR}/etc/systemd/system/local-fs.target.wants/foldingos-journal-flush.service"
+ln -snf \
+  /usr/lib/systemd/system/foldingos-identity.service \
+  "${TARGET_DIR}/etc/systemd/system/local-fs.target.wants/foldingos-identity.service"
+ln -snf \
+  /usr/lib/systemd/system/foldingos-config-validate.service \
+  "${TARGET_DIR}/etc/systemd/system/local-fs.target.wants/foldingos-config-validate.service"
+ln -snf \
+  /usr/lib/systemd/system/foldingos-ssh-provision.service \
+  "${TARGET_DIR}/etc/systemd/system/local-fs.target.wants/foldingos-ssh-provision.service"
+
+mkdir -p \
+  "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants" \
+  "${TARGET_DIR}/etc/systemd/system/network-online.target.wants" \
+  "${TARGET_DIR}/etc/systemd/system/sockets.target.wants" \
+  "${TARGET_DIR}/etc/systemd/system/sysinit.target.wants"
+ln -snf \
+  /usr/lib/systemd/system/sshd.service \
+  "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/sshd.service"
+ln -snf \
+  /usr/lib/systemd/system/systemd-networkd.service \
+  "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/systemd-networkd.service"
+ln -snf \
+  /usr/lib/systemd/system/systemd-networkd-wait-online.service \
+  "${TARGET_DIR}/etc/systemd/system/network-online.target.wants/systemd-networkd-wait-online.service"
+ln -snf \
+  /usr/lib/systemd/system/systemd-networkd.socket \
+  "${TARGET_DIR}/etc/systemd/system/sockets.target.wants/systemd-networkd.socket"
+ln -snf \
+  /usr/lib/systemd/system/systemd-networkd-varlink.socket \
+  "${TARGET_DIR}/etc/systemd/system/sockets.target.wants/systemd-networkd-varlink.socket"
+ln -snf \
+  /usr/lib/systemd/system/systemd-resolved-varlink.socket \
+  "${TARGET_DIR}/etc/systemd/system/sockets.target.wants/systemd-resolved-varlink.socket"
+ln -snf \
+  /usr/lib/systemd/system/systemd-resolved-monitor.socket \
+  "${TARGET_DIR}/etc/systemd/system/sockets.target.wants/systemd-resolved-monitor.socket"
+ln -snf \
+  /usr/lib/systemd/system/systemd-resolved.service \
+  "${TARGET_DIR}/etc/systemd/system/sysinit.target.wants/systemd-resolved.service"
+ln -snf \
+  /usr/lib/systemd/system/systemd-timesyncd.service \
+  "${TARGET_DIR}/etc/systemd/system/sysinit.target.wants/systemd-timesyncd.service"
+ln -snf \
+  /usr/lib/systemd/system/systemd-networkd.service \
+  "${TARGET_DIR}/etc/systemd/system/dbus-org.freedesktop.network1.service"
+ln -snf \
+  /usr/lib/systemd/system/systemd-resolved.service \
+  "${TARGET_DIR}/etc/systemd/system/dbus-org.freedesktop.resolve1.service"
+ln -snf \
+  /usr/lib/systemd/system/systemd-timesyncd.service \
+  "${TARGET_DIR}/etc/systemd/system/dbus-org.freedesktop.timesync1.service"
