@@ -50,6 +50,7 @@ design decisions years after they were originally made.
 - [ADR-0010: Persistent Logging And Retention](0010-persistent-logging-and-retention.md)
 - [ADR-0011: TOML Configuration Validation And Migration](0011-toml-configuration-validation-and-migration.md)
 - [ADR-0012: Reproducible Build Environment And Verification](0012-reproducible-build-environment-and-verification.md)
+- [ADR-0013: Combined Appliance And Installer Image](0013-combined-appliance-and-installer-image.md)
 
 ---
 

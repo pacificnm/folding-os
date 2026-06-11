@@ -29,7 +29,7 @@ This index groups the project's documentation by purpose.
   combining roadmap Milestones 1 and 2
 - [v0.1.0 engineering specification](milestone/1-engineering-spec.md) - concrete
   implementation blueprint for the first release
-- [Installer](installer.md) - draft installation and first-boot scope
+- [Installer](installer.md) - approved combined-image installation architecture
 - [Update system](update-system.md) - draft update requirements and trust model
 
 ## Engineering Process

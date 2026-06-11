@@ -139,6 +139,11 @@ Remote administration should be:
 Initial administrator and SSH-key provisioning is defined by
 [ADR-0007](adr/0007-first-boot-administrator-and-ssh-provisioning.md).
 
+Installer-capable releases use the same FoldingOS image, kernel, root
+filesystem, and package set for both appliance operation and local-console
+installation. The combined-image installer architecture is defined by
+[ADR-0013](adr/0013-combined-appliance-and-installer-image.md).
+
 No local desktop environment is planned.
 
 No local browser interface is planned.

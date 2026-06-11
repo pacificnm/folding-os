@@ -65,6 +65,12 @@ Requirements:
 Initial administrator provisioning is defined by
 [ADR-0007](adr/0007-first-boot-administrator-and-ssh-provisioning.md).
 
+Installer-capable releases expose destructive installation capability only
+through explicitly selected local-console installer mode. Installer mode must
+exclude its source boot device, require target-specific destructive
+confirmation, and write only to the selected target as defined by
+[ADR-0013](adr/0013-combined-appliance-and-installer-image.md).
+
 ---
 
 # Network Exposure

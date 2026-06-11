@@ -208,6 +208,29 @@ Storage expansion regressions should block release.
 
 ---
 
+# Combined-Image Installer Validation
+
+Releases that claim combined-image installer support should validate:
+
+- appliance mode remains the default
+- installer mode preserves the fixed source image without expanding it
+- installer mode does not start appliance-only initialization or services
+- source media containing appliance-generated persistent state is rejected
+- the source boot device cannot be selected or overwritten
+- no disk changes before explicit target-specific destructive confirmation
+- only the selected target disk changes
+- undersized targets are rejected
+- invalid administrator public keys are rejected
+- interrupted or failed writes never report success
+- the installed target boots in appliance mode
+- the installed target expands its persistent data partition
+- provisioned SSH access becomes available
+
+Physical installer validation should cover each claimed USB-source and target
+storage combination, including SATA and NVMe where supported.
+
+---
+
 # Folding@home Acquisition Validation
 
 Folding@home workload acquisition testing should verify:

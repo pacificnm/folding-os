@@ -1,162 +1,244 @@
 # FoldingOS Installer
 
-Version: 0.1
-Status: Draft
+Version: 0.2
+Status: Approved Architecture
 
 ## Purpose
 
-This document defines what “installation” means for FoldingOS.
+This document defines the intended FoldingOS installation experience.
 
-FoldingOS is an appliance operating system. The preferred installation method should be simple, reproducible, and reliable.
+FoldingOS is an appliance operating system. Installation must remain simple,
+reproducible, explicit, and safe while supporting systems whose intended boot
+disk is installed internally.
+
+The governing architecture decision is
+[ADR-0013](adr/0013-combined-appliance-and-installer-image.md).
 
 ## Installation Philosophy
 
-For early releases, installation means flashing a complete disk image.
+FoldingOS uses one combined appliance and installer image.
 
-FoldingOS should not initially use a traditional interactive installer.
-
-The preferred workflow is:
+The project does not maintain a separate installer operating system. The same
+release image, kernel, root filesystem, packages, and tools boot in one of two
+modes:
 
 ```text
-Download image
-↓
-Flash image
-↓
-Boot target machine
-↓
-Complete first-boot configuration
-↓
-Start Folding
+FoldingOS appliance mode
+FoldingOS installer mode
 ```
+
+The image remains directly flashable for deployments where the target storage
+can be prepared from another machine.
+
+For systems with internal target disks, an administrator can flash the image
+to USB media, boot installer mode, and install FoldingOS onto the internal
+disk.
 
 ## Supported Installation Methods
 
-### Primary: Flashable Image
+### Direct Flash
 
-The primary installation method is a complete bootable image written to storage.
+The complete bootable image may be written directly to the intended appliance
+storage.
 
-Examples:
+After flashing, administrator public keys are placed on the EFI System
+Partition as defined by
+[ADR-0007](adr/0007-first-boot-administrator-and-ssh-provisioning.md).
 
-- USB flash drive
-- SSD
-- NVMe drive
-- SD card for Raspberry Pi
+### Combined-Image Installer
 
-This model is simple, predictable, and consistent with appliance-style systems.
+The same image may be booted from USB media in installer mode:
 
-The v0.1.0 image is 4 GiB. On boot, its final persistent data partition and
-filesystem automatically expand to the maximum usable capacity of the target
-device. Devices smaller than the release image are unsupported. Expansion
-behavior and failure safety are defined by
-[ADR-0008](adr/0008-raw-image-size-and-data-expansion.md).
+```text
+Flash FoldingOS image to USB
+↓
+Boot USB and select installer mode
+↓
+Select an internal target disk
+↓
+Provide administrator public keys
+↓
+Confirm the destructive installation
+↓
+Install and verify FoldingOS
+↓
+Remove USB and boot the installed appliance
+```
 
-### Future: Interactive Installer
+Installer mode copies the fixed release image from the source boot device to
+the selected target. The installed appliance then performs its normal
+first-boot initialization and data-partition expansion.
 
-A future release may provide a bootable installer ISO for x86_64 systems.
+Source media that has previously booted in appliance mode and contains
+appliance-generated persistent node state is not eligible installation media.
 
-That installer may:
+## Boot Modes
 
-- Detect disks
-- Partition storage
-- Format filesystems
-- Copy FoldingOS
-- Install bootloader
-- Configure first boot
+GRUB provides explicit boot entries for:
 
-This is not required for initial releases.
+```text
+Start FoldingOS
+Install FoldingOS
+```
+
+Appliance mode is the default and passes:
+
+```text
+foldingos.mode=appliance
+```
+
+Installer mode requires local selection and passes:
+
+```text
+foldingos.mode=installer
+```
+
+Installer mode activates `foldingos-installer.target` instead of the normal
+appliance target.
 
 ## Installer Scope
 
-The installer or image process should provide:
+The first combined-image installer will:
 
-- Boot partition
-- Root filesystem
-- Persistent data area
-- Bootloader configuration
-- Kernel
-- Required system services
-- First-boot configuration hook
+- run through the local console
+- identify and exclude its source boot device
+- verify that the source retains the expected release layout and contains no
+  appliance-generated persistent node state
+- discover eligible target disks
+- display target path, capacity, and stable identifying information
+- require explicit target selection
+- require target-specific destructive confirmation
+- reject targets smaller than the release image
+- write the fixed release image to the selected target
+- provision administrator public keys on the target EFI partition
+- verify and flush the completed installation
+- require reboot or poweroff after completion
 
-## Non-Goals
+The first implementation performs fresh destructive installation only.
 
-The installer should not provide:
+## Installer-Mode Isolation
 
-- Desktop environment selection
-- Package selection
-- Development tool selection
-- General Linux customization
-- Multi-purpose server roles
+Installer mode must preserve a pristine source image and must not behave as an
+appliance.
 
-FoldingOS is not a general-purpose distribution.
+It must not:
 
-## First-Boot Relationship
+- expand the source data partition
+- create persistent node identity
+- generate SSH host keys
+- start OpenSSH
+- acquire or start Folding@home
+- create deployment-specific persistent state
+- write to any disk before destructive confirmation
 
-Installation and first-boot configuration are separate concerns.
+## SSH-Key Provisioning
 
-Installation places the operating system on storage.
-
-First boot handles node-specific configuration such as:
-
-- Hostname
-- Network settings
-- FoldOps supervisor address
-- Folding@home identity/configuration
-- SSH access
-
-For v0.1.0, the administrator prepares SSH access after flashing and before
-booting the target node by writing public keys to:
+The installer provisions public keys through the target EFI System Partition:
 
 ```text
 /foldingos/provision/authorized_keys
 ```
 
-This path is relative to the EFI System Partition. When FoldingOS is running,
-the file appears under `/boot/efi`.
+The first implementation accepts:
 
-On boot, FoldingOS validates and imports the keys into persistent configuration.
-The complete workflow is defined by
-[ADR-0007](adr/0007-first-boot-administrator-and-ssh-provisioning.md).
+- a public-key file from the source EFI System Partition
+- public keys entered through the local console
 
-## Data Preservation
+Keys use the validation rules defined by ADR-0007. The installer never requests
+or stores private keys.
 
-Initial flashing may overwrite the target device.
+On first appliance boot, FoldingOS imports the keys into persistent
+configuration and starts OpenSSH.
 
-Future installer versions should support preserving:
+## Storage Behavior
 
-- Configuration
-- Node identity
-- Folding@home work/checkpoints
-- Logs where appropriate
+The release image remains exactly the deterministic fixed size defined by
+[ADR-0008](adr/0008-raw-image-size-and-data-expansion.md).
 
-The storage layout is defined by
-[ADR-0004](adr/0004-partition-and-persistence-layout.md).
+Installer mode copies only that fixed release-image byte range. The installed
+target expands its final persistent data partition during its first appliance
+boot.
+
+Devices smaller than the release image are unsupported.
 
 ## Safety Requirements
 
-Installer tooling should:
+The installer must:
 
-- Clearly identify target disks
-- Avoid accidental overwrite where practical
-- Require explicit confirmation before destructive actions
-- Produce clear logs
-- Fail safely
+- fail closed if the source boot device cannot be identified
+- never offer the source boot device as a target
+- never select a target automatically
+- revalidate source and target identities immediately before writing
+- require confirmation that identifies the selected target
+- clearly warn that the selected target will be overwritten
+- write only to the selected target
+- stop on verification failure
+- clearly report whether installation completed
 
-## Unresolved Decisions
+An interrupted installation may leave the selected target unbootable.
+Repeating installation is the recovery path.
 
-The following decisions require ADRs:
+## Non-Goals
 
-- Whether v1.0 ships only flashable images
-- Whether x86_64 needs an installer ISO
-- Raspberry Pi image generation process
+The first installer does not provide:
+
+- a separate installer operating system
+- GUI installation
+- package selection
+- custom partitioning
+- network-required installation
+- unattended destructive installation
+- preservation of existing target data
+- installation to multiple targets at once
+
+## Implementation Plan
+
+Implementation proceeds only after an approved installer engineering
+specification defines the concrete commands, units, dependencies, and failure
+behavior required by ADR-0013.
+
+The implementation sequence is:
+
+1. Define the installer engineering specification.
+2. Add appliance and installer GRUB entries and boot parameters.
+3. Define and add `foldingos-installer.target`.
+4. Implement safe source-media eligibility and source-device identification.
+5. Implement target discovery, selection, identity revalidation, and
+   target-specific destructive confirmation.
+6. Implement `foldingosctl install`.
+7. Implement target EFI administrator-key provisioning.
+8. Add QEMU tests proving installer mode cannot overwrite its source device or
+   any unselected disk.
+9. Add installed-target boot, expansion, and SSH acceptance tests.
+10. Complete physical USB-source installation validation for approved SATA and
+    NVMe targets.
+
+Installer support must not be claimed until the automated and physical
+validation gates pass.
+
+## Validation
+
+Automated QEMU validation must prove:
+
+- installer mode cannot overwrite its source boot device
+- source media containing appliance-generated persistent state is rejected
+- no target changes before explicit confirmation
+- only the selected target changes
+- undersized targets are rejected
+- invalid SSH keys are rejected
+- installed targets boot and expand successfully
+- provisioned SSH access becomes available
+
+Physical validation must cover approved USB-source and SATA/NVMe target
+combinations before installer support is claimed for them.
 
 ## Summary
 
-For early FoldingOS releases, installation means flashing a complete image.
-
-A traditional installer may come later, but it should not block the first working release.
-
-The priority is a reliable appliance workflow:
+FoldingOS remains one reproducible appliance image:
 
 ```text
-Flash. Boot. Configure. Fold.
+Flash directly, or boot the image and install it locally.
 ```
+
+The combined installer solves internal-disk deployment without creating a
+second operating system.

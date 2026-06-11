@@ -88,6 +88,9 @@ precedence or silently choose one statement.
 - v0.1.0 networking uses Ethernet DHCP; static networking is out of scope.
 - Initial remote administration uses OpenSSH with the `foldingos-admin` account
   and public keys provisioned through the EFI System Partition.
+- A future installer-capable release uses one combined appliance and installer
+  image with explicit GRUB boot modes; it does not introduce a separate
+  installer operating system.
 - FoldingOS images do not contain Folding@home client or FahCore binaries.
   Nodes download a pinned, verified client directly from official Folding@home
   infrastructure; FoldOps may coordinate approved manifests but does not proxy

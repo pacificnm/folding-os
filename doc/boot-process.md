@@ -120,6 +120,13 @@ Responsibilities include:
 The initial x86_64 implementation uses GRUB 2 on UEFI systems, as defined by
 [ADR-0003](adr/0003-x86_64-bootloader-and-image-format.md).
 
+Installer-capable releases provide explicit appliance and installer boot
+entries as defined by
+[ADR-0013](adr/0013-combined-appliance-and-installer-image.md). Appliance mode
+is the default. Installer mode requires local selection and activates a
+restricted local-console installation target instead of normal appliance
+startup.
+
 ---
 
 # Stage 3 - Linux Kernel

@@ -30,7 +30,16 @@ Milestones 1 and 2 together define the first working v0.1.0 release scope.
 - Define FAH configuration management
 - Add FAH health checks
 
-## Milestone 3: FoldOps Integration
+## Milestone 3: Combined-Image Installer
+
+- Add appliance and installer GRUB boot modes
+- Add `foldingos-installer.target`
+- Implement safe local-console `foldingosctl install`
+- Provision administrator public keys onto installed targets
+- Add QEMU source-device protection and installation tests
+- Validate USB-source installation to approved SATA and NVMe targets
+
+## Milestone 4: FoldOps Integration
 
 - Define node registration workflow
 - Define metrics reporting API
@@ -38,7 +47,7 @@ Milestones 1 and 2 together define the first working v0.1.0 release scope.
 - Support remote configuration from FoldOps
 - Report node health and FAH status
 
-## Milestone 4: Update System
+## Milestone 5: Update System
 
 - Define update model
 - Evaluate A/B root filesystem design
@@ -46,14 +55,14 @@ Milestones 1 and 2 together define the first working v0.1.0 release scope.
 - Add rollback behavior
 - Report update status to FoldOps
 
-## Milestone 5: Raspberry Pi Support
+## Milestone 6: Raspberry Pi Support
 
 - Add ARM64 build target
 - Support Raspberry Pi 5 boot process
 - Validate Ethernet and storage
 - Produce flashable Pi image
 
-## Milestone 6: v1.0 Release
+## Milestone 7: v1.0 Release
 
 - Publish first stable x86_64 release
 - Complete installation documentation
