@@ -35,18 +35,6 @@ ln -snf \
 ln -snf \
   /usr/lib/systemd/system/var-log-journal.mount \
   "${TARGET_DIR}/etc/systemd/system/local-fs.target.wants/var-log-journal.mount"
-ln -snf \
-  /usr/lib/systemd/system/foldingos-journal-flush.service \
-  "${TARGET_DIR}/etc/systemd/system/local-fs.target.wants/foldingos-journal-flush.service"
-ln -snf \
-  /usr/lib/systemd/system/foldingos-identity.service \
-  "${TARGET_DIR}/etc/systemd/system/local-fs.target.wants/foldingos-identity.service"
-ln -snf \
-  /usr/lib/systemd/system/foldingos-config-validate.service \
-  "${TARGET_DIR}/etc/systemd/system/local-fs.target.wants/foldingos-config-validate.service"
-ln -snf \
-  /usr/lib/systemd/system/foldingos-ssh-provision.service \
-  "${TARGET_DIR}/etc/systemd/system/local-fs.target.wants/foldingos-ssh-provision.service"
 
 mkdir -p \
   "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants" \
@@ -56,6 +44,18 @@ mkdir -p \
 ln -snf \
   /usr/lib/systemd/system/sshd.service \
   "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/sshd.service"
+ln -snf \
+  /usr/lib/systemd/system/foldingos-journal-flush.service \
+  "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/foldingos-journal-flush.service"
+ln -snf \
+  /usr/lib/systemd/system/foldingos-identity.service \
+  "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/foldingos-identity.service"
+ln -snf \
+  /usr/lib/systemd/system/foldingos-config-validate.service \
+  "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/foldingos-config-validate.service"
+ln -snf \
+  /usr/lib/systemd/system/foldingos-ssh-provision.service \
+  "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/foldingos-ssh-provision.service"
 ln -snf \
   /usr/lib/systemd/system/systemd-networkd.service \
   "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/systemd-networkd.service"

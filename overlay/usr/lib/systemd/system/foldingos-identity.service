@@ -10,4 +10,4 @@ ExecStart=/usr/bin/foldingosctl identity ensure
 RemainAfterExit=yes
 
 [Install]
-WantedBy=local-fs.target
+WantedBy=multi-user.target

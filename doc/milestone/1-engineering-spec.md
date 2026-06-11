@@ -527,7 +527,8 @@ Algorithm:
 8. Use `partx` to update the kernel's view of partition 3 without requiring
    partitions 1 or 2 to be unmounted.
 9. Run `resize2fs` on the unmounted data filesystem.
-10. Confirm the filesystem is mountable before allowing persistent writers.
+10. Allow the ordered `data.mount` unit to confirm the filesystem is mountable
+    before allowing persistent writers.
 
 The command exits successfully without changes when the partition and
 filesystem already occupy available capacity.
@@ -1087,6 +1088,11 @@ foldingos-config-validate.service
 foldingos-fah-prepare.service
   -> folding-at-home.service
 ```
+
+Only storage preparation required before local filesystems are ready is pulled
+into `local-fs.target`. Post-mount identity, configuration, SSH provisioning,
+and journal-flush services are pulled into `multi-user.target` while retaining
+the ordering above. The unit graph must contain no systemd ordering cycles.
 
 `foldingos-fah-prepare.service` and `folding-at-home.service` do not require
 `network-online.target` or successful time synchronization.

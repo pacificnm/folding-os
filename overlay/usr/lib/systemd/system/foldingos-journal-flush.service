@@ -9,4 +9,4 @@ ExecStart=/usr/bin/journalctl --flush
 RemainAfterExit=yes
 
 [Install]
-WantedBy=local-fs.target
+WantedBy=multi-user.target

@@ -10,4 +10,4 @@ ExecStart=/usr/bin/foldingosctl provision ssh
 RemainAfterExit=yes
 
 [Install]
-WantedBy=local-fs.target
+WantedBy=multi-user.target

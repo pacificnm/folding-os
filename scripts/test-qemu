@@ -31,7 +31,9 @@ find_tool() {
 
   for candidate in \
     "${HOST_DIR}/bin/${name}" \
-    "${HOST_DIR}/sbin/${name}"
+    "${HOST_DIR}/sbin/${name}" \
+    "/usr/sbin/${name}" \
+    "/sbin/${name}"
   do
     if [ -x "${candidate}" ]; then
       printf '%s\n' "${candidate}"
@@ -186,6 +188,11 @@ boot_image() {
 
   if ! grep -Eq 'Reached target .*Multi-User|Reached target Multi-User System' "${serial_log}"; then
     echo "ERROR: systemd did not reach the multi-user target." >&2
+    echo "Serial log: ${serial_log}" >&2
+    exit 1
+  fi
+  if grep -Fq "Ordering cycle found" "${serial_log}"; then
+    echo "ERROR: systemd detected an ordering cycle." >&2
     echo "Serial log: ${serial_log}" >&2
     exit 1
   fi

@@ -154,9 +154,6 @@ func expandData() error {
 	if err := run("resize2fs", dataDevice); err != nil {
 		return err
 	}
-	if _, err := output("findmnt", "--verify", "--verbose"); err != nil {
-		return fmt.Errorf("filesystem mount verification failed: %w", err)
-	}
 
 	fmt.Printf("Expanded %s to sector %d.\n", dataDevice, targetEnd)
 	return nil
