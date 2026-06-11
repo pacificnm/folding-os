@@ -1352,8 +1352,9 @@ paths, or wall-clock timestamps.
 `scripts/verify-reproducible` does not create or orchestrate build
 environments. The operator prepares and runs two independent Debian 13 amd64
 build environments and supplies their completed artifact directories. For
-v0.1.0, the environments should be separate Debian 13 virtual machines or
-physical systems. Containers are not approved unless ADR-0012 is amended.
+v0.1.0, the second clean disposable environment may be a separate Debian 13
+virtual machine, physical system, or digest-pinned Debian 13 x86_64 container
+that satisfies the isolation and metadata requirements in ADR-0012.
 
 Command:
 

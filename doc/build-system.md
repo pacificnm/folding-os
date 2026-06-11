@@ -39,6 +39,10 @@ by [ADR-0012](adr/0012-reproducible-build-environment-and-verification.md).
 The v0.1.0 build-host baseline is Debian 13 on amd64. Exact kernel and installed
 build-package versions are captured in release metadata.
 
+The second independent clean verification build may use a digest-pinned Debian
+13 x86_64 container when it satisfies the isolation and metadata requirements
+defined by ADR-0012.
+
 ---
 
 ## Automation

@@ -2,9 +2,9 @@
 
 **Status:** Accepted
 
-**Version:** 1.1
+**Version:** 1.2
 
-**Date:** 2026-06-10
+**Date:** 2026-06-11
 
 **Authors:** FoldingOS Project Contributors
 
@@ -65,9 +65,38 @@ Both builds must use:
 - no package source overrides
 - no uncommitted source changes
 
-The build-host definition may initially be implemented as a documented package
-manifest and disposable virtual machine. A pinned container image may replace
-or supplement it later without changing the reproducibility requirement.
+The clean disposable Debian environment may be a virtual machine, physical
+system, or digest-pinned Debian 13 x86_64 container. A container is an approved
+independent verification environment even when its runtime executes on the
+dedicated builder, provided it satisfies the container isolation requirements
+below. The container supplies an independently created Debian userland and
+must not reuse the dedicated builder's checkout, build outputs, or unverified
+host state.
+
+## Container Verification Environment
+
+A container used as the second independent clean build must:
+
+- use a Debian 13 x86_64 base image pinned by immutable image digest
+- record the base-image reference and digest, container-runtime name and
+  version, and installed Debian package versions
+- install dependencies from the committed build-host package manifest
+- build as an unprivileged user
+- use a clean source checkout at the exact release-candidate Git commit
+- use a new empty Buildroot output directory
+- disable compiler caches and package source overrides
+- receive no writable host checkout, prior build output, or developer-specific
+  configuration
+- receive only explicitly documented inputs and output locations
+
+The container may receive the hash-verified source-download cache read-only.
+Its completed artifact directory may be copied or written to the documented
+verification handoff location.
+
+The shared host kernel and container runtime do not invalidate independence for
+v0.1.0. The Debian major release and architecture remain required build-host
+properties; exact kernel and container-runtime versions are retained as
+verification metadata for investigation.
 
 ---
 
@@ -233,12 +262,12 @@ dependencies.
 Rejected as the final proof because hidden machine state can influence both
 builds identically.
 
-## Require A Container Immediately
+## Require A Separate Physical System Or Virtual Machine
 
-Rejected as an initial requirement because a clean disposable Debian virtual
-machine can provide independent verification without introducing container
-tooling into the first implementation. A container remains an acceptable
-implementation option.
+Rejected because contributors may not have a second physical machine or enough
+resources for a second full virtual machine. A digest-pinned container with an
+independently created Debian userland, clean checkout, and empty output
+directory provides the required independent clean-build check for v0.1.0.
 
 ## Permit Known Artifact Differences
 
