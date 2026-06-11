@@ -30,6 +30,8 @@ This index groups the project's documentation by purpose.
 - [v0.1.0 engineering specification](milestone/1-engineering-spec.md) - concrete
   implementation blueprint for the first release
 - [Installer](installer.md) - approved combined-image installation architecture
+- [Installer engineering specification](milestone/3-engineering-spec.md) -
+  approved concrete implementation contract for the combined-image installer
 - [Update system](update-system.md) - draft update requirements and trust model
 
 ## Engineering Process

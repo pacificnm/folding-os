@@ -178,6 +178,31 @@ The installer must:
 An interrupted installation may leave the selected target unbootable.
 Repeating installation is the recovery path.
 
+## Reinstallation
+
+Reinstallation uses the same fresh destructive installation workflow:
+
+```text
+Boot pristine FoldingOS installer USB
+↓
+Select the existing internal FoldingOS disk
+↓
+Confirm erasure
+↓
+Install and provision FoldingOS again
+```
+
+An existing FoldingOS installation remains an eligible target when it
+otherwise satisfies the target safety rules. Reinstallation does not require
+removing the internal disk.
+
+The installer USB must remain eligible source media. If it has previously
+booted in appliance mode or accumulated persistent appliance state, it must be
+reflashed from the release image before it can be used to reinstall a node.
+
+The first installer does not preserve existing target configuration, node
+identity, logs, Folding@home work, or checkpoints during reinstallation.
+
 ## Non-Goals
 
 The first installer does not provide:
@@ -190,12 +215,17 @@ The first installer does not provide:
 - unattended destructive installation
 - preservation of existing target data
 - installation to multiple targets at once
+- network-booted installation
 
 ## Implementation Plan
 
-Implementation proceeds only after an approved installer engineering
-specification defines the concrete commands, units, dependencies, and failure
-behavior required by ADR-0013.
+Implementation follows the approved installer engineering specification, which
+defines the concrete commands, units, dependencies, and failure behavior
+required by ADR-0013.
+
+The approved specification is:
+
+[Milestone 3 installer engineering specification](milestone/3-engineering-spec.md)
 
 The implementation sequence is:
 
@@ -242,3 +272,7 @@ Flash directly, or boot the image and install it locally.
 
 The combined installer solves internal-disk deployment without creating a
 second operating system.
+
+Future releases may provide network-booted deployment using the same installer
+logic and safety requirements without introducing a separate installer
+operating system.

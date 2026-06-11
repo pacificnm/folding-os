@@ -347,7 +347,7 @@ Reference:
 v0.1.0 contains no FoldOps agent, placeholder service, enrollment workflow, or
 remote-management components.
 
-FoldOps integration begins in roadmap Milestone 3. FoldingOS must remain
+FoldOps integration begins in roadmap Milestone 4. FoldingOS must remain
 compatible with adding it later without making FoldOps required for node
 operation.
 

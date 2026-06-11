@@ -275,6 +275,8 @@ Future ADRs may define:
 
 - preservation or migration of an existing data partition
 - FoldOps-assisted enrollment during installation
+- network-booted installation using the same installer workflow and safety
+  requirements
 - signed provisioning bundles
 - automated fleet installation
 - recovery and reinstall workflows
