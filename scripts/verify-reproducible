@@ -18,6 +18,14 @@ REQUIRED_FILES = (
 )
 DETERMINISTIC_FILES = REQUIRED_FILES[:-1]
 COMPATIBLE_ARCHITECTURES = {"amd64", "x86_64"}
+MIB = 1024 * 1024
+IMAGE_REGIONS = (
+    ("primary GPT and leading alignment", 0, 1 * MIB),
+    ("EFI partition", 1 * MIB, 512 * MIB),
+    ("root partition", 513 * MIB, 2048 * MIB),
+    ("data partition", 2561 * MIB, 1534 * MIB),
+    ("backup GPT and trailing alignment", 4095 * MIB, 1 * MIB),
+)
 
 
 class VerificationError(Exception):
@@ -34,6 +42,40 @@ def sha256_file(path):
         for block in iter(lambda: source.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def first_difference(path_a, path_b, offset, length):
+    block_size = 1024 * 1024
+    compared = 0
+
+    with path_a.open("rb") as source_a, path_b.open("rb") as source_b:
+        source_a.seek(offset)
+        source_b.seek(offset)
+
+        while compared < length:
+            read_size = min(block_size, length - compared)
+            block_a = source_a.read(read_size)
+            block_b = source_b.read(read_size)
+            if block_a != block_b:
+                for index, (byte_a, byte_b) in enumerate(zip(block_a, block_b)):
+                    if byte_a != byte_b:
+                        return offset + compared + index
+                return offset + compared + min(len(block_a), len(block_b))
+            compared += read_size
+
+    return None
+
+
+def describe_image_difference(path_a, path_b):
+    descriptions = []
+    for label, offset, length in IMAGE_REGIONS:
+        difference = first_difference(path_a, path_b, offset, length)
+        if difference is not None:
+            descriptions.append(
+                f"  - {label}: first differing byte {difference} "
+                f"(0x{difference:x})"
+            )
+    return descriptions
 
 
 def load_json(path):
@@ -117,9 +159,25 @@ def main():
     if sources_a != sources_b:
         fail("builds used different pinned source inputs")
 
-    for filename in DETERMINISTIC_FILES:
-        if digests_a[filename] != digests_b[filename]:
-            fail(f"deterministic artifact differs: {filename}")
+    differences = [
+        filename
+        for filename in DETERMINISTIC_FILES
+        if digests_a[filename] != digests_b[filename]
+    ]
+    if differences:
+        message = ["deterministic artifacts differ:"]
+        for filename in differences:
+            suffix = ""
+            if filename == f"{BASE_NAME}.img.sha256":
+                suffix = " (records the image digest)"
+            elif filename == f"{BASE_NAME}.metadata.json":
+                suffix = " (records the image and checksum digests)"
+            message.append(f"- {filename}{suffix}")
+            if filename == f"{BASE_NAME}.img":
+                message.extend(
+                    describe_image_difference(build_a / filename, build_b / filename)
+                )
+        fail("\n".join(message))
 
     result = {
         "artifact_digests": {

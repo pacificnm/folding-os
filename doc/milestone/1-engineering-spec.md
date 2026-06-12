@@ -430,6 +430,11 @@ Disk GUID, partition GUIDs, filesystem UUIDs, FAT volume ID, filesystem
 creation options, and timestamps must be fixed in committed image-generation
 configuration so two builds produce byte-identical images.
 
+The root and data ext4 filesystems use their fixed filesystem UUID as their
+fixed ext4 directory hash seed. The EFI filesystem is created with
+`mkfs.fat --invariant`, followed by the fixed FAT volume ID, and its staged
+files and directories use `SOURCE_DATE_EPOCH` before image generation.
+
 The root filesystem is writable in v0.1.0. Routine persistent state must still
 reside under `/data`.
 
@@ -1432,7 +1437,10 @@ The comparison script:
 5. Compares the SHA-256 digest of every required deterministic artifact. The
    build-host verification records are compatibility-checked but are not
    required to be byte-identical.
-6. Writes a deterministic successful result to:
+6. When the disk image differs, reports whether the primary GPT, EFI
+   partition, root partition, data partition, or backup GPT differs and gives
+   the first differing byte offset in each differing region.
+7. Writes a deterministic successful result to:
 
    ```text
    build/verification/result/foldingos-x86_64-0.1.0.reproducibility.json
