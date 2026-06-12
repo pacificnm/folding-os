@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+"""Verify FoldingOS persistent-directory and journald policy configuration."""
+
+import sys
+import tarfile
+from pathlib import Path
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_ROOTFS = PROJECT_ROOT / "build/output/images/rootfs.tar"
+EXPECTED_JOURNAL_SETTINGS = {
+    "Storage": "auto",
+    "SystemMaxUse": "256M",
+    "SystemKeepFree": "512M",
+    "MaxRetentionSec": "14day",
+    "MaxFileSec": "1day",
+    "RuntimeMaxUse": "64M",
+    "RateLimitIntervalSec": "30s",
+    "RateLimitBurst": "1000",
+    "Compress": "yes",
+    "Seal": "no",
+}
+EXPECTED_CORE_DIRS = {
+    "/data/apps/fah": ("0755", "root", "root"),
+    "/data/config": ("0755", "root", "root"),
+    "/data/config/last-good": ("0700", "root", "root"),
+    "/data/config/overrides": ("0755", "root", "root"),
+    "/data/config/secrets": ("0700", "root", "root"),
+    "/data/config/ssh": ("0755", "root", "root"),
+    "/data/config/ssh/host-keys": ("0700", "root", "root"),
+    "/data/fah": ("0750", "fah", "fah"),
+    "/data/state": ("0755", "root", "root"),
+}
+EXPECTED_JOURNAL_DIRS = {
+    "/data/logs/journal": ("2755", "root", "systemd-journal"),
+    "/var/log/journal": ("2755", "root", "systemd-journal"),
+}
+
+
+class VerificationError(Exception):
+    """A persistent logging verification failure."""
+
+
+def fail(message):
+    raise VerificationError(message)
+
+
+def normalize(name):
+    return name.removeprefix("./").rstrip("/")
+
+
+def read_member(archive, members, path):
+    member = members.get(path)
+    if member is None:
+        fail(f"required file is absent: {path}")
+    source = archive.extractfile(member)
+    if source is None:
+        fail(f"cannot read required file: {path}")
+    return source.read().decode("utf-8")
+
+
+def parse_journal(text):
+    settings = {}
+    section = None
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith(("#", ";")):
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            section = line[1:-1]
+            continue
+        if section == "Journal" and "=" in line:
+            key, value = line.split("=", 1)
+            settings[key] = value
+    return settings
+
+
+def parse_tmpfiles(text):
+    entries = {}
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        fields = line.split()
+        if len(fields) >= 5 and fields[0] == "d":
+            entries[fields[1]] = tuple(fields[2:5])
+    return entries
+
+
+def main():
+    if len(sys.argv) > 2:
+        print("Usage: ./scripts/verify-persistent-logging [rootfs.tar]", file=sys.stderr)
+        return 2
+
+    rootfs_path = Path(sys.argv[1]) if len(sys.argv) == 2 else DEFAULT_ROOTFS
+    if not rootfs_path.is_file():
+        fail(f"root filesystem archive does not exist: {rootfs_path}")
+
+    with tarfile.open(rootfs_path) as archive:
+        members = {normalize(member.name): member for member in archive.getmembers()}
+        settings = parse_journal(
+            read_member(archive, members, "etc/systemd/journald.conf")
+        )
+        if settings != EXPECTED_JOURNAL_SETTINGS:
+            fail(
+                "journald settings differ from approved policy: "
+                f"expected {EXPECTED_JOURNAL_SETTINGS}, found {settings}"
+            )
+
+        core_dirs = parse_tmpfiles(
+            read_member(archive, members, "usr/lib/tmpfiles.d/foldingos.conf")
+        )
+        if core_dirs != EXPECTED_CORE_DIRS:
+            fail(
+                "core persistent-directory rules differ from approved policy: "
+                f"expected {EXPECTED_CORE_DIRS}, found {core_dirs}"
+            )
+
+        journal_dirs = parse_tmpfiles(
+            read_member(
+                archive, members, "usr/lib/foldingos/tmpfiles/journal.conf"
+            )
+        )
+        if journal_dirs != EXPECTED_JOURNAL_DIRS:
+            fail(
+                "journal-directory rules differ from approved policy: "
+                f"expected {EXPECTED_JOURNAL_DIRS}, found {journal_dirs}"
+            )
+
+        stock_flush = members.get(
+            "etc/systemd/system/systemd-journal-flush.service"
+        )
+        if (
+            stock_flush is None
+            or not stock_flush.issym()
+            or stock_flush.linkname != "/dev/null"
+        ):
+            fail("stock systemd-journal-flush.service is not masked")
+
+        for name in members:
+            if members[name].isfile() and "/systemd/system/" in name and (
+                name.endswith((".service", ".socket", ".mount", ".conf"))
+            ):
+                text = read_member(archive, members, name)
+                if (
+                    "LogRateLimitIntervalSec=" in text
+                    or "LogRateLimitBurst=" in text
+                ):
+                    fail(f"service-specific journald rate-limit override found: {name}")
+
+    print("FoldingOS persistent directories and journald policy verified.")
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except (OSError, tarfile.TarError, UnicodeDecodeError, VerificationError) as error:
+        print(f"ERROR: {error}", file=sys.stderr)
+        sys.exit(1)
