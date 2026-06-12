@@ -352,6 +352,13 @@ PRETTY_NAME=\"FoldingOS 0.1.0\""
     systemctl is-active --quiet systemd-networkd.service
     systemctl is-active --quiet systemd-resolved.service
     systemctl is-active --quiet systemd-timesyncd.service
+    systemctl is-active --quiet foldingos-data-expand.service
+    systemctl is-active --quiet foldingos-persistent-dirs.service
+    systemctl is-active --quiet var-log-journal.mount
+    systemctl is-active --quiet foldingos-journal-flush.service
+    systemctl is-active --quiet foldingos-identity.service
+    systemctl is-active --quiet foldingos-config-validate.service
+    systemctl is-active --quiet foldingos-ssh-provision.service
     systemctl is-active --quiet sshd.service
     attempts=0
     until resolvectl query time.cloudflare.com >/dev/null 2>&1; do
@@ -548,6 +555,7 @@ if [ ! -f "${ROOTFS_TAR}" ]; then
   echo "ERROR: Root filesystem artifact does not exist: ${ROOTFS_TAR}" >&2
   exit 1
 fi
+"${PROJECT_ROOT}/scripts/verify-systemd-graph" "${ROOTFS_TAR}"
 mkdir -p "${TEST_DIR}"
 ROOTFS_MANIFEST="${TEST_DIR}/rootfs-manifest.txt"
 tar -tf "${ROOTFS_TAR}" >"${ROOTFS_MANIFEST}"
