@@ -1,0 +1,103 @@
+#!/usr/bin/env python3
+"""Verify FoldingOS node-identity and TOML configuration policy in rootfs.tar."""
+
+import sys
+import tarfile
+from pathlib import Path
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_ROOTFS = PROJECT_ROOT / "build/output/images/rootfs.tar"
+EXPECTED_DEFAULTS = {
+    "etc/foldingos/defaults/system.toml": (
+        "schema_version = 1\n\n[identity]\nhostname = \"\"\n"
+    ),
+    "etc/foldingos/defaults/network.toml": (
+        "schema_version = 1\n\n[ethernet]\ndhcp = true\n"
+        "required_for_online = true\n"
+    ),
+    "etc/foldingos/defaults/foldinghome.toml": (
+        "schema_version = 1\n\n[identity]\nusername = \"Anonymous\"\n"
+        "team = 0\npasskey_secret = \"\"\n\n[resources]\ncpus = 0\n"
+        "gpus = false\n"
+    ),
+}
+REQUIRED_UNITS = {
+    "usr/lib/systemd/system/foldingos-identity.service": (
+        "ExecStart=/usr/bin/foldingosctl identity ensure\n",
+        "WantedBy=multi-user.target\n",
+    ),
+    "usr/lib/systemd/system/foldingos-config-validate.service": (
+        "ExecStart=/usr/bin/foldingosctl config validate --all\n",
+        "WantedBy=multi-user.target\n",
+    ),
+}
+REQUIRED_PATHS = (
+    "usr/bin/foldingosctl",
+    "etc/foldingos/defaults/system.toml",
+    "etc/foldingos/defaults/network.toml",
+    "etc/foldingos/defaults/foldinghome.toml",
+)
+
+
+class VerificationError(Exception):
+    """A configuration verification failure."""
+
+
+def fail(message):
+    raise VerificationError(message)
+
+
+def normalize(name):
+    return name.removeprefix("./").rstrip("/")
+
+
+def read_member(archive, members, path):
+    member = members.get(path)
+    if member is None:
+        fail(f"required file is absent: {path}")
+    source = archive.extractfile(member)
+    if source is None:
+        fail(f"cannot read required file: {path}")
+    return source.read().decode("utf-8")
+
+
+def main():
+    if len(sys.argv) > 2:
+        print("Usage: ./scripts/verify-config [rootfs.tar]", file=sys.stderr)
+        return 2
+
+    rootfs_path = Path(sys.argv[1]) if len(sys.argv) == 2 else DEFAULT_ROOTFS
+    if not rootfs_path.is_file():
+        fail(f"root filesystem archive does not exist: {rootfs_path}")
+
+    with tarfile.open(rootfs_path) as archive:
+        members = {normalize(member.name): member for member in archive.getmembers()}
+
+        for path in REQUIRED_PATHS:
+            if path not in members or not members[path].isfile():
+                fail(f"required file is absent: {path}")
+
+        for path, expected in EXPECTED_DEFAULTS.items():
+            content = read_member(archive, members, path)
+            if content != expected:
+                fail(
+                    f"default configuration differs from approved policy: {path}"
+                )
+
+        for path, snippets in REQUIRED_UNITS.items():
+            content = read_member(archive, members, path)
+            for snippet in snippets:
+                if snippet not in content:
+                    fail(f"required unit setting is absent in {path}: {snippet!r}")
+
+    print("FoldingOS node identity and configuration policy verified.")
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except (OSError, tarfile.TarError, UnicodeDecodeError, VerificationError) as error:
+        print(f"ERROR: {error}", file=sys.stderr)
+        sys.exit(1)
