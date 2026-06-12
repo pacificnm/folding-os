@@ -94,6 +94,7 @@ scripts/
   fetch-sources
   test-qemu
   verify-reproducible
+  verify-systemd-graph
 
 tools/
   qemu/
@@ -1129,6 +1130,13 @@ and FAH startup proceed independently of acquisition.
 
 There are no FoldOps units in v0.1.0.
 
+The foundation appliance graph through SSH is implemented and verified before
+the FAH runtime work. The four FAH units listed above remain absent until their
+approved acquisition, activation, preparation, and runtime behavior is
+implemented by issues #16 through #20. `scripts/verify-systemd-graph` verifies
+the foundation graph, failure-isolation dependencies, enabled FoldingOS unit
+set, absence of FoldOps units, and absence of prematurely enabled FAH units.
+
 ---
 
 # Service Failure Policy
@@ -1262,6 +1270,7 @@ Required user-facing commands:
 ./scripts/build-b
 ./scripts/test-qemu
 ./scripts/verify-reproducible
+./scripts/verify-systemd-graph
 ```
 
 `scripts/check-host-tools` verifies the Debian 13 amd64 build-host baseline,

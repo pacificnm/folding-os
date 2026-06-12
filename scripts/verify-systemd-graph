@@ -1,0 +1,281 @@
+#!/usr/bin/env python3
+"""Verify the approved Milestone 1 foundation systemd graph."""
+
+import sys
+import tarfile
+from collections import defaultdict
+from pathlib import Path
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_ROOTFS = PROJECT_ROOT / "build/output/images/rootfs.tar"
+FOUNDATION_UNITS = {
+    "foldingos-config-validate.service",
+    "foldingos-data-expand.service",
+    "foldingos-identity.service",
+    "foldingos-journal-flush.service",
+    "foldingos-persistent-dirs.service",
+    "foldingos-ssh-provision.service",
+    "var-log-journal.mount",
+}
+DEFERRED_FAH_UNITS = {
+    "foldingos-fah-acquire.service",
+    "foldingos-fah-acquire.timer",
+    "foldingos-fah-prepare.service",
+    "folding-at-home.service",
+}
+REQUIRED_LINKS = {
+    "etc/systemd/system/local-fs.target.wants/foldingos-data-expand.service":
+        "/usr/lib/systemd/system/foldingos-data-expand.service",
+    "etc/systemd/system/local-fs.target.wants/foldingos-persistent-dirs.service":
+        "/usr/lib/systemd/system/foldingos-persistent-dirs.service",
+    "etc/systemd/system/local-fs.target.wants/var-log-journal.mount":
+        "/usr/lib/systemd/system/var-log-journal.mount",
+    "etc/systemd/system/multi-user.target.wants/foldingos-config-validate.service":
+        "/usr/lib/systemd/system/foldingos-config-validate.service",
+    "etc/systemd/system/multi-user.target.wants/foldingos-identity.service":
+        "/usr/lib/systemd/system/foldingos-identity.service",
+    "etc/systemd/system/multi-user.target.wants/foldingos-journal-flush.service":
+        "/usr/lib/systemd/system/foldingos-journal-flush.service",
+    "etc/systemd/system/multi-user.target.wants/foldingos-ssh-provision.service":
+        "/usr/lib/systemd/system/foldingos-ssh-provision.service",
+    "etc/systemd/system/multi-user.target.wants/sshd.service":
+        "/usr/lib/systemd/system/sshd.service",
+    "etc/systemd/system/multi-user.target.wants/systemd-networkd.service":
+        "/usr/lib/systemd/system/systemd-networkd.service",
+    "etc/systemd/system/network-online.target.wants/systemd-networkd-wait-online.service":
+        "/usr/lib/systemd/system/systemd-networkd-wait-online.service",
+    "etc/systemd/system/sysinit.target.wants/systemd-resolved.service":
+        "/usr/lib/systemd/system/systemd-resolved.service",
+    "etc/systemd/system/sysinit.target.wants/systemd-timesyncd.service":
+        "/usr/lib/systemd/system/systemd-timesyncd.service",
+}
+UNIT_REQUIREMENTS = {
+    "foldingos-data-expand.service": {
+        ("Unit", "Requires"): {"boot-efi.mount"},
+        ("Unit", "After"): {"boot-efi.mount"},
+        ("Unit", "Before"): {"data.mount"},
+    },
+    "foldingos-persistent-dirs.service": {
+        ("Unit", "Requires"): {"data.mount"},
+        ("Unit", "After"): {"data.mount"},
+    },
+    "var-log-journal.mount": {
+        ("Unit", "Requires"): {"foldingos-persistent-dirs.service"},
+        ("Unit", "After"): {"foldingos-persistent-dirs.service"},
+    },
+    "foldingos-journal-flush.service": {
+        ("Unit", "Requires"): {"var-log-journal.mount"},
+        ("Unit", "After"): {"var-log-journal.mount"},
+    },
+    "foldingos-identity.service": {
+        ("Unit", "Requires"): {"foldingos-persistent-dirs.service"},
+        ("Unit", "After"): {"foldingos-persistent-dirs.service"},
+    },
+    "foldingos-config-validate.service": {
+        ("Unit", "Requires"): {"foldingos-identity.service"},
+        ("Unit", "After"): {"foldingos-identity.service"},
+        ("Unit", "Before"): {
+            "systemd-networkd.service",
+            "systemd-networkd-wait-online.service",
+        },
+    },
+    "foldingos-ssh-provision.service": {
+        ("Unit", "Requires"): {
+            "boot-efi.mount",
+            "foldingos-persistent-dirs.service",
+        },
+        ("Unit", "After"): {
+            "boot-efi.mount",
+            "foldingos-persistent-dirs.service",
+        },
+        ("Unit", "Before"): {"sshd.service"},
+    },
+    "sshd.service.d/foldingos.conf": {
+        ("Unit", "Requires"): {"foldingos-ssh-provision.service"},
+        ("Unit", "After"): {"foldingos-ssh-provision.service"},
+        ("Unit", "ConditionPathExists"): {"/data/config/ssh/authorized_keys"},
+    },
+}
+FAILURE_ISOLATION_FORBIDDEN_REQUIRES = {
+    "foldingos-identity.service": {
+        "var-log-journal.mount",
+        "foldingos-journal-flush.service",
+        "network-online.target",
+        "systemd-time-wait-sync.service",
+    },
+    "foldingos-config-validate.service": {
+        "var-log-journal.mount",
+        "foldingos-journal-flush.service",
+        "network-online.target",
+        "systemd-time-wait-sync.service",
+    },
+    "foldingos-ssh-provision.service": {
+        "var-log-journal.mount",
+        "foldingos-journal-flush.service",
+        "network-online.target",
+        "systemd-time-wait-sync.service",
+    },
+}
+
+
+class VerificationError(Exception):
+    """A systemd graph verification failure."""
+
+
+def fail(message):
+    raise VerificationError(message)
+
+
+def normalize(name):
+    return name.removeprefix("./").rstrip("/")
+
+
+def parse_unit(text):
+    values = defaultdict(set)
+    section = None
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith(("#", ";")):
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            section = line[1:-1]
+            continue
+        if section and "=" in line:
+            key, value = line.split("=", 1)
+            if value:
+                values[(section, key)].update(value.split())
+    return values
+
+
+def add_ordering_edges(graph, unit_name, values):
+    for dependency in values.get(("Unit", "After"), set()):
+        graph[dependency].add(unit_name)
+    for dependency in values.get(("Unit", "Before"), set()):
+        graph[unit_name].add(dependency)
+
+
+def find_cycle(graph):
+    active = set()
+    visited = set()
+
+    def visit(node, path):
+        if node in active:
+            return path[path.index(node) :] + [node]
+        if node in visited:
+            return None
+        active.add(node)
+        for successor in graph[node]:
+            cycle = visit(successor, path + [successor])
+            if cycle:
+                return cycle
+        active.remove(node)
+        visited.add(node)
+        return None
+
+    for node in tuple(graph):
+        cycle = visit(node, [node])
+        if cycle:
+            return cycle
+    return None
+
+
+def main():
+    if len(sys.argv) > 2:
+        print("Usage: ./scripts/verify-systemd-graph [rootfs.tar]", file=sys.stderr)
+        return 2
+
+    rootfs_path = Path(sys.argv[1]) if len(sys.argv) == 2 else DEFAULT_ROOTFS
+    if not rootfs_path.is_file():
+        fail(f"root filesystem archive does not exist: {rootfs_path}")
+
+    with tarfile.open(rootfs_path) as archive:
+        members = {normalize(member.name): member for member in archive.getmembers()}
+
+        for unit in FOUNDATION_UNITS:
+            if f"usr/lib/systemd/system/{unit}" not in members:
+                fail(f"required foundation unit is absent: {unit}")
+
+        forbidden = [
+            name
+            for name in members
+            if "foldops" in name.lower()
+            or any(unit in name for unit in DEFERRED_FAH_UNITS)
+        ]
+        if forbidden:
+            fail(f"premature or undocumented runtime unit is present: {forbidden[0]}")
+
+        project_enabled = {
+            name
+            for name, member in members.items()
+            if member.issym()
+            and "/systemd/system/" in name
+            and (
+                Path(name).name.startswith("foldingos-")
+                or Path(name).name == "folding-at-home.service"
+            )
+        }
+        expected_project_enabled = {
+            link for link in REQUIRED_LINKS if Path(link).name.startswith("foldingos-")
+        }
+        if project_enabled != expected_project_enabled:
+            fail(
+                "enabled FoldingOS units differ from the approved foundation set: "
+                f"expected {sorted(expected_project_enabled)}, found {sorted(project_enabled)}"
+            )
+
+        for link, target in REQUIRED_LINKS.items():
+            member = members.get(link)
+            if member is None or not member.issym():
+                fail(f"required enabled-unit link is absent: {link}")
+            if member.linkname != target:
+                fail(
+                    f"enabled-unit link has wrong target: {link} -> "
+                    f"{member.linkname}, expected {target}"
+                )
+
+        graph = defaultdict(set)
+        for unit_name, requirements in UNIT_REQUIREMENTS.items():
+            if ".d/" in unit_name:
+                path = f"etc/systemd/system/{unit_name}"
+            else:
+                path = f"usr/lib/systemd/system/{unit_name}"
+            member = members.get(path)
+            if member is None:
+                fail(f"required unit configuration is absent: {path}")
+            source = archive.extractfile(member)
+            if source is None:
+                fail(f"cannot read unit configuration: {path}")
+            values = parse_unit(source.read().decode("utf-8"))
+            for key, expected in requirements.items():
+                if not expected.issubset(values.get(key, set())):
+                    fail(
+                        f"{unit_name} is missing {key[0]}.{key[1]} values: "
+                        f"{sorted(expected - values.get(key, set()))}"
+                    )
+            forbidden_requires = FAILURE_ISOLATION_FORBIDDEN_REQUIRES.get(
+                unit_name, set()
+            )
+            unexpected = values.get(("Unit", "Requires"), set()) & forbidden_requires
+            if unexpected:
+                fail(
+                    f"{unit_name} violates failure isolation with Requires=: "
+                    f"{sorted(unexpected)}"
+                )
+            add_ordering_edges(graph, unit_name.split(".d/", 1)[0], values)
+
+        cycle = find_cycle(graph)
+        if cycle:
+            fail(f"foundation unit ordering cycle found: {' -> '.join(cycle)}")
+
+    print("FoldingOS foundation systemd graph verified.")
+    print("Deferred FAH units remain absent for issues #16-#20.")
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except (OSError, tarfile.TarError, UnicodeDecodeError, VerificationError) as error:
+        print(f"ERROR: {error}", file=sys.stderr)
+        sys.exit(1)
