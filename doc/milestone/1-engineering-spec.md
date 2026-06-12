@@ -87,6 +87,8 @@ packages/
 
 scripts/
   build
+  build-a
+  build-b
   check-host-tools
   clean
   fetch-sources
@@ -1256,6 +1258,7 @@ Required user-facing commands:
 ./scripts/clean
 ./scripts/fetch-sources
 ./scripts/build
+./scripts/build-a
 ./scripts/build-b
 ./scripts/test-qemu
 ./scripts/verify-reproducible
@@ -1287,7 +1290,12 @@ an empty Buildroot output directory.
 The default script performs a reliable incremental developer build and must not
 claim reproducibility. A clean or reproducibility build starts from an empty
 out-of-tree Buildroot output directory by running `scripts/clean` first or by
-using `scripts/verify-reproducible`.
+using `scripts/build-a` or `scripts/build-b`.
+
+`scripts/build-a` performs the first clean build for a same-host deterministic
+output check. It requires a clean committed worktree, refuses to overwrite an
+existing `build/verification/build-a` artifact set, runs `scripts/clean` and
+`scripts/build`, and captures the required Build A artifacts.
 
 `scripts/build-b` performs the second clean build for a same-host deterministic
 output check. It requires a clean committed worktree and an existing
