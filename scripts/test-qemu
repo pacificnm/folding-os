@@ -17,6 +17,11 @@ PROVISION_IMAGE="${TEST_DIR}/foldingos-x86_64-0.1.0-provisioned.img"
 PROVISION_SERIAL_LOG="${TEST_DIR}/provisioned-serial.log"
 CONFIG_IMAGE="${TEST_DIR}/foldingos-x86_64-0.1.0-config-tests.img"
 CONFIG_SERIAL_LOG="${TEST_DIR}/config-tests-serial.log"
+JOURNAL_FAILURE_IMAGE="${TEST_DIR}/foldingos-x86_64-0.1.0-journal-failure.img"
+JOURNAL_BREAK_SERIAL_LOG="${TEST_DIR}/journal-break-serial.log"
+JOURNAL_FAILURE_SERIAL_LOG="${TEST_DIR}/journal-failure-serial.log"
+JOURNAL_PRESSURE_IMAGE="${TEST_DIR}/foldingos-x86_64-0.1.0-journal-pressure.img"
+JOURNAL_PRESSURE_SERIAL_LOG="${TEST_DIR}/journal-pressure-serial.log"
 INVALID_PROVISION_SERIAL_LOG="${TEST_DIR}/invalid-provision-serial.log"
 RECOVERY_SERIAL_LOG="${TEST_DIR}/recovery-serial.log"
 REPLACEMENT_SERIAL_LOG="${TEST_DIR}/replacement-serial.log"
@@ -354,12 +359,27 @@ PRETTY_NAME=\"FoldingOS 0.1.0\""
     systemctl is-active --quiet systemd-timesyncd.service
     systemctl is-active --quiet foldingos-data-expand.service
     systemctl is-active --quiet foldingos-persistent-dirs.service
-    systemctl is-active --quiet var-log-journal.mount
-    systemctl is-active --quiet foldingos-journal-flush.service
     systemctl is-active --quiet foldingos-identity.service
     systemctl is-active --quiet foldingos-config-validate.service
     systemctl is-active --quiet foldingos-ssh-provision.service
     systemctl is-active --quiet sshd.service
+    test "$(sudo find /data/apps/fah -maxdepth 0 -user root -group root -perm 0755 -print)" = /data/apps/fah
+    test "$(sudo find /data/config -maxdepth 0 -user root -group root -perm 0755 -print)" = /data/config
+    test "$(sudo find /data/config/last-good -maxdepth 0 -user root -group root -perm 0700 -print)" = /data/config/last-good
+    test "$(sudo find /data/config/overrides -maxdepth 0 -user root -group root -perm 0755 -print)" = /data/config/overrides
+    test "$(sudo find /data/config/secrets -maxdepth 0 -user root -group root -perm 0700 -print)" = /data/config/secrets
+    test "$(sudo find /data/fah -maxdepth 0 -user fah -group fah -perm 0750 -print)" = /data/fah
+    test "$(sudo find /data/state -maxdepth 0 -user root -group root -perm 0755 -print)" = /data/state
+    if [ "'"${PERSISTENCE_MODE}"'" = journal-failure ]; then
+      ! systemctl is-active --quiet foldingos-journal-dir.service
+      ! systemctl is-active --quiet var-log-journal.mount
+      ! systemctl is-active --quiet foldingos-journal-flush.service
+    else
+      systemctl is-active --quiet foldingos-journal-dir.service
+      systemctl is-active --quiet var-log-journal.mount
+      systemctl is-active --quiet foldingos-journal-flush.service
+      test "$(sudo find /data/logs/journal -maxdepth 0 -user root -group systemd-journal -perm 2755 -print)" = /data/logs/journal
+    fi
     attempts=0
     until resolvectl query time.cloudflare.com >/dev/null 2>&1; do
       attempts=$((attempts + 1))
@@ -419,6 +439,8 @@ PRETTY_NAME=\"FoldingOS 0.1.0\""
       if ! ssh_guest '
         set -eux
         printf "%s\n" foldingos-storage-preserved | sudo tee /data/state/storage-preservation-test >/dev/null
+        printf "%s\n" foldingos-journal-preserved | sudo systemd-cat -t foldingos-journal-test
+        sudo journalctl --flush
         sudo ssh-keygen -lf /data/config/ssh/host-keys/ssh_host_ed25519_key |
           sudo tee /data/state/ssh-host-key-fingerprint >/dev/null
         sudo sync
@@ -430,10 +452,57 @@ PRETTY_NAME=\"FoldingOS 0.1.0\""
       if ! ssh_guest '
         set -eux
         grep -Fxq foldingos-storage-preserved /data/state/storage-preservation-test
+        sudo journalctl -t foldingos-journal-test --no-pager |
+          grep -Fq foldingos-journal-preserved
         test "$(sudo ssh-keygen -lf /data/config/ssh/host-keys/ssh_host_ed25519_key)" = \
           "$(cat /data/state/ssh-host-key-fingerprint)"
         sudo foldingosctl config validate --all >/dev/null
         sudo foldingosctl config effective foldinghome | grep -Fq "username = \"Anonymous\""
+      ' >"${GUEST_ACCEPTANCE_LOG}" 2>&1; then
+        return 1
+      fi
+      ;;
+    journal-break)
+      if ! ssh_guest '
+        set -eux
+        sudo systemctl stop foldingos-journal-flush.service
+        sudo systemctl stop systemd-journald.service systemd-journald.socket
+        sudo umount /var/log/journal
+        sudo rm -rf /data/logs/journal
+        sudo sh -c ": > /data/logs/journal"
+        sudo sync
+      ' >"${GUEST_ACCEPTANCE_LOG}" 2>&1; then
+        return 1
+      fi
+      ;;
+    journal-failure)
+      if ! ssh_guest '
+        set -eux
+        systemctl is-active --quiet multi-user.target
+        systemctl is-active --quiet foldingos-persistent-dirs.service
+        systemctl is-active --quiet foldingos-identity.service
+        systemctl is-active --quiet foldingos-config-validate.service
+        systemctl is-active --quiet foldingos-ssh-provision.service
+        systemctl is-active --quiet sshd.service
+        test -f /data/logs/journal
+      ' >"${GUEST_ACCEPTANCE_LOG}" 2>&1; then
+        return 1
+      fi
+      ;;
+    journal-pressure)
+      if ! ssh_guest '
+        set -eux
+        sudo fallocate -l 1200M /data/state/journal-pressure-test
+        i=0
+        while [ "${i}" -lt 2000 ]; do
+          logger -t foldingos-journal-pressure "bounded journal pressure ${i}"
+          i=$((i + 1))
+        done
+        sudo sync
+        systemctl is-active --quiet multi-user.target
+        systemctl is-active --quiet sshd.service
+        test -f /data/state/journal-pressure-test
+        sudo rm -f /data/state/journal-pressure-test
       ' >"${GUEST_ACCEPTANCE_LOG}" 2>&1; then
         return 1
       fi
@@ -556,12 +625,14 @@ if [ ! -f "${ROOTFS_TAR}" ]; then
   exit 1
 fi
 "${PROJECT_ROOT}/scripts/verify-systemd-graph" "${ROOTFS_TAR}"
+"${PROJECT_ROOT}/scripts/verify-persistent-logging" "${ROOTFS_TAR}"
 mkdir -p "${TEST_DIR}"
 ROOTFS_MANIFEST="${TEST_DIR}/rootfs-manifest.txt"
 tar -tf "${ROOTFS_TAR}" >"${ROOTFS_MANIFEST}"
 for guest_command in \
-  cat cp cut find findmnt foldingosctl grep id networkctl printf readlink rm \
-  resolvectl sleep ssh-keygen sshd sudo sync systemctl tee timedatectl
+  cat cp cut fallocate find findmnt foldingosctl grep id journalctl logger \
+  networkctl printf readlink rm resolvectl sh sleep ssh-keygen sshd sudo sync \
+  systemctl systemd-cat tee timedatectl
 do
   if ! grep -Eq \
     "^\./(bin|sbin|usr/bin|usr/sbin)/${guest_command}$" \
@@ -696,6 +767,19 @@ boot_image "an image with provisioned SSH access" \
   "${PROVISION_IMAGE}" "${PROVISION_SERIAL_LOG}" enabled
 assert_expansion_service_succeeded "${PROVISION_SERIAL_LOG}"
 
+cp --reflink=auto --sparse=always "${PROVISION_IMAGE}" "${JOURNAL_FAILURE_IMAGE}"
+PERSISTENCE_MODE=journal-break
+boot_image "a disposable image before persistent-journal failure" \
+  "${JOURNAL_FAILURE_IMAGE}" "${JOURNAL_BREAK_SERIAL_LOG}" enabled
+PERSISTENCE_MODE=journal-failure
+boot_image "an image with unavailable persistent-journal storage" \
+  "${JOURNAL_FAILURE_IMAGE}" "${JOURNAL_FAILURE_SERIAL_LOG}" enabled
+
+cp --reflink=auto --sparse=always "${PROVISION_IMAGE}" "${JOURNAL_PRESSURE_IMAGE}"
+PERSISTENCE_MODE=journal-pressure
+boot_image "an image under persistent-journal storage pressure" \
+  "${JOURNAL_PRESSURE_IMAGE}" "${JOURNAL_PRESSURE_SERIAL_LOG}" enabled
+
 cp --reflink=auto --sparse=always "${PROVISION_IMAGE}" "${CONFIG_IMAGE}"
 PERSISTENCE_MODE=config
 boot_image "a disposable provisioned image for configuration failure tests" \
@@ -752,5 +836,5 @@ if [ "${invalid_table_before}" != "${invalid_table_after}" ]; then
   exit 1
 fi
 
-echo "QEMU/OVMF boot, storage expansion, networking, and secure SSH provisioning verified."
-echo "Serial logs: ${EXACT_SERIAL_LOG}, ${LARGER_SERIAL_LOG}, ${REPEAT_SERIAL_LOG}, ${PROVISION_SERIAL_LOG}, ${CONFIG_SERIAL_LOG}, ${PRESERVATION_SERIAL_LOG}, ${INVALID_PROVISION_SERIAL_LOG}, ${RECOVERY_SERIAL_LOG}, ${REPLACEMENT_SERIAL_LOG}, ${INVALID_SERIAL_LOG}"
+echo "QEMU/OVMF boot, storage expansion, persistent logging, networking, and secure SSH provisioning verified."
+echo "Serial logs: ${EXACT_SERIAL_LOG}, ${LARGER_SERIAL_LOG}, ${REPEAT_SERIAL_LOG}, ${PROVISION_SERIAL_LOG}, ${JOURNAL_BREAK_SERIAL_LOG}, ${JOURNAL_FAILURE_SERIAL_LOG}, ${JOURNAL_PRESSURE_SERIAL_LOG}, ${CONFIG_SERIAL_LOG}, ${PRESERVATION_SERIAL_LOG}, ${INVALID_PROVISION_SERIAL_LOG}, ${RECOVERY_SERIAL_LOG}, ${REPLACEMENT_SERIAL_LOG}, ${INVALID_SERIAL_LOG}"

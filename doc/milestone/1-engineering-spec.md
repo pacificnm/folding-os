@@ -94,6 +94,7 @@ scripts/
   fetch-sources
   test-qemu
   verify-reproducible
+  verify-persistent-logging
   verify-systemd-graph
 
 tools/
@@ -501,6 +502,9 @@ Required persistent directories and initial ownership:
 
 Directory creation and permission repair are performed by committed
 `systemd-tmpfiles` rules. Permission repair must not delete existing data.
+Core persistent directories and journal directories are prepared by separate
+oneshot units so an invalid or unwritable persistent-journal path cannot block
+identity, configuration, SSH recovery, or appliance boot.
 
 ---
 
@@ -1053,9 +1057,17 @@ Seal=no
 mounted. Early logs remain volatile; `journalctl --flush` runs after the bind
 mount becomes available.
 
+The stock `systemd-journal-flush.service` is masked. Only
+`foldingos-journal-flush.service` may flush the early volatile journal, after
+the persistent bind mount succeeds. If journal preparation or mounting fails,
+the custom flush service does not run and journald remains volatile.
+
 No v0.1.0 service receives a journald rate-limit override.
 
 Persistent-journal failure degrades to volatile logging and does not block FAH.
+`scripts/verify-persistent-logging` checks the committed directory rules,
+journald bounds, stock-flush mask, and absence of service-specific rate-limit
+overrides against the built root filesystem archive.
 
 ---
 
@@ -1067,6 +1079,7 @@ Required units:
 foldingos-data-expand.service
 data.mount
 foldingos-persistent-dirs.service
+foldingos-journal-dir.service
 var-log-journal.mount
 foldingos-journal-flush.service
 foldingos-identity.service
@@ -1090,7 +1103,8 @@ boot-efi.mount
   -> foldingos-data-expand.service
   -> data.mount
   -> foldingos-persistent-dirs.service
-     -> var-log-journal.mount
+     -> foldingos-journal-dir.service
+        -> var-log-journal.mount
         -> foldingos-journal-flush.service
      -> foldingos-identity.service
         -> foldingos-config-validate.service
@@ -1270,6 +1284,7 @@ Required user-facing commands:
 ./scripts/build-b
 ./scripts/test-qemu
 ./scripts/verify-reproducible
+./scripts/verify-persistent-logging
 ./scripts/verify-systemd-graph
 ```
 

@@ -1,7 +1,7 @@
 [Unit]
 Description=FoldingOS persistent journal
-Requires=foldingos-persistent-dirs.service
-After=foldingos-persistent-dirs.service
+Requires=foldingos-journal-dir.service
+After=foldingos-journal-dir.service
 Before=foldingos-journal-flush.service
 
 [Mount]

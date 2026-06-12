@@ -13,6 +13,7 @@ FOUNDATION_UNITS = {
     "foldingos-config-validate.service",
     "foldingos-data-expand.service",
     "foldingos-identity.service",
+    "foldingos-journal-dir.service",
     "foldingos-journal-flush.service",
     "foldingos-persistent-dirs.service",
     "foldingos-ssh-provision.service",
@@ -29,6 +30,8 @@ REQUIRED_LINKS = {
         "/usr/lib/systemd/system/foldingos-data-expand.service",
     "etc/systemd/system/local-fs.target.wants/foldingos-persistent-dirs.service":
         "/usr/lib/systemd/system/foldingos-persistent-dirs.service",
+    "etc/systemd/system/local-fs.target.wants/foldingos-journal-dir.service":
+        "/usr/lib/systemd/system/foldingos-journal-dir.service",
     "etc/systemd/system/local-fs.target.wants/var-log-journal.mount":
         "/usr/lib/systemd/system/var-log-journal.mount",
     "etc/systemd/system/multi-user.target.wants/foldingos-config-validate.service":
@@ -60,9 +63,14 @@ UNIT_REQUIREMENTS = {
         ("Unit", "Requires"): {"data.mount"},
         ("Unit", "After"): {"data.mount"},
     },
-    "var-log-journal.mount": {
+    "foldingos-journal-dir.service": {
+        ("Unit", "DefaultDependencies"): {"no"},
         ("Unit", "Requires"): {"foldingos-persistent-dirs.service"},
         ("Unit", "After"): {"foldingos-persistent-dirs.service"},
+    },
+    "var-log-journal.mount": {
+        ("Unit", "Requires"): {"foldingos-journal-dir.service"},
+        ("Unit", "After"): {"foldingos-journal-dir.service"},
     },
     "foldingos-journal-flush.service": {
         ("Unit", "Requires"): {"var-log-journal.mount"},

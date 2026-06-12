@@ -1,0 +1,14 @@
+[Unit]
+Description=Prepare FoldingOS persistent journal directories
+DefaultDependencies=no
+Requires=foldingos-persistent-dirs.service
+After=foldingos-persistent-dirs.service
+Before=var-log-journal.mount
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemd-tmpfiles --create /usr/lib/foldingos/tmpfiles/journal.conf
+RemainAfterExit=yes
+
+[Install]
+WantedBy=local-fs.target

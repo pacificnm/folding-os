@@ -33,6 +33,9 @@ ln -snf \
   /usr/lib/systemd/system/foldingos-persistent-dirs.service \
   "${TARGET_DIR}/etc/systemd/system/local-fs.target.wants/foldingos-persistent-dirs.service"
 ln -snf \
+  /usr/lib/systemd/system/foldingos-journal-dir.service \
+  "${TARGET_DIR}/etc/systemd/system/local-fs.target.wants/foldingos-journal-dir.service"
+ln -snf \
   /usr/lib/systemd/system/var-log-journal.mount \
   "${TARGET_DIR}/etc/systemd/system/local-fs.target.wants/var-log-journal.mount"
 
@@ -89,3 +92,5 @@ ln -snf \
 ln -snf \
   /usr/lib/systemd/system/systemd-timesyncd.service \
   "${TARGET_DIR}/etc/systemd/system/dbus-org.freedesktop.timesync1.service"
+ln -snf /dev/null \
+  "${TARGET_DIR}/etc/systemd/system/systemd-journal-flush.service"
