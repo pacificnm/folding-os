@@ -465,7 +465,9 @@ PRETTY_NAME=\"FoldingOS 0.1.0\""
     journal-break)
       if ! ssh_guest '
         set -eux
-        sudo systemctl stop foldingos-journal-flush.service var-log-journal.mount
+        sudo systemctl stop foldingos-journal-flush.service
+        sudo systemctl stop systemd-journald.service systemd-journald.socket
+        sudo umount /var/log/journal
         sudo rm -rf /data/logs/journal
         sudo sh -c ": > /data/logs/journal"
         sudo sync
