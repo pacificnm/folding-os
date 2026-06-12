@@ -17,11 +17,14 @@ fi
 install -m 0644 "${BOARD_DIR}/grub.cfg" "${EFI_DIR}/EFI/BOOT/grub.cfg"
 install -m 0644 "${BOARD_DIR}/grub.cfg" "${EFI_DIR}/boot/grub/grub.cfg"
 
+find "${EFI_DIR}" -exec touch -h -d "@${SOURCE_DATE_EPOCH}" {} +
+
 rm -f "${DATA_IMAGE}"
 "${HOST_DIR}/sbin/mkfs.ext4" \
   -F \
   -L FOLDINGOS_DATA \
   -U 464f4c44-494e-474f-5344-415441000001 \
+  -E hash_seed=464f4c44-494e-474f-5344-415441000001 \
   -m 0 \
   "${DATA_IMAGE}" \
   1534M

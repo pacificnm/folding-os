@@ -87,6 +87,8 @@ packages/
 
 scripts/
   build
+  build-a
+  build-b
   check-host-tools
   clean
   fetch-sources
@@ -429,6 +431,11 @@ Partition alignment is 1 MiB. The data partition is the final partition.
 Disk GUID, partition GUIDs, filesystem UUIDs, FAT volume ID, filesystem
 creation options, and timestamps must be fixed in committed image-generation
 configuration so two builds produce byte-identical images.
+
+The root and data ext4 filesystems use their fixed filesystem UUID as their
+fixed ext4 directory hash seed. The EFI filesystem is created with
+`mkfs.fat --invariant`, followed by the fixed FAT volume ID, and its staged
+files and directories use `SOURCE_DATE_EPOCH` before image generation.
 
 The root filesystem is writable in v0.1.0. Routine persistent state must still
 reside under `/data`.
@@ -1251,6 +1258,8 @@ Required user-facing commands:
 ./scripts/clean
 ./scripts/fetch-sources
 ./scripts/build
+./scripts/build-a
+./scripts/build-b
 ./scripts/test-qemu
 ./scripts/verify-reproducible
 ```
@@ -1281,7 +1290,23 @@ an empty Buildroot output directory.
 The default script performs a reliable incremental developer build and must not
 claim reproducibility. A clean or reproducibility build starts from an empty
 out-of-tree Buildroot output directory by running `scripts/clean` first or by
-using `scripts/verify-reproducible`.
+using `scripts/build-a` or `scripts/build-b`.
+
+`scripts/build-a` performs the first clean build for a same-host deterministic
+output check. It requires a clean committed worktree, refuses to overwrite an
+existing `build/verification/build-a` artifact set, runs `scripts/clean` and
+`scripts/build`, and captures the required Build A artifacts.
+
+`scripts/build-b` performs the second clean build for a same-host deterministic
+output check. It requires a clean committed worktree and an existing
+`build/verification/build-a` artifact set from the current Git revision. It
+refuses to overwrite an existing `build-b`, runs `scripts/clean` and
+`scripts/build`, captures the required Build B artifacts, and invokes
+`scripts/verify-reproducible`.
+
+The same-host Build B workflow is a development determinism check. It does not
+replace the independent-environment release-candidate verification required by
+ADR-0012.
 
 ---
 
@@ -1420,7 +1445,10 @@ The comparison script:
 5. Compares the SHA-256 digest of every required deterministic artifact. The
    build-host verification records are compatibility-checked but are not
    required to be byte-identical.
-6. Writes a deterministic successful result to:
+6. When the disk image differs, reports whether the primary GPT, EFI
+   partition, root partition, data partition, or backup GPT differs and gives
+   the first differing byte offset in each differing region.
+7. Writes a deterministic successful result to:
 
    ```text
    build/verification/result/foldingos-x86_64-0.1.0.reproducibility.json

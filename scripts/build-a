@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export LC_ALL=C
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+VERSION="0.1.0"
+BASE_NAME="foldingos-x86_64-${VERSION}"
+IMAGES_DIR="${PROJECT_ROOT}/build/output/images"
+BUILD_A_DIR="${PROJECT_ROOT}/build/verification/build-a"
+REQUIRED_FILES=(
+  "${BASE_NAME}.img"
+  "${BASE_NAME}.img.sha256"
+  "${BASE_NAME}.metadata.json"
+  "${BASE_NAME}.source-inputs.json"
+  "${BASE_NAME}.build-host.json"
+)
+
+echo "FoldingOS same-host clean build A"
+echo
+echo "This checks deterministic output across two clean builds on this host."
+echo "It does not replace ADR-0012 independent-environment release verification."
+echo
+
+if [ -n "$(git -C "${PROJECT_ROOT}" status --porcelain)" ]; then
+  echo "ERROR: Commit or discard worktree changes before building build-a." >&2
+  exit 1
+fi
+
+if [ -e "${BUILD_A_DIR}" ]; then
+  echo "ERROR: Refusing to overwrite existing build A directory:" >&2
+  echo "${BUILD_A_DIR}" >&2
+  echo "Remove or archive it explicitly before retrying." >&2
+  exit 1
+fi
+
+"${PROJECT_ROOT}/scripts/clean"
+"${PROJECT_ROOT}/scripts/build"
+
+mkdir -p "${BUILD_A_DIR}"
+for filename in "${REQUIRED_FILES[@]}"; do
+  if [ ! -f "${IMAGES_DIR}/${filename}" ]; then
+    echo "ERROR: Clean build A is missing required artifact: ${filename}" >&2
+    exit 1
+  fi
+  cp "${IMAGES_DIR}/${filename}" "${BUILD_A_DIR}/${filename}"
+done
+
+echo
+echo "Build A artifacts:"
+echo "${BUILD_A_DIR}"
