@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export LC_ALL=C
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+VERSION="0.1.0"
+BASE_NAME="foldingos-x86_64-${VERSION}"
+IMAGES_DIR="${PROJECT_ROOT}/build/output/images"
+VERIFICATION_DIR="${PROJECT_ROOT}/build/verification"
+BUILD_A_DIR="${VERIFICATION_DIR}/build-a"
+BUILD_B_DIR="${VERIFICATION_DIR}/build-b"
+REQUIRED_FILES=(
+  "${BASE_NAME}.img"
+  "${BASE_NAME}.img.sha256"
+  "${BASE_NAME}.metadata.json"
+  "${BASE_NAME}.source-inputs.json"
+  "${BASE_NAME}.build-host.json"
+)
+
+echo "FoldingOS same-host clean build B"
+echo
+echo "This checks deterministic output across two clean builds on this host."
+echo "It does not replace ADR-0012 independent-environment release verification."
+echo
+
+if [ -n "$(git -C "${PROJECT_ROOT}" status --porcelain)" ]; then
+  echo "ERROR: Commit or discard worktree changes before building build-b." >&2
+  exit 1
+fi
+
+if [ ! -d "${BUILD_A_DIR}" ]; then
+  echo "ERROR: Build A directory does not exist: ${BUILD_A_DIR}" >&2
+  echo "Capture a clean build A artifact set before running this script." >&2
+  exit 1
+fi
+
+for filename in "${REQUIRED_FILES[@]}"; do
+  if [ ! -f "${BUILD_A_DIR}/${filename}" ]; then
+    echo "ERROR: Build A is missing required artifact: ${filename}" >&2
+    exit 1
+  fi
+done
+
+current_revision="$(git -C "${PROJECT_ROOT}" rev-parse HEAD)"
+build_a_revision="$(
+  python3 -c \
+    'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["git_revision"])' \
+    "${BUILD_A_DIR}/${BASE_NAME}.metadata.json"
+)"
+if [ "${build_a_revision}" != "${current_revision}" ]; then
+  echo "ERROR: Build A was produced from a different Git revision." >&2
+  echo "Current revision: ${current_revision}" >&2
+  echo "Build A revision: ${build_a_revision}" >&2
+  exit 1
+fi
+
+if [ -e "${BUILD_B_DIR}" ]; then
+  echo "ERROR: Refusing to overwrite existing build B directory:" >&2
+  echo "${BUILD_B_DIR}" >&2
+  echo "Remove or archive it explicitly before retrying." >&2
+  exit 1
+fi
+
+"${PROJECT_ROOT}/scripts/clean"
+"${PROJECT_ROOT}/scripts/build"
+
+mkdir -p "${BUILD_B_DIR}"
+for filename in "${REQUIRED_FILES[@]}"; do
+  if [ ! -f "${IMAGES_DIR}/${filename}" ]; then
+    echo "ERROR: Clean build B is missing required artifact: ${filename}" >&2
+    exit 1
+  fi
+  cp "${IMAGES_DIR}/${filename}" "${BUILD_B_DIR}/${filename}"
+done
+
+"${PROJECT_ROOT}/scripts/verify-reproducible" \
+  "${BUILD_A_DIR}" \
+  "${BUILD_B_DIR}"
+
+echo
+echo "Build B artifacts:"
+echo "${BUILD_B_DIR}"

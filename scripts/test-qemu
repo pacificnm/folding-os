@@ -36,6 +36,7 @@ PERSISTENCE_MODE=none
 EXPECTED_IMAGE_SIZE=4294967296
 LARGER_IMAGE_SIZE=6442450944
 LARGER_DATA_END=12580863
+EXPECTED_KERNEL_COMMAND_LINE="BOOT_IMAGE=/boot/bzImage root=PARTUUID=464f4c44-494e-474f-5352-4f4f54000001 rootwait ro console=tty1 console=ttyS0,115200"
 BOOT_TIMEOUT=360
 SSH_READY_TIMEOUT=60
 ACTIVE_QEMU_WRAPPER_PID=""
@@ -248,6 +249,17 @@ boot_image() {
 
   if ! grep -Fq "Linux version" "${serial_log}"; then
     echo "ERROR: Linux did not start." >&2
+    echo "Serial log: ${serial_log}" >&2
+    exit 1
+  fi
+  if ! grep -Fq "GNU GRUB  version" "${serial_log}"; then
+    echo "ERROR: OVMF did not load GRUB." >&2
+    echo "Serial log: ${serial_log}" >&2
+    exit 1
+  fi
+  if ! grep -Fq "Command line: ${EXPECTED_KERNEL_COMMAND_LINE}" "${serial_log}"; then
+    echo "ERROR: Kernel did not receive the approved command line." >&2
+    echo "Expected: ${EXPECTED_KERNEL_COMMAND_LINE}" >&2
     echo "Serial log: ${serial_log}" >&2
     exit 1
   fi
@@ -527,6 +539,7 @@ BLKID="$(find_tool blkid)"
 CMP="$(find_tool cmp)"
 MCOPY="$(find_tool mcopy)"
 MDEL="$(find_tool mdel)"
+MDIR="$(find_tool mdir)"
 SGDISK="$(find_tool sgdisk)"
 SSH="$(find_tool ssh)"
 SSH_KEYGEN="$(find_tool ssh-keygen)"
@@ -604,6 +617,17 @@ verify_filesystem "${RELEASE_IMAGE}" 537919488 2147483648 \
   FOLDINGOS_ROOT 464f4c44-494e-474f-5352-4f4f54000001 ext4
 verify_filesystem "${RELEASE_IMAGE}" 2685403136 1608515584 \
   FOLDINGOS_DATA 464f4c44-494e-474f-5344-415441000001 ext4
+
+efi_files="$("${MDIR}" -b -i "${RELEASE_IMAGE}@@1048576" \
+  ::/EFI/BOOT/BOOTX64.EFI \
+  ::/boot/grub/grub.cfg)"
+efi_foldingos_directory="$("${MDIR}" -b -i "${RELEASE_IMAGE}@@1048576" \
+  ::/foldingos)"
+assert_contains "${efi_files}" "BOOTX64.EFI" "EFI fallback bootloader is absent."
+assert_contains "${efi_files}" "grub.cfg" "GRUB configuration is absent from EFI."
+assert_contains "${efi_foldingos_directory}" \
+  "::/foldingos/provision/" \
+  "EFI provisioning directory is absent."
 
 echo "Image structure verified."
 

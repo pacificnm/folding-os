@@ -1251,6 +1251,7 @@ Required user-facing commands:
 ./scripts/clean
 ./scripts/fetch-sources
 ./scripts/build
+./scripts/build-b
 ./scripts/test-qemu
 ./scripts/verify-reproducible
 ```
@@ -1282,6 +1283,17 @@ The default script performs a reliable incremental developer build and must not
 claim reproducibility. A clean or reproducibility build starts from an empty
 out-of-tree Buildroot output directory by running `scripts/clean` first or by
 using `scripts/verify-reproducible`.
+
+`scripts/build-b` performs the second clean build for a same-host deterministic
+output check. It requires a clean committed worktree and an existing
+`build/verification/build-a` artifact set from the current Git revision. It
+refuses to overwrite an existing `build-b`, runs `scripts/clean` and
+`scripts/build`, captures the required Build B artifacts, and invokes
+`scripts/verify-reproducible`.
+
+The same-host Build B workflow is a development determinism check. It does not
+replace the independent-environment release-candidate verification required by
+ADR-0012.
 
 ---
 
