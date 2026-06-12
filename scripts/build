@@ -68,8 +68,33 @@ make \
   BR2_DEFCONFIG="${DEFCONFIG}" \
   defconfig
 
+# Buildroot local-package source changes do not invalidate an already-rsynced
+# package automatically. Rebuild this small repository-owned package every time
+# so an incremental image can never silently contain stale foldingosctl code.
+echo "Invalidating repository-local foldingosctl build"
+make \
+  O="${PROJECT_ROOT}/build/output" \
+  foldingosctl-dirclean
+
 echo "Building FoldingOS"
 make O="${PROJECT_ROOT}/build/output"
+
+FOLDINGOSCTL_BINARY="${PROJECT_ROOT}/build/output/target/usr/bin/foldingosctl"
+if [ ! -x "${FOLDINGOSCTL_BINARY}" ]; then
+  echo "ERROR: Built foldingosctl binary is missing:"
+  echo "${FOLDINGOSCTL_BINARY}"
+  exit 1
+fi
+if ! grep -aFq "Force-checked %s before data expansion." "${FOLDINGOSCTL_BINARY}"; then
+  echo "ERROR: Built foldingosctl binary is stale."
+  echo "Expected current storage-check behavior was not found."
+  exit 1
+fi
+if ! grep -aFq ".ssh_host_ed25519_key.tmp-" "${FOLDINGOSCTL_BINARY}"; then
+  echo "ERROR: Built foldingosctl binary is stale."
+  echo "Expected current SSH-provisioning behavior was not found."
+  exit 1
+fi
 
 echo "Generating FoldingOS build artifacts"
 "${PROJECT_ROOT}/tools/release/generate-build-artifacts" \

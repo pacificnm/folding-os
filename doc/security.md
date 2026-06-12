@@ -71,6 +71,12 @@ exclude its source boot device, require target-specific destructive
 confirmation, and write only to the selected target as defined by
 [ADR-0013](adr/0013-combined-appliance-and-installer-image.md).
 
+Supervisor-role installations enable the FoldOps web interface by default, but
+it must not become remotely available until initial administrator and TLS
+provisioning succeeds. The exact secure provisioning workflow must be approved
+before implementation, as required by
+[ADR-0014](adr/0014-fixed-installation-roles.md).
+
 ---
 
 # Network Exposure

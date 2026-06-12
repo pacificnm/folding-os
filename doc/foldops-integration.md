@@ -1,6 +1,6 @@
 # FoldOps Integration
 
-Version: 0.1
+Version: 0.2
 
 Status: Living Document
 
@@ -33,6 +33,54 @@ FoldingOS should remain lightweight.
 Management complexity belongs in FoldOps rather than on individual nodes.
 
 Nodes should remain simple appliances.
+
+FoldingOS uses the fixed installation roles defined by
+[ADR-0014](adr/0014-fixed-installation-roles.md).
+
+---
+
+# Installation Roles
+
+FoldingOS supports exactly two fixed roles:
+
+```text
+agent
+supervisor
+```
+
+The agent role runs `foldops-agent` and does not enable the FoldOps supervisor
+or web interface.
+
+The supervisor role runs:
+
+```text
+foldops-agent
+foldops-supervisor
+foldops-web
+```
+
+The web interface is enabled by default for the supervisor role, but it must
+not become remotely available until initial administrator and TLS provisioning
+succeeds.
+
+Roles are selected during installation and cannot be changed in place.
+Changing roles requires fresh destructive reinstallation.
+
+Whether the supervisor role also runs Folding@home remains unresolved.
+
+---
+
+# Package Integration
+
+Approved FoldOps Debian package artifacts are pinned, verified, and integrated
+into the combined FoldingOS image at Buildroot build time.
+
+FoldingOS does not use APT at runtime or contact the FoldOps package repository
+during installation. The image must not rely on an APT source configured with
+`trusted=yes`.
+
+Exact package versions, verification metadata, extraction behavior, and
+service integration require an approved implementation specification.
 
 ---
 

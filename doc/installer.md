@@ -1,6 +1,6 @@
 # FoldingOS Installer
 
-Version: 0.2
+Version: 0.3
 Status: Approved Architecture
 
 ## Purpose
@@ -12,7 +12,9 @@ reproducible, explicit, and safe while supporting systems whose intended boot
 disk is installed internally.
 
 The governing architecture decision is
-[ADR-0013](adr/0013-combined-appliance-and-installer-image.md).
+[ADR-0013](adr/0013-combined-appliance-and-installer-image.md). Fixed
+installation roles are defined by
+[ADR-0014](adr/0014-fixed-installation-roles.md).
 
 ## Installation Philosophy
 
@@ -45,6 +47,10 @@ After flashing, administrator public keys are placed on the EFI System
 Partition as defined by
 [ADR-0007](adr/0007-first-boot-administrator-and-ssh-provisioning.md).
 
+The equivalent direct-flash mechanism for selecting a fixed installation role
+before first boot remains to be defined. Role-specific services must not be
+implemented until that mechanism is approved.
+
 ### Combined-Image Installer
 
 The same image may be booted from USB media in installer mode:
@@ -55,6 +61,8 @@ Flash FoldingOS image to USB
 Boot USB and select installer mode
 ↓
 Select an internal target disk
+↓
+Select the fixed installation role
 ↓
 Provide administrator public keys
 ↓
@@ -107,14 +115,42 @@ The first combined-image installer will:
 - discover eligible target disks
 - display target path, capacity, and stable identifying information
 - require explicit target selection
+- require explicit selection of the `agent` or `supervisor` role
 - require target-specific destructive confirmation
 - reject targets smaller than the release image
 - write the fixed release image to the selected target
 - provision administrator public keys on the target EFI partition
+- provision the selected fixed role onto the target
 - verify and flush the completed installation
 - require reboot or poweroff after completion
 
 The first implementation performs fresh destructive installation only.
+
+## Installation Roles
+
+The installer offers exactly:
+
+```text
+agent
+supervisor
+```
+
+The agent role enables the FoldOps agent without the FoldOps supervisor or web
+interface.
+
+The supervisor role enables the FoldOps agent, supervisor, and web interface.
+It also requires successful initial administrator and TLS provisioning before
+the web interface becomes remotely available.
+
+The selected role cannot be changed in place. Changing roles requires fresh
+destructive reinstallation.
+
+Role selection activates approved payloads already present in the image. It is
+not arbitrary package selection and does not require network access.
+
+The exact role-provisioning transaction and supervisor administrator and TLS
+workflow require an approved installer engineering-specification amendment
+before implementation.
 
 ## Installer-Mode Isolation
 
@@ -209,7 +245,7 @@ The first installer does not provide:
 
 - a separate installer operating system
 - GUI installation
-- package selection
+- arbitrary package selection beyond the two approved fixed roles
 - custom partitioning
 - network-required installation
 - unattended destructive installation

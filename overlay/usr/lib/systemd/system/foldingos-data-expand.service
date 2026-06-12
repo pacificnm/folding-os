@@ -8,6 +8,8 @@ Before=data.mount
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/foldingosctl storage expand-data
+StandardOutput=journal+console
+StandardError=journal+console
 RemainAfterExit=yes
 
 [Install]

@@ -91,6 +91,13 @@ precedence or silently choose one statement.
 - A future installer-capable release uses one combined appliance and installer
   image with explicit GRUB boot modes; it does not introduce a separate
   installer operating system.
+- FoldingOS supports fixed `agent` and `supervisor` installation roles from
+  the same combined image. The supervisor includes the FoldOps agent,
+  supervisor, and web services; its web interface requires initial
+  administrator and TLS provisioning. Roles cannot be changed in place.
+- FoldOps package artifacts are pinned and verified at Buildroot build time.
+  FoldingOS does not use APT at runtime or install FoldOps packages from the
+  network during installation.
 - FoldingOS images do not contain Folding@home client or FahCore binaries.
   Nodes download a pinned, verified client directly from official Folding@home
   infrastructure; FoldOps may coordinate approved manifests but does not proxy

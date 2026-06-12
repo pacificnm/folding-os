@@ -40,7 +40,7 @@ func provisionSSH() error {
 	if err != nil {
 		return err
 	}
-	if err := atomicWrite(activeKeys, keys, 0600); err != nil {
+	if err := atomicWrite(activeKeys, keys, 0644); err != nil {
 		return err
 	}
 	if err := os.Remove(provisionedKeys); err != nil {
@@ -52,14 +52,52 @@ func provisionSSH() error {
 
 func ensureHostKey() error {
 	if info, err := os.Stat(hostKey); err == nil && info.Mode().IsRegular() {
-		return nil
+		if err := os.Chmod(hostKey, 0600); err != nil {
+			return err
+		}
+		publicKey, validateErr := commandInput("", "ssh-keygen", "-y", "-f", hostKey)
+		if validateErr == nil {
+			return atomicWrite(hostKey+".pub", []byte(strings.TrimSpace(publicKey)+"\n"), 0644)
+		}
 	} else if err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(hostKey), 0700); err != nil {
 		return err
 	}
-	return run("ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", hostKey)
+	if err := os.Chmod(filepath.Dir(hostKey), 0700); err != nil {
+		return err
+	}
+	temp, err := os.CreateTemp(filepath.Dir(hostKey), ".ssh_host_ed25519_key.tmp-")
+	if err != nil {
+		return err
+	}
+	tempName := temp.Name()
+	if err := temp.Close(); err != nil {
+		return err
+	}
+	if err := os.Remove(tempName); err != nil {
+		return err
+	}
+	defer os.Remove(tempName)
+	defer os.Remove(tempName + ".pub")
+
+	if err := run("ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", tempName); err != nil {
+		return err
+	}
+	if err := os.Chmod(tempName, 0600); err != nil {
+		return err
+	}
+	if err := os.Chmod(tempName+".pub", 0644); err != nil {
+		return err
+	}
+	if err := os.Rename(tempName+".pub", hostKey+".pub"); err != nil {
+		return err
+	}
+	if err := os.Rename(tempName, hostKey); err != nil {
+		return err
+	}
+	return nil
 }
 
 func validateAuthorizedKeys(content []byte) ([]byte, error) {

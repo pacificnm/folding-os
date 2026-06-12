@@ -35,6 +35,7 @@ Milestones 1 and 2 together define the first working v0.1.0 release scope.
 - Add appliance and installer GRUB boot modes
 - Add `foldingos-installer.target`
 - Implement safe local-console `foldingosctl install`
+- Add fixed `agent` and `supervisor` role selection and target provisioning
 - Provision administrator public keys onto installed targets
 - Add QEMU source-device protection and installation tests
 - Validate USB-source installation to approved SATA and NVMe targets
@@ -43,7 +44,11 @@ Milestones 1 and 2 together define the first working v0.1.0 release scope.
 
 - Define node registration workflow
 - Define metrics reporting API
+- Integrate pinned and verified FoldOps package artifacts
+- Activate the fixed agent and supervisor service graphs
+- Provision initial supervisor administrator and TLS configuration
 - Add FoldingOS agent
+- Add FoldOps supervisor and web services
 - Support remote configuration from FoldOps
 - Report node health and FAH status
 

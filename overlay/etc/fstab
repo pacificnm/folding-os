@@ -1,3 +1,3 @@
 LABEL=FOLDINGOS_ROOT  /          ext4  defaults                              0  1
 LABEL=FOLDING_EFI     /boot/efi  vfat  defaults,noexec,nosuid,nodev,umask=0077  0  2
-LABEL=FOLDINGOS_DATA  /data      ext4  defaults,nosuid,nodev                 0  2
+LABEL=FOLDINGOS_DATA  /data      ext4  defaults,nosuid,nodev                 0  0

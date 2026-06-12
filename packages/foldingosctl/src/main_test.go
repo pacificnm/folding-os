@@ -1,6 +1,12 @@
 package main
 
-import "testing"
+import (
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 func TestParseTable(t *testing.T) {
 	table := `Disk /dev/vda: 8388608 sectors
@@ -86,4 +92,63 @@ func TestNewUUID(t *testing.T) {
 	if !uuidPattern.MatchString(value) {
 		t.Fatalf("invalid UUIDv4: %s", value)
 	}
+}
+
+func TestValidateAuthorizedKeysAcceptsCompleteSupportedKeySet(t *testing.T) {
+	ed25519 := generateTestPublicKey(t, "ed25519", "")
+	ecdsa := generateTestPublicKey(t, "ecdsa", "256")
+	content := []byte("# complete replacement set\n" + ed25519 + "\n\n" + ecdsa + "\n")
+
+	got, err := validateAuthorizedKeys(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := ed25519 + "\n" + ecdsa + "\n"
+	if string(got) != want {
+		t.Fatalf("validated keys = %q, want %q", got, want)
+	}
+}
+
+func TestValidateAuthorizedKeysRejectsPrivateKeyMaterial(t *testing.T) {
+	privateKey := generateTestPrivateKey(t)
+	if _, err := validateAuthorizedKeys(privateKey); err == nil {
+		t.Fatal("private key material was accepted")
+	}
+}
+
+func TestValidateAuthorizedKeysRejectsOptions(t *testing.T) {
+	key := generateTestPublicKey(t, "ed25519", "")
+	if _, err := validateAuthorizedKeys([]byte("no-port-forwarding " + key + "\n")); err == nil {
+		t.Fatal("option-prefixed key was accepted")
+	}
+}
+
+func generateTestPublicKey(t *testing.T, keyType, bits string) string {
+	t.Helper()
+	privatePath := filepath.Join(t.TempDir(), "key")
+	args := []string{"-q", "-t", keyType, "-N", "", "-f", privatePath}
+	if bits != "" {
+		args = append(args, "-b", bits)
+	}
+	if output, err := exec.Command("ssh-keygen", args...).CombinedOutput(); err != nil {
+		t.Fatalf("generate %s key: %v: %s", keyType, err, output)
+	}
+	content, err := os.ReadFile(privatePath + ".pub")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.TrimSpace(string(content))
+}
+
+func generateTestPrivateKey(t *testing.T) []byte {
+	t.Helper()
+	privatePath := filepath.Join(t.TempDir(), "key")
+	if output, err := exec.Command("ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", privatePath).CombinedOutput(); err != nil {
+		t.Fatalf("generate private key: %v: %s", err, output)
+	}
+	content, err := os.ReadFile(privatePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return content
 }

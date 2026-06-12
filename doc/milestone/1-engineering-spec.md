@@ -485,7 +485,7 @@ Required persistent directories and initial ownership:
 | `/data/config/last-good` | `root:root` | `0700` | last-known-good TOML |
 | `/data/config/overrides` | `root:root` | `0755` | administrator overrides |
 | `/data/config/secrets` | `root:root` | `0700` | secret values |
-| `/data/config/ssh` | `root:root` | `0700` | administrator authorized keys |
+| `/data/config/ssh` | `root:root` | `0755` | administrator authorized keys |
 | `/data/config/ssh/host-keys` | `root:root` | `0700` | persistent SSH host identity |
 | `/data/fah` | `fah:fah` | `0750` | FAH work, checkpoints, and runtime state |
 | `/data/logs/journal` | `root:systemd-journal` | `2755` | persistent journal |
@@ -511,6 +511,7 @@ findmnt
 lsblk
 sgdisk
 partx
+fsck.ext4
 resize2fs
 ```
 
@@ -521,13 +522,19 @@ Algorithm:
 3. Confirm GPT and required partition labels.
 4. Confirm partition 3 is `FOLDINGOS_DATA` and is the final partition.
 5. Record partition 3 start sector and unique GUID.
-6. Move the backup GPT header to the physical device end when required.
-7. Recreate only partition 3 with the identical start sector, type, name, and
+6. Run `fsck.ext4 -p` on the unmounted data filesystem. Exit status `0` or `1`
+   permits the filesystem to mount; every other status prevents mounting and
+   expansion.
+7. Move the backup GPT header to the physical device end when required.
+8. If expansion is required, run `fsck.ext4 -f -p` immediately before
+   recreating the data partition. Exit status `0` or `1` permits expansion;
+   every other status prevents expansion.
+9. Recreate only partition 3 with the identical start sector, type, name, and
    unique GUID, extending its end to the maximum aligned usable sector.
-8. Use `partx` to update the kernel's view of partition 3 without requiring
+10. Use `partx` to update the kernel's view of partition 3 without requiring
    partitions 1 or 2 to be unmounted.
-9. Run `resize2fs` on the unmounted data filesystem.
-10. Allow the ordered `data.mount` unit to confirm the filesystem is mountable
+11. Run `resize2fs` on the unmounted data filesystem.
+12. Allow the ordered `data.mount` unit to confirm the filesystem is mountable
     before allowing persistent writers.
 
 The command exits successfully without changes when the partition and
@@ -535,6 +542,11 @@ filesystem already occupy available capacity.
 
 The unit must never call `mkfs`, shrink a filesystem, alter partitions 1 or 2,
 or change the data partition start sector or identity.
+
+`foldingosctl storage expand-data` owns the complete unmounted data-filesystem
+operation, including its pre-expansion check. The `/data` fstab entry uses pass
+number `0`; systemd must not generate a competing device-bound filesystem-check
+unit. Expansion must complete before `data.mount` starts.
 
 ---
 
@@ -612,7 +624,10 @@ configuration:
 | `foldingos-admin` | 1000 | `foldingos-admin` | 1000 | `/bin/sh` |
 | `fah` | 200 | `fah` | 200 | `/usr/sbin/nologin` |
 
-`foldingos-admin` has no usable password hash.
+`foldingos-admin` has no usable password hash. Its Buildroot user-table password
+field is the literal invalid-hash marker `NP`, which prevents Unix password
+login without causing OpenSSH to reject public-key authentication as a locked
+account.
 
 `fah` has no interactive login, password, or administrative privileges.
 
@@ -628,6 +643,7 @@ Required `sshd_config` policy:
 ```text
 PermitRootLogin no
 PasswordAuthentication no
+PermitEmptyPasswords no
 KbdInteractiveAuthentication no
 PubkeyAuthentication yes
 AuthorizedKeysFile /data/config/ssh/authorized_keys
@@ -663,8 +679,10 @@ comments are ignored.
 
 The complete candidate key set is validated with `ssh-keygen`, written to a
 temporary file under `/data/config/ssh`, flushed, and atomically renamed over
-the active file. The provisioning file is removed only after successful
-activation.
+the active `root:root 0644` file. The directory is `root:root 0755` so OpenSSH
+can read the file while temporarily using the `foldingos-admin` UID. Neither
+the directory nor file is writable by that account. The provisioning file is
+removed only after successful activation.
 
 On first boot, the provisioning service generates one Ed25519 SSH host key
 under `/data/config/ssh/host-keys` when no valid host key exists. The private
@@ -1176,6 +1194,9 @@ At minimum, CI and release verification implement:
 - SSH disabled without key
 - valid key provisioning and SSH access
 - root/password SSH rejection
+- invalid and private-key provisioning rejection without replacing valid keys
+- SSH host-key persistence across reboot
+- complete authorized-key-set replacement and old-key revocation
 
 ## Storage Tests
 
@@ -1249,13 +1270,18 @@ an empty Buildroot output directory.
 1. Refuses a dirty worktree for release mode.
 2. Verifies Buildroot and source hashes.
 3. Derives deterministic timestamps from the Git source revision.
-4. Creates an empty out-of-tree Buildroot output directory.
-5. Applies `foldingos_x86_64_defconfig`.
-6. Builds the complete image.
+4. Applies `foldingos_x86_64_defconfig`.
+5. Invalidates every repository-local Buildroot package before an incremental
+   developer build so Buildroot cannot reuse stale local-package source or
+   binaries.
+6. Builds the complete image and verifies that required repository-local
+   behavior is present in the installed target binaries.
 7. Produces version metadata and a SHA-256 artifact manifest.
 
-The script supports an explicit developer mode that may use a writable download
-cache but must not claim reproducibility.
+The default script performs a reliable incremental developer build and must not
+claim reproducibility. A clean or reproducibility build starts from an empty
+out-of-tree Buildroot output directory by running `scripts/clean` first or by
+using `scripts/verify-reproducible`.
 
 ---
 

@@ -7,6 +7,7 @@ IMAGES_DIR="${PROJECT_ROOT}/build/output/images"
 HOST_DIR="${PROJECT_ROOT}/build/output/host"
 TEST_DIR="${PROJECT_ROOT}/build/test-qemu"
 RELEASE_IMAGE="${1:-${IMAGES_DIR}/foldingos-x86_64-0.1.0.img}"
+ROOTFS_TAR="${IMAGES_DIR}/rootfs.tar"
 EXACT_IMAGE="${TEST_DIR}/foldingos-x86_64-0.1.0-exact.img"
 LARGER_IMAGE="${TEST_DIR}/foldingos-x86_64-0.1.0-larger.img"
 EXACT_SERIAL_LOG="${TEST_DIR}/exact-serial.log"
@@ -14,16 +15,49 @@ LARGER_SERIAL_LOG="${TEST_DIR}/larger-serial.log"
 REPEAT_SERIAL_LOG="${TEST_DIR}/repeat-serial.log"
 PROVISION_IMAGE="${TEST_DIR}/foldingos-x86_64-0.1.0-provisioned.img"
 PROVISION_SERIAL_LOG="${TEST_DIR}/provisioned-serial.log"
+CONFIG_IMAGE="${TEST_DIR}/foldingos-x86_64-0.1.0-config-tests.img"
+CONFIG_SERIAL_LOG="${TEST_DIR}/config-tests-serial.log"
+INVALID_PROVISION_SERIAL_LOG="${TEST_DIR}/invalid-provision-serial.log"
+RECOVERY_SERIAL_LOG="${TEST_DIR}/recovery-serial.log"
+REPLACEMENT_SERIAL_LOG="${TEST_DIR}/replacement-serial.log"
+SSH_DIAGNOSTIC_LOG="${TEST_DIR}/ssh-diagnostic.log"
+GUEST_ACCEPTANCE_LOG="${TEST_DIR}/guest-acceptance.log"
 PRESERVATION_SERIAL_LOG="${TEST_DIR}/preservation-serial.log"
 INVALID_IMAGE="${TEST_DIR}/foldingos-x86_64-0.1.0-invalid-layout.img"
 INVALID_SERIAL_LOG="${TEST_DIR}/invalid-layout-serial.log"
 SSH_KEY="${TEST_DIR}/foldingos-test-key"
+SSH_REPLACEMENT_KEY="${TEST_DIR}/foldingos-test-replacement-key"
+SSH_REPLACEMENT_KEY_SECOND="${TEST_DIR}/foldingos-test-replacement-key-second"
+SSH_REPLACEMENT_KEYS="${TEST_DIR}/foldingos-test-replacement-authorized_keys"
+INVALID_PROVISION_COPY="${TEST_DIR}/invalid-provision-authorized_keys"
+SSH_IDENTITY="${SSH_KEY}"
 SSH_PORT=2222
 PERSISTENCE_MODE=none
 EXPECTED_IMAGE_SIZE=4294967296
 LARGER_IMAGE_SIZE=6442450944
 LARGER_DATA_END=12580863
 BOOT_TIMEOUT=360
+SSH_READY_TIMEOUT=60
+ACTIVE_QEMU_WRAPPER_PID=""
+ACTIVE_QEMU_PID_FILE=""
+
+stop_active_qemu() {
+  local qemu_process_pid
+
+  if [ -n "${ACTIVE_QEMU_PID_FILE}" ] && [ -f "${ACTIVE_QEMU_PID_FILE}" ]; then
+    qemu_process_pid="$(cat "${ACTIVE_QEMU_PID_FILE}")"
+    kill -TERM "${qemu_process_pid}" 2>/dev/null || true
+  fi
+  if [ -n "${ACTIVE_QEMU_WRAPPER_PID}" ]; then
+    kill -TERM "${ACTIVE_QEMU_WRAPPER_PID}" 2>/dev/null || true
+  fi
+
+  ACTIVE_QEMU_WRAPPER_PID=""
+  ACTIVE_QEMU_PID_FILE=""
+}
+
+trap stop_active_qemu EXIT
+trap 'stop_active_qemu; exit 130' INT TERM
 
 find_tool() {
   local name="$1"
@@ -99,13 +133,16 @@ boot_image() {
   local serial_log="$3"
   local ssh_expectation="${4:-none}"
   local vars_file="${serial_log%.log}-OVMF_VARS_4M.fd"
+  local qemu_pid_file="${serial_log%.log}.pid"
   local qemu_pid
   local qemu_status
   local seconds
   local ssh_ready=false
+  local multi_user_seconds=-1
 
   cp "${OVMF_VARS}" "${vars_file}"
-  rm -f "${serial_log}"
+  rm -f "${serial_log}" "${qemu_pid_file}"
+  rm -f "${SSH_DIAGNOSTIC_LOG}" "${GUEST_ACCEPTANCE_LOG}"
 
   echo "Booting ${description} with QEMU/OVMF"
   set +e
@@ -122,39 +159,65 @@ boot_image() {
     -display none \
     -monitor none \
     -serial "file:${serial_log}" \
+    -pidfile "${qemu_pid_file}" \
     -no-reboot &
   qemu_pid=$!
+  ACTIVE_QEMU_WRAPPER_PID="${qemu_pid}"
+  ACTIVE_QEMU_PID_FILE="${qemu_pid_file}"
   set -e
 
   for ((seconds = 0; seconds < BOOT_TIMEOUT; seconds++)); do
     if [ -f "${serial_log}" ] &&
       grep -Eq 'Reached target .*Multi-User|Reached target Multi-User System' "${serial_log}"
     then
+      if [ "${multi_user_seconds}" -lt 0 ]; then
+        multi_user_seconds="${seconds}"
+      fi
       case "${ssh_expectation}" in
         none)
-          kill -TERM "${qemu_pid}" 2>/dev/null || true
-          break
+          if expansion_reached_terminal_state "${serial_log}"; then
+            stop_active_qemu
+            break
+          fi
           ;;
         disabled)
-          if ssh_guest true >/dev/null 2>&1; then
-            echo "ERROR: SSH accepted a connection without provisioned keys." >&2
-            kill -TERM "${qemu_pid}" 2>/dev/null || true
-            wait "${qemu_pid}" 2>/dev/null || true
-            exit 1
+          if expansion_reached_terminal_state "${serial_log}"; then
+            if ssh_guest true >/dev/null 2>&1; then
+              echo "ERROR: SSH accepted a connection when it should be disabled." >&2
+              stop_active_qemu
+              exit 1
+            fi
+            stop_active_qemu
+            break
           fi
-          kill -TERM "${qemu_pid}" 2>/dev/null || true
-          break
           ;;
         enabled)
+          if grep -Eq \
+            'Failed to start .*Expand FoldingOS persistent data partition|Stopped .*Expand FoldingOS persistent data partition' \
+            "${serial_log}"
+          then
+            echo "ERROR: Data expansion failed before provisioned SSH became available." >&2
+            echo "Serial log: ${serial_log}" >&2
+            stop_active_qemu
+            exit 1
+          fi
           if ssh_guest true >/dev/null 2>&1; then
             ssh_ready=true
             if ! verify_guest_acceptance; then
               echo "ERROR: Provisioned guest acceptance checks failed." >&2
-              kill -TERM "${qemu_pid}" 2>/dev/null || true
-              wait "${qemu_pid}" 2>/dev/null || true
+              if [ -s "${GUEST_ACCEPTANCE_LOG}" ]; then
+                echo "Guest acceptance diagnostic: ${GUEST_ACCEPTANCE_LOG}" >&2
+                cat "${GUEST_ACCEPTANCE_LOG}" >&2
+              fi
+              stop_active_qemu
               exit 1
             fi
-            kill -TERM "${qemu_pid}" 2>/dev/null || true
+            stop_active_qemu
+            break
+          fi
+          if [ $((seconds - multi_user_seconds)) -ge "${SSH_READY_TIMEOUT}" ]; then
+            ssh_guest true >"${SSH_DIAGNOSTIC_LOG}" 2>&1 || true
+            stop_active_qemu
             break
           fi
           ;;
@@ -169,6 +232,9 @@ boot_image() {
   set +e
   wait "${qemu_pid}"
   qemu_status=$?
+  ACTIVE_QEMU_WRAPPER_PID=""
+  ACTIVE_QEMU_PID_FILE=""
+  rm -f "${qemu_pid_file}"
   set -e
 
   if [ "${qemu_status}" -ne 0 ] &&
@@ -196,8 +262,27 @@ boot_image() {
     echo "Serial log: ${serial_log}" >&2
     exit 1
   fi
+  if grep -Fq "Unit configuration has fatal error" "${serial_log}"; then
+    echo "ERROR: systemd rejected a unit configuration." >&2
+    echo "Serial log: ${serial_log}" >&2
+    exit 1
+  fi
+  if grep -Eq 'Finished .*Expand FoldingOS persistent data partition' "${serial_log}"; then
+    assert_data_fsck_completed "${serial_log}"
+  fi
+  if [ "${ssh_expectation}" = disabled ] &&
+    grep -Eq 'Started .*OpenSSH server daemon' "${serial_log}"
+  then
+    echo "ERROR: OpenSSH started when it should be disabled." >&2
+    echo "Serial log: ${serial_log}" >&2
+    exit 1
+  fi
   if [ "${ssh_expectation}" = enabled ] && [ "${ssh_ready}" != true ]; then
     echo "ERROR: Provisioned SSH access did not become available." >&2
+    if [ -s "${SSH_DIAGNOSTIC_LOG}" ]; then
+      echo "SSH diagnostic: ${SSH_DIAGNOSTIC_LOG}" >&2
+      cat "${SSH_DIAGNOSTIC_LOG}" >&2
+    fi
     echo "Serial log: ${serial_log}" >&2
     exit 1
   fi
@@ -207,24 +292,42 @@ ssh_guest() {
   ssh_user foldingos-admin "$@"
 }
 
+expansion_reached_terminal_state() {
+  local serial_log="$1"
+
+  grep -Eq \
+    'Finished .*Expand FoldingOS persistent data partition|Failed to start .*Expand FoldingOS persistent data partition|Stopped .*Expand FoldingOS persistent data partition' \
+    "${serial_log}"
+}
+
 ssh_user() {
   local user="$1"
   shift
+  ssh_user_with_key "${SSH_IDENTITY}" "${user}" "$@"
+}
+
+ssh_user_with_key() {
+  local identity="$1"
+  local user="$2"
+  shift 2
   "${SSH}" \
-    -i "${SSH_KEY}" \
+    -F /dev/null \
+    -i "${identity}" \
     -p "${SSH_PORT}" \
     -o BatchMode=yes \
     -o ConnectTimeout=2 \
+    -o LogLevel=ERROR \
     -o StrictHostKeyChecking=no \
     -o UserKnownHostsFile=/dev/null \
     "${user}@127.0.0.1" "$@"
 }
 
 verify_guest_acceptance() {
-  ssh_guest '
-    set -eu
+  if ! ssh_guest '
+    set -eux
     test "$(id -u)" = 1000
     sudo -n true
+    sudo grep -Fxq "foldingos-admin:NP:::::::" /etc/shadow
     test "$(readlink /etc/os-release)" = ../usr/lib/os-release
     test "$(cat /usr/lib/os-release)" = "NAME=\"FoldingOS\"
 ID=foldingos
@@ -233,12 +336,23 @@ VERSION_ID=\"0.1.0\"
 PRETTY_NAME=\"FoldingOS 0.1.0\""
     findmnt /boot/efi >/dev/null
     findmnt /data >/dev/null
-    networkctl is-online >/dev/null
-    resolvectl query time.cloudflare.com >/dev/null
+    networkctl status --no-pager enp0s2 >/dev/null
     systemctl is-active --quiet systemd-networkd.service
     systemctl is-active --quiet systemd-resolved.service
     systemctl is-active --quiet systemd-timesyncd.service
     systemctl is-active --quiet sshd.service
+    attempts=0
+    until resolvectl query time.cloudflare.com >/dev/null 2>&1; do
+      attempts=$((attempts + 1))
+      test "${attempts}" -lt 30
+      sleep 1
+    done
+    sudo sshd -T | grep -Fxq "permitrootlogin no"
+    sudo sshd -T | grep -Fxq "passwordauthentication no"
+    sudo sshd -T | grep -Fxq "permitemptypasswords no"
+    sudo sshd -T | grep -Fxq "kbdinteractiveauthentication no"
+    sudo sshd -T | grep -Fxq "pubkeyauthentication yes"
+    sudo sshd -T | grep -Fxq "allowusers foldingos-admin"
     attempts=0
     while [ "$(timedatectl show -p NTPSynchronized --value)" != yes ]; do
       attempts=$((attempts + 1))
@@ -247,37 +361,139 @@ PRETTY_NAME=\"FoldingOS 0.1.0\""
     done
     test -s /data/config/node-id
     test -s /data/config/ssh/authorized_keys
+    test "$(find /data/config/ssh -maxdepth 0 -user root -group root -perm 0755 -print)" = /data/config/ssh
+    test "$(find /data/config/ssh/authorized_keys -maxdepth 0 -user root -group root -perm 0644 -print)" = /data/config/ssh/authorized_keys
+    test "$(sudo find /data/config/ssh/host-keys -maxdepth 0 -user root -group root -perm 0700 -print)" = /data/config/ssh/host-keys
+    test "$(sudo find /data/config/ssh/host-keys/ssh_host_ed25519_key -maxdepth 0 -user root -group root -perm 0600 -print)" = /data/config/ssh/host-keys/ssh_host_ed25519_key
+    test "$(sudo find /data/config/ssh/host-keys/ssh_host_ed25519_key.pub -maxdepth 0 -user root -group root -perm 0644 -print)" = /data/config/ssh/host-keys/ssh_host_ed25519_key.pub
     test ! -e /boot/efi/foldingos/provision/authorized_keys
 
-    valid=/data/state/foldinghome-valid.toml
-    malformed=/data/state/foldinghome-malformed.toml
-    unknown=/data/state/foldinghome-unknown.toml
-    printf "schema_version = 1\n\n[identity]\nusername = \"Test User\"\nteam = 0\npasskey_secret = \"\"\n\n[resources]\ncpus = 0\ngpus = false\n" > "${valid}"
-    sudo foldingosctl config activate foldinghome "${valid}"
-    sudo foldingosctl config effective foldinghome | grep -Fq "username = \"Test User\""
-    printf "schema_version = nope\n" > "${malformed}"
-    if sudo foldingosctl config activate foldinghome "${malformed}"; then
-      exit 1
-    fi
-    printf "schema_version = 1\n\n[identity]\nusername = \"Test User\"\nteam = 0\npasskey_secret = \"\"\nunknown = true\n\n[resources]\ncpus = 0\ngpus = false\n" > "${unknown}"
-    if sudo foldingosctl config activate foldinghome "${unknown}"; then
-      exit 1
-    fi
-    sudo cp "${malformed}" /data/config/foldinghome.toml
-    sudo foldingosctl config validate --all
-    sudo foldingosctl config effective foldinghome | grep -Fq "username = \"Anonymous\""
-  '
+  ' >"${GUEST_ACCEPTANCE_LOG}" 2>&1; then
+    return 1
+  fi
   case "${PERSISTENCE_MODE}" in
-    create)
-      ssh_guest 'printf "%s\n" foldingos-storage-preserved > /data/state/storage-preservation-test && sync'
+    config)
+      if ! ssh_guest '
+        set -eux
+        valid=/data/config/foldinghome-test-valid.toml
+        malformed=/data/config/foldinghome-test-malformed.toml
+        unknown=/data/config/foldinghome-test-unknown.toml
+        printf "schema_version = 1\n\n[identity]\nusername = \"Test User\"\nteam = 0\npasskey_secret = \"\"\n\n[resources]\ncpus = 0\ngpus = false\n" | sudo tee "${valid}" >/dev/null
+        sudo foldingosctl config activate foldinghome "${valid}"
+        sudo foldingosctl config effective foldinghome | grep -Fq "username = \"Test User\""
+        printf "schema_version = nope\n" | sudo tee "${malformed}" >/dev/null
+        if sudo foldingosctl config activate foldinghome "${malformed}" 2>/dev/null; then
+          exit 1
+        fi
+        printf "schema_version = 1\n\n[identity]\nusername = \"Test User\"\nteam = 0\npasskey_secret = \"\"\nunknown = true\n\n[resources]\ncpus = 0\ngpus = false\n" | sudo tee "${unknown}" >/dev/null
+        if sudo foldingosctl config activate foldinghome "${unknown}" 2>/dev/null; then
+          exit 1
+        fi
+        sudo cp "${malformed}" /data/config/foldinghome.toml
+        sudo foldingosctl config validate --all 2>/dev/null
+        sudo foldingosctl config effective foldinghome 2>/dev/null | grep -Fq "username = \"Anonymous\""
+      ' >"${GUEST_ACCEPTANCE_LOG}" 2>&1; then
+        return 1
+      fi
       ;;
-    check)
-      ssh_guest 'grep -Fxq foldingos-storage-preserved /data/state/storage-preservation-test'
+    create)
+      if ! ssh_guest '
+        set -eux
+        printf "%s\n" foldingos-storage-preserved | sudo tee /data/state/storage-preservation-test >/dev/null
+        sudo ssh-keygen -lf /data/config/ssh/host-keys/ssh_host_ed25519_key |
+          sudo tee /data/state/ssh-host-key-fingerprint >/dev/null
+        sudo sync
+      ' >"${GUEST_ACCEPTANCE_LOG}" 2>&1; then
+        return 1
+      fi
+      ;;
+    check|replacement)
+      if ! ssh_guest '
+        set -eux
+        grep -Fxq foldingos-storage-preserved /data/state/storage-preservation-test
+        test "$(sudo ssh-keygen -lf /data/config/ssh/host-keys/ssh_host_ed25519_key)" = \
+          "$(cat /data/state/ssh-host-key-fingerprint)"
+        sudo foldingosctl config validate --all >/dev/null
+        sudo foldingosctl config effective foldinghome | grep -Fq "username = \"Anonymous\""
+      ' >"${GUEST_ACCEPTANCE_LOG}" 2>&1; then
+        return 1
+      fi
       ;;
   esac
   if ssh_user root true >/dev/null 2>&1; then
     echo "ERROR: Root SSH login was accepted." >&2
     return 1
+  fi
+  if "${SSH}" \
+    -F /dev/null \
+    -p "${SSH_PORT}" \
+    -o BatchMode=yes \
+    -o ConnectTimeout=2 \
+    -o PreferredAuthentications=password \
+    -o PubkeyAuthentication=no \
+    -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile=/dev/null \
+    foldingos-admin@127.0.0.1 true >/dev/null 2>&1
+  then
+    echo "ERROR: Password SSH login was accepted." >&2
+    return 1
+  fi
+  if [ "${PERSISTENCE_MODE}" = replacement ]; then
+    if ! ssh_user_with_key "${SSH_REPLACEMENT_KEY_SECOND}" foldingos-admin true >/dev/null 2>&1; then
+      echo "ERROR: Second replacement SSH key was not accepted." >&2
+      return 1
+    fi
+    if ssh_user_with_key "${SSH_KEY}" foldingos-admin true >/dev/null 2>&1; then
+      echo "ERROR: Replaced SSH key remained authorized." >&2
+      return 1
+    fi
+    if [ "$(ssh_guest 'cat /data/config/ssh/authorized_keys')" != "$(cat "${SSH_REPLACEMENT_KEYS}")" ]; then
+      echo "ERROR: Active SSH keys do not exactly match the complete replacement set." >&2
+      return 1
+    fi
+  fi
+}
+
+assert_data_fsck_completed() {
+  local serial_log="$1"
+  local fsck_finished_line
+  local forced_fsck_finished_line
+  local resized_line
+  local expansion_finished_line
+
+  if grep -Fq 'File System Check on /dev/disk/by-label/FOLDINGOS_DATA' "${serial_log}"; then
+    echo "ERROR: systemd generated a competing data-filesystem check unit." >&2
+    echo "Serial log: ${serial_log}" >&2
+    exit 1
+  fi
+
+  fsck_finished_line="$(grep -n -m1 -F \
+    'Checked /dev/vda3 before data mount.' "${serial_log}" | cut -d: -f1 || true)"
+  expansion_finished_line="$(grep -n -m1 -E \
+    'Finished .*Expand FoldingOS persistent data partition' \
+    "${serial_log}" | cut -d: -f1 || true)"
+
+  if [ -z "${fsck_finished_line}" ] || [ -z "${expansion_finished_line}" ] ||
+    [ "${fsck_finished_line}" -ge "${expansion_finished_line}" ]
+  then
+    echo "ERROR: Data filesystem check did not complete before expansion." >&2
+    echo "Serial log: ${serial_log}" >&2
+    exit 1
+  fi
+
+  if grep -Fq 'Expanded /dev/vda3 to sector' "${serial_log}"; then
+    forced_fsck_finished_line="$(grep -n -m1 -F \
+      'Force-checked /dev/vda3 before data expansion.' "${serial_log}" | cut -d: -f1 || true)"
+    resized_line="$(grep -n -m1 -F \
+      'Expanded /dev/vda3 to sector' "${serial_log}" | cut -d: -f1 || true)"
+    if [ -z "${forced_fsck_finished_line}" ] ||
+      [ -z "${resized_line}" ] ||
+      [ "${forced_fsck_finished_line}" -ge "${resized_line}" ]
+    then
+      echo "ERROR: Forced data filesystem check did not complete before resize." >&2
+      echo "Serial log: ${serial_log}" >&2
+      exit 1
+    fi
   fi
 }
 
@@ -286,6 +502,11 @@ assert_expansion_service_succeeded() {
 
   if grep -Eq 'Failed to start .*Expand FoldingOS persistent data partition' "${serial_log}"; then
     echo "ERROR: Data expansion service failed." >&2
+    echo "Serial log: ${serial_log}" >&2
+    exit 1
+  fi
+  if grep -Eq 'Stopped .*Expand FoldingOS persistent data partition' "${serial_log}"; then
+    echo "ERROR: Data expansion service stopped before completion." >&2
     echo "Serial log: ${serial_log}" >&2
     exit 1
   fi
@@ -303,10 +524,44 @@ fi
 
 FDISK="$(find_tool fdisk)"
 BLKID="$(find_tool blkid)"
+CMP="$(find_tool cmp)"
 MCOPY="$(find_tool mcopy)"
+MDEL="$(find_tool mdel)"
 SGDISK="$(find_tool sgdisk)"
 SSH="$(find_tool ssh)"
 SSH_KEYGEN="$(find_tool ssh-keygen)"
+
+if [ ! -f "${ROOTFS_TAR}" ]; then
+  echo "ERROR: Root filesystem artifact does not exist: ${ROOTFS_TAR}" >&2
+  exit 1
+fi
+mkdir -p "${TEST_DIR}"
+ROOTFS_MANIFEST="${TEST_DIR}/rootfs-manifest.txt"
+tar -tf "${ROOTFS_TAR}" >"${ROOTFS_MANIFEST}"
+for guest_command in \
+  cat cp cut find findmnt foldingosctl grep id networkctl printf readlink rm \
+  resolvectl sleep ssh-keygen sshd sudo sync systemctl tee timedatectl
+do
+  if ! grep -Eq \
+    "^\./(bin|sbin|usr/bin|usr/sbin)/${guest_command}$" \
+    "${ROOTFS_MANIFEST}"
+  then
+    echo "ERROR: Guest acceptance command is absent from the image: ${guest_command}" >&2
+    exit 1
+  fi
+done
+BUILT_FOLDINGOSCTL="${TEST_DIR}/foldingosctl-under-test"
+tar -xOf "${ROOTFS_TAR}" ./usr/bin/foldingosctl >"${BUILT_FOLDINGOSCTL}"
+if ! grep -aFq "Force-checked %s before data expansion." "${BUILT_FOLDINGOSCTL}"; then
+  echo "ERROR: Release artifacts contain a stale foldingosctl binary." >&2
+  echo "Rebuild FoldingOS before running QEMU tests." >&2
+  exit 1
+fi
+if ! grep -aFq ".ssh_host_ed25519_key.tmp-" "${BUILT_FOLDINGOSCTL}"; then
+  echo "ERROR: Release artifacts contain stale SSH-provisioning behavior." >&2
+  echo "Rebuild FoldingOS before running QEMU tests." >&2
+  exit 1
+fi
 
 echo "Verifying FoldingOS release image"
 echo "Image: ${RELEASE_IMAGE}"
@@ -356,9 +611,15 @@ QEMU="$(find_tool qemu-system-x86_64)"
 OVMF_CODE="$(find_ovmf_file OVMF_CODE_4M.fd)"
 OVMF_VARS="$(find_ovmf_file OVMF_VARS_4M.fd)"
 
-mkdir -p "${TEST_DIR}"
-rm -f "${SSH_KEY}" "${SSH_KEY}.pub"
+rm -f \
+  "${SSH_KEY}" "${SSH_KEY}.pub" \
+  "${SSH_REPLACEMENT_KEY}" "${SSH_REPLACEMENT_KEY}.pub" \
+  "${SSH_REPLACEMENT_KEY_SECOND}" "${SSH_REPLACEMENT_KEY_SECOND}.pub" \
+  "${SSH_REPLACEMENT_KEYS}" "${INVALID_PROVISION_COPY}"
 "${SSH_KEYGEN}" -q -t ed25519 -N "" -f "${SSH_KEY}"
+"${SSH_KEYGEN}" -q -t ed25519 -N "" -f "${SSH_REPLACEMENT_KEY}"
+"${SSH_KEYGEN}" -q -t ed25519 -N "" -f "${SSH_REPLACEMENT_KEY_SECOND}"
+cat "${SSH_REPLACEMENT_KEY}.pub" "${SSH_REPLACEMENT_KEY_SECOND}.pub" >"${SSH_REPLACEMENT_KEYS}"
 cp --reflink=auto --sparse=always "${RELEASE_IMAGE}" "${EXACT_IMAGE}"
 boot_image "an exact-size image without provisioned SSH keys" "${EXACT_IMAGE}" "${EXACT_SERIAL_LOG}" disabled
 assert_expansion_service_succeeded "${EXACT_SERIAL_LOG}"
@@ -401,10 +662,43 @@ cp --reflink=auto --sparse=always "${RELEASE_IMAGE}" "${PROVISION_IMAGE}"
 PERSISTENCE_MODE=create
 boot_image "an image with provisioned SSH access" \
   "${PROVISION_IMAGE}" "${PROVISION_SERIAL_LOG}" enabled
+assert_expansion_service_succeeded "${PROVISION_SERIAL_LOG}"
+
+cp --reflink=auto --sparse=always "${PROVISION_IMAGE}" "${CONFIG_IMAGE}"
+PERSISTENCE_MODE=config
+boot_image "a disposable provisioned image for configuration failure tests" \
+  "${CONFIG_IMAGE}" "${CONFIG_SERIAL_LOG}" enabled
+
 truncate -s "${LARGER_IMAGE_SIZE}" "${PROVISION_IMAGE}"
 PERSISTENCE_MODE=check
 boot_image "the provisioned image on a larger disk" \
   "${PROVISION_IMAGE}" "${PRESERVATION_SERIAL_LOG}" enabled
+assert_expansion_service_succeeded "${PRESERVATION_SERIAL_LOG}"
+
+"${MCOPY}" -o -i "${PROVISION_IMAGE}@@1048576" \
+  "${SSH_KEY}" ::/foldingos/provision/authorized_keys
+boot_image "the provisioned image with invalid private-key provisioning input" \
+  "${PROVISION_IMAGE}" "${INVALID_PROVISION_SERIAL_LOG}" disabled
+if ! grep -Eq 'Failed to start .*Provision FoldingOS SSH access' "${INVALID_PROVISION_SERIAL_LOG}"; then
+  echo "ERROR: Invalid private-key provisioning input was not rejected." >&2
+  exit 1
+fi
+"${MCOPY}" -o -i "${PROVISION_IMAGE}@@1048576" \
+  ::/foldingos/provision/authorized_keys "${INVALID_PROVISION_COPY}"
+if ! "${CMP}" -s "${SSH_KEY}" "${INVALID_PROVISION_COPY}"; then
+  echo "ERROR: Rejected private-key provisioning input was modified or removed." >&2
+  exit 1
+fi
+"${MDEL}" -i "${PROVISION_IMAGE}@@1048576" ::/foldingos/provision/authorized_keys
+boot_image "the provisioned image after removing invalid provisioning input" \
+  "${PROVISION_IMAGE}" "${RECOVERY_SERIAL_LOG}" enabled
+
+"${MCOPY}" -o -i "${PROVISION_IMAGE}@@1048576" \
+  "${SSH_REPLACEMENT_KEYS}" ::/foldingos/provision/authorized_keys
+SSH_IDENTITY="${SSH_REPLACEMENT_KEY}"
+PERSISTENCE_MODE=replacement
+boot_image "the provisioned image with a complete replacement SSH key set" \
+  "${PROVISION_IMAGE}" "${REPLACEMENT_SERIAL_LOG}" enabled
 PERSISTENCE_MODE=none
 
 cp --reflink=auto --sparse=always "${RELEASE_IMAGE}" "${INVALID_IMAGE}"
@@ -426,5 +720,5 @@ if [ "${invalid_table_before}" != "${invalid_table_after}" ]; then
   exit 1
 fi
 
-echo "QEMU/OVMF boot, storage expansion, networking, and SSH provisioning verified."
-echo "Serial logs: ${EXACT_SERIAL_LOG}, ${LARGER_SERIAL_LOG}, ${REPEAT_SERIAL_LOG}, ${PROVISION_SERIAL_LOG}, ${PRESERVATION_SERIAL_LOG}, ${INVALID_SERIAL_LOG}"
+echo "QEMU/OVMF boot, storage expansion, networking, and secure SSH provisioning verified."
+echo "Serial logs: ${EXACT_SERIAL_LOG}, ${LARGER_SERIAL_LOG}, ${REPEAT_SERIAL_LOG}, ${PROVISION_SERIAL_LOG}, ${CONFIG_SERIAL_LOG}, ${PRESERVATION_SERIAL_LOG}, ${INVALID_PROVISION_SERIAL_LOG}, ${RECOVERY_SERIAL_LOG}, ${REPLACEMENT_SERIAL_LOG}, ${INVALID_SERIAL_LOG}"

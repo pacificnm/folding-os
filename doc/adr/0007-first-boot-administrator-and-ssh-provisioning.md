@@ -2,7 +2,7 @@
 
 **Status:** Accepted
 
-**Version:** 1.0
+**Version:** 1.1
 
 **Date:** 2026-06-10
 
@@ -91,8 +91,8 @@ provisioning service will:
    /data/config/ssh/authorized_keys
    ```
 
-5. Set the persistent key directory to `root:root` ownership and mode `0700`.
-6. Set the persistent key file to `root:root` ownership and mode `0600`.
+5. Set the persistent key directory to `root:root` ownership and mode `0755`.
+6. Set the persistent key file to `root:root` ownership and mode `0644`.
 7. Configure OpenSSH to use the persistent key file for `foldingos-admin`.
 8. Remove the provisioning file after a successful import.
 9. Log the outcome without logging key material.
@@ -102,6 +102,11 @@ set.
 
 Key import replaces the persistent authorized-key set. Adding or rotating keys
 therefore requires supplying the complete desired set.
+
+OpenSSH reads the authorized-key file while temporarily using the
+`foldingos-admin` UID. The root-owned directory and file are therefore readable
+but not writable by that account. Private SSH host keys remain under the
+root-only `/data/config/ssh/host-keys` directory.
 
 ---
 

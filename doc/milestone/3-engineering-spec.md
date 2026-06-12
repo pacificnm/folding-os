@@ -1,6 +1,6 @@
 # FoldingOS Milestone 3 Installer Engineering Specification
 
-**Version:** 1.0
+**Version:** 1.1
 
 **Status:** Approved for Implementation
 
@@ -38,6 +38,11 @@ capability, not part of Milestone 3.
 The project owner approved the pristine source-media requirement and clarified
 reinstall workflow on 2026-06-11.
 
+The project owner approved the fixed `agent` and `supervisor` installation
+roles, supervisor inclusion of the agent, no supported in-place role changes,
+required initial supervisor administrator and TLS provisioning, and the
+supervisor web interface being enabled by default on 2026-06-11.
+
 ---
 
 # Purpose
@@ -47,6 +52,26 @@ and installer image accepted by
 [ADR-0013](../adr/0013-combined-appliance-and-installer-image.md).
 
 This specification is approved for implementation.
+
+## Required Role-Provisioning Amendment
+
+[ADR-0014](../adr/0014-fixed-installation-roles.md) requires the installer to
+collect and provision a fixed installation role.
+
+This version does not yet authorize implementation of role provisioning. An
+approved amendment must first define:
+
+- exact console role-selection behavior
+- exact target EFI role-provisioning path and file format
+- first-boot validation, persistence, and consumption behavior
+- direct-flash role provisioning
+- supervisor initial-administrator and TLS provisioning
+- role-specific acceptance tests
+
+The existing installer transaction defined by this specification remains
+approved for implementation. It must not be considered complete for the
+updated Milestone 3 roadmap until the role-provisioning amendment is approved
+and implemented.
 
 ---
 
@@ -61,6 +86,10 @@ Milestone 3 adds:
 - target EFI administrator-key provisioning
 - automated QEMU installer validation
 - physical USB-source installation validation
+
+Fixed role selection and target provisioning are required by ADR-0014 and the
+Milestone 3 roadmap, but their concrete implementation remains blocked by the
+required role-provisioning amendment identified above.
 
 Milestone 3 does not add a second operating system, separate installer image,
 network-required installation, custom partitioning, or data-preserving

@@ -100,6 +100,9 @@ func expandData() error {
 	if mounted(dataDevice) {
 		return fmt.Errorf("refusing to resize mounted data filesystem %s", dataDevice)
 	}
+	if err := checkFilesystem(dataDevice, false); err != nil {
+		return err
+	}
 
 	diskSizeText, err := output("lsblk", "-b", "-d", "-n", "-o", "SIZE", disk)
 	if err != nil {
@@ -136,6 +139,10 @@ func expandData() error {
 		return nil
 	}
 
+	if err := checkFilesystem(dataDevice, true); err != nil {
+		return err
+	}
+
 	if err := run(
 		"sgdisk",
 		"--delete=3",
@@ -156,6 +163,30 @@ func expandData() error {
 	}
 
 	fmt.Printf("Expanded %s to sector %d.\n", dataDevice, targetEnd)
+	return nil
+}
+
+func checkFilesystem(device string, force bool) error {
+	args := []string{"-p"}
+	if force {
+		args = append([]string{"-f"}, args...)
+	}
+	args = append(args, device)
+
+	cmd := exec.Command("fsck.ext4", args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		var exitErr *exec.ExitError
+		if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 {
+			return fmt.Errorf("fsck.ext4 failed: %w", err)
+		}
+	}
+	if force {
+		fmt.Printf("Force-checked %s before data expansion.\n", device)
+	} else {
+		fmt.Printf("Checked %s before data mount.\n", device)
+	}
 	return nil
 }
 

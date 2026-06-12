@@ -1,2 +1,3 @@
-foldingos-admin 1000 foldingos-admin 1000 ! /home/foldingos-admin /bin/sh - FoldingOS administrator
+# "NP" is not a valid password hash and does not mark the account locked.
+foldingos-admin 1000 foldingos-admin 1000 NP /home/foldingos-admin /bin/sh - FoldingOS administrator
 fah 200 fah 200 ! /data/fah /usr/sbin/nologin - Folding@home service

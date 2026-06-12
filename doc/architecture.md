@@ -144,6 +144,10 @@ filesystem, and package set for both appliance operation and local-console
 installation. The combined-image installer architecture is defined by
 [ADR-0013](adr/0013-combined-appliance-and-installer-image.md).
 
+Installations use one of the fixed `agent` or `supervisor` roles defined by
+[ADR-0014](adr/0014-fixed-installation-roles.md). Roles cannot be changed in
+place.
+
 No local desktop environment is planned.
 
 No local browser interface is planned.
@@ -187,6 +191,20 @@ Potential responsibilities include:
 - inventory reporting
 
 Communication should occur using authenticated and encrypted protocols.
+
+---
+
+## FoldOps Supervisor And Web
+
+A supervisor-role installation runs the FoldOps agent, supervisor, and web
+services from the same FoldingOS image used by agent-role installations.
+
+The web interface is enabled by default for the supervisor role but must not
+become remotely available until initial administrator and TLS provisioning
+succeeds.
+
+Whether supervisor-role installations also run the Folding@home workload
+remains unresolved.
 
 ---
 
