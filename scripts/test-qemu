@@ -417,6 +417,8 @@ PRETTY_NAME=\"FoldingOS 0.1.0\""
         valid=/data/config/foldinghome-test-valid.toml
         malformed=/data/config/foldinghome-test-malformed.toml
         unknown=/data/config/foldinghome-test-unknown.toml
+        invalid_gpus=/data/config/foldinghome-test-invalid-gpus.toml
+        secret_candidate=/data/config/foldinghome-test-secret.toml
         printf "schema_version = 1\n\n[identity]\nusername = \"Test User\"\nteam = 0\npasskey_secret = \"\"\n\n[resources]\ncpus = 0\ngpus = false\n" | sudo tee "${valid}" >/dev/null
         sudo foldingosctl config activate foldinghome "${valid}"
         sudo foldingosctl config effective foldinghome | grep -Fq "username = \"Test User\""
@@ -428,9 +430,29 @@ PRETTY_NAME=\"FoldingOS 0.1.0\""
         if sudo foldingosctl config activate foldinghome "${unknown}" 2>/dev/null; then
           exit 1
         fi
+        printf "schema_version = 1\n\n[identity]\nusername = \"Broken User\"\nteam = 0\npasskey_secret = \"\"\n\n[resources]\ncpus = 0\ngpus = true\n" | sudo tee "${invalid_gpus}" >/dev/null
+        if sudo foldingosctl config activate foldinghome "${invalid_gpus}" 2>/dev/null; then
+          exit 1
+        fi
+        sudo foldingosctl config effective foldinghome | grep -Fq "username = \"Test User\""
+        printf "%s\n" top-secret-passkey-value | sudo tee /data/config/secrets/fah-passkey >/dev/null
+        sudo chown root:fah /data/config/secrets/fah-passkey
+        sudo chmod 640 /data/config/secrets/fah-passkey
+        printf "schema_version = 1\n\n[identity]\nusername = \"Test User\"\nteam = 0\npasskey_secret = \"fah-passkey\"\n\n[resources]\ncpus = 0\ngpus = false\n" | sudo tee "${secret_candidate}" >/dev/null
+        sudo foldingosctl config activate foldinghome "${secret_candidate}"
+        effective="$(sudo foldingosctl config effective foldinghome)"
+        printf "%s\n" "${effective}" | grep -Fq "passkey_secret = \"fah-passkey\""
+        if printf "%s\n" "${effective}" | grep -Fq top-secret-passkey-value; then
+          exit 1
+        fi
         sudo cp "${malformed}" /data/config/foldinghome.toml
         sudo foldingosctl config validate --all 2>/dev/null
+        sudo foldingosctl config effective foldinghome 2>/dev/null | grep -Fq "username = \"Test User\""
+        sudo rm -f /data/config/last-good/foldinghome.toml
+        sudo foldingosctl config validate --all 2>/dev/null
         sudo foldingosctl config effective foldinghome 2>/dev/null | grep -Fq "username = \"Anonymous\""
+        systemctl is-active --quiet sshd.service
+        systemctl is-active --quiet systemd-networkd.service
       ' >"${GUEST_ACCEPTANCE_LOG}" 2>&1; then
         return 1
       fi
@@ -438,6 +460,7 @@ PRETTY_NAME=\"FoldingOS 0.1.0\""
     create)
       if ! ssh_guest '
         set -eux
+        sudo cp /data/config/node-id /data/state/node-id-test
         printf "%s\n" foldingos-storage-preserved | sudo tee /data/state/storage-preservation-test >/dev/null
         printf "%s\n" foldingos-journal-preserved | sudo systemd-cat -t foldingos-journal-test
         sudo journalctl --flush
@@ -451,6 +474,7 @@ PRETTY_NAME=\"FoldingOS 0.1.0\""
     check|replacement)
       if ! ssh_guest '
         set -eux
+        test "$(cat /data/config/node-id)" = "$(cat /data/state/node-id-test)"
         grep -Fxq foldingos-storage-preserved /data/state/storage-preservation-test
         sudo journalctl -t foldingos-journal-test --no-pager |
           grep -Fq foldingos-journal-preserved
@@ -626,6 +650,7 @@ if [ ! -f "${ROOTFS_TAR}" ]; then
 fi
 "${PROJECT_ROOT}/scripts/verify-systemd-graph" "${ROOTFS_TAR}"
 "${PROJECT_ROOT}/scripts/verify-persistent-logging" "${ROOTFS_TAR}"
+"${PROJECT_ROOT}/scripts/verify-config" "${ROOTFS_TAR}"
 mkdir -p "${TEST_DIR}"
 ROOTFS_MANIFEST="${TEST_DIR}/rootfs-manifest.txt"
 tar -tf "${ROOTFS_TAR}" >"${ROOTFS_MANIFEST}"
@@ -836,5 +861,5 @@ if [ "${invalid_table_before}" != "${invalid_table_after}" ]; then
   exit 1
 fi
 
-echo "QEMU/OVMF boot, storage expansion, persistent logging, networking, and secure SSH provisioning verified."
+echo "QEMU/OVMF boot, storage expansion, node identity, configuration management, persistent logging, networking, and secure SSH provisioning verified."
 echo "Serial logs: ${EXACT_SERIAL_LOG}, ${LARGER_SERIAL_LOG}, ${REPEAT_SERIAL_LOG}, ${PROVISION_SERIAL_LOG}, ${JOURNAL_BREAK_SERIAL_LOG}, ${JOURNAL_FAILURE_SERIAL_LOG}, ${JOURNAL_PRESSURE_SERIAL_LOG}, ${CONFIG_SERIAL_LOG}, ${PRESERVATION_SERIAL_LOG}, ${INVALID_PROVISION_SERIAL_LOG}, ${RECOVERY_SERIAL_LOG}, ${REPLACEMENT_SERIAL_LOG}, ${INVALID_SERIAL_LOG}"

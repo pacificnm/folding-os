@@ -84,6 +84,44 @@ func TestRejectUnsupportedFoldingHomeConfig(t *testing.T) {
 	}
 }
 
+func TestRejectEnabledGpus(t *testing.T) {
+	config := domainConfig{
+		"schema_version":          {kind: "int", ival: 1},
+		"identity.username":       {kind: "string", text: "Anonymous"},
+		"identity.team":           {kind: "int", ival: 0},
+		"identity.passkey_secret": {kind: "string", text: ""},
+		"resources.cpus":          {kind: "int", ival: 0},
+		"resources.gpus":          {kind: "bool", bval: true},
+	}
+	if err := validateDomain("foldinghome", config); err == nil {
+		t.Fatal("enabled GPU configuration was accepted")
+	}
+}
+
+func TestRenderDomainKeepsSecretReferenceOnly(t *testing.T) {
+	config := domainConfig{
+		"schema_version":          {kind: "int", ival: 1},
+		"identity.username":       {kind: "string", text: "Anonymous"},
+		"identity.team":           {kind: "int", ival: 0},
+		"identity.passkey_secret": {kind: "string", text: "fah-passkey"},
+		"resources.cpus":          {kind: "int", ival: 0},
+		"resources.gpus":          {kind: "bool", bval: false},
+	}
+	rendered := renderDomain("foldinghome", config)
+	if !strings.Contains(rendered, `passkey_secret = "fah-passkey"`) {
+		t.Fatalf("rendered config missing secret reference:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "top-secret-passkey-value") {
+		t.Fatalf("rendered config leaked secret value:\n%s", rendered)
+	}
+}
+
+func TestRejectMalformedSchemaVersion(t *testing.T) {
+	if _, err := parseDomain("system", "schema_version = nope\n\n[identity]\nhostname = \"\"\n", true); err == nil {
+		t.Fatal("malformed schema_version was accepted")
+	}
+}
+
 func TestNewUUID(t *testing.T) {
 	value, err := newUUID()
 	if err != nil {

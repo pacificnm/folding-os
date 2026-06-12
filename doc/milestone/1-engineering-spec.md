@@ -94,6 +94,7 @@ scripts/
   fetch-sources
   test-qemu
   verify-reproducible
+  verify-config
   verify-persistent-logging
   verify-systemd-graph
 
@@ -877,6 +878,10 @@ the caller.
 Configuration files use `root:root 0644`. Files containing secret references
 remain readable because references are not secret values.
 
+`scripts/verify-config` checks the committed default schemas, identity and
+configuration boot units, and `foldingosctl` wiring against the built root
+filesystem archive.
+
 ---
 
 # Node Identity
@@ -1284,6 +1289,7 @@ Required user-facing commands:
 ./scripts/build-b
 ./scripts/test-qemu
 ./scripts/verify-reproducible
+./scripts/verify-config
 ./scripts/verify-persistent-logging
 ./scripts/verify-systemd-graph
 ```
