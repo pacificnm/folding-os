@@ -53,6 +53,29 @@ def git_revision(project_root):
         fail(f"cannot resolve Git revision: {error}")
 
 
+def git_revision_is_valid(project_root, revision):
+    head = git_revision(project_root)
+    if revision == head:
+        return True
+    try:
+        result = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(project_root),
+                "merge-base",
+                "--is-ancestor",
+                revision,
+                head,
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError as error:
+        fail(f"cannot verify Git revision ancestry: {error}")
+    return result.returncode == 0
+
+
 def load_json(path):
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -130,10 +153,10 @@ def main():
         )
 
     current_revision = git_revision(PROJECT_ROOT)
-    if record_revision != current_revision:
+    if not git_revision_is_valid(PROJECT_ROOT, record_revision):
         fail(
-            "validation record git_revision does not match current HEAD: "
-            f"expected {current_revision}, found {record_revision}"
+            "validation record git_revision is not an ancestor of current HEAD: "
+            f"HEAD is {current_revision}, found {record_revision}"
         )
 
     print(

@@ -1,0 +1,39 @@
+{
+  "foldingos_version": "0.1.0",
+  "git_revision": "56c65f7c43b33665e115f56050b3dd9f9720486e",
+  "image_sha256": "ee2dfb2b5f7a98c95d5837f41e259825e883cac4bfbba868d53ebc84540ea76f",
+  "overall": "pass",
+  "schema_version": 1,
+  "tests": {
+    "data_expansion": "pass",
+    "dns_resolution": "pass",
+    "ethernet_dhcp": "pass",
+    "filesystem_mounts": "pass",
+    "foundation_services": "pass",
+    "graceful_shutdown": "pass",
+    "power_interruption": "pass",
+    "reboot": "pass",
+    "ssh_access": "pass",
+    "time_sync": "pass",
+    "uefi_boot": "pass"
+  },
+  "validation_date": "2026-06-12",
+  "validator": "Jaimie Garner",
+  "hardware": {
+    "cpu": "Intel x86_64",
+    "ethernet_controller": "Onboard wired Ethernet",
+    "ethernet_interface": "DHCP-routable interface",
+    "firmware_version": "Dell UEFI",
+    "known_limitations": [
+      "No local display output without framebuffer or GPU drivers in the v0.1.0 kernel",
+      "Validation booted from USB mass storage prepared with scripts/make-bootable-usb"
+    ],
+    "manufacturer": "Dell",
+    "memory_gib": 8,
+    "model": "OptiPlex Micro",
+    "storage_capacity_gib": 57,
+    "storage_model": "USB mass storage",
+    "storage_serial": "not recorded",
+    "storage_transport": "usb"
+  }
+}

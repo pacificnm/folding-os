@@ -242,7 +242,7 @@ committed under `validation/`.
 
 | Manufacturer | Model | Firmware | Storage transport | Validation record | Notes |
 | --- | --- | --- | --- | --- | --- |
-| _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | Milestone 1 foundation validation in progress |
+| Dell | OptiPlex Micro | Dell UEFI | USB | [appliance-physical-0.1.0.json](../validation/appliance-physical-0.1.0.json) | Headless validation over wired Ethernet; local display remains blank without framebuffer drivers |
 
 ---
 

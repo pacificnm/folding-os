@@ -44,7 +44,7 @@ if ! "${SSH[@]}" true >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! "${SSH[@]}" bash -s >"${LOG}" 2>&1 <<'EOF'
+if ! "${SSH[@]}" sh -s >"${LOG}" 2>&1 <<'EOF'
 set -eux
 test "$(id -u)" = 1000
 sudo -n true
