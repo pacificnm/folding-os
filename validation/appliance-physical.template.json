@@ -1,0 +1,36 @@
+{
+  "foldingos_version": "0.1.0",
+  "git_revision": "REQUIRED",
+  "image_sha256": "REQUIRED",
+  "overall": "fail",
+  "schema_version": 1,
+  "tests": {
+    "data_expansion": "not_run",
+    "dns_resolution": "not_run",
+    "ethernet_dhcp": "not_run",
+    "filesystem_mounts": "not_run",
+    "foundation_services": "not_run",
+    "graceful_shutdown": "not_run",
+    "power_interruption": "not_run",
+    "reboot": "not_run",
+    "ssh_access": "not_run",
+    "time_sync": "not_run",
+    "uefi_boot": "not_run"
+  },
+  "validation_date": "YYYY-MM-DD",
+  "validator": "REQUIRED",
+  "hardware": {
+    "cpu": "REQUIRED",
+    "ethernet_controller": "REQUIRED",
+    "ethernet_interface": "REQUIRED",
+    "firmware_version": "REQUIRED",
+    "known_limitations": [],
+    "manufacturer": "REQUIRED",
+    "memory_gib": 0,
+    "model": "REQUIRED",
+    "storage_capacity_gib": 0,
+    "storage_model": "REQUIRED",
+    "storage_serial": "REQUIRED",
+    "storage_transport": "REQUIRED"
+  }
+}

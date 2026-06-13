@@ -16,6 +16,7 @@ This index groups the project's documentation by purpose.
 - [Boot process](boot-process.md) - logical boot sequence and failure behavior
 - [Build system](build-system.md) - build goals, expected framework, and outputs
 - [Hardware support](hardware-support.md) - target platforms and support policy
+- [Physical validation](physical-validation.md) - Milestone 1 physical acceptance procedure and boot-media preparation
 - [Networking](networking.md) - networking behavior and capabilities
 - [Storage layout](storage-layout.md) - logical storage and persistence model
 - [Security model](security.md) - runtime security architecture

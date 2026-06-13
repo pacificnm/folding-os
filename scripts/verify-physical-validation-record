@@ -1,0 +1,152 @@
+#!/usr/bin/env python3
+"""Verify a committed FoldingOS appliance physical-validation record."""
+
+import hashlib
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+REQUIRED_TESTS = (
+    "uefi_boot",
+    "filesystem_mounts",
+    "data_expansion",
+    "ethernet_dhcp",
+    "dns_resolution",
+    "time_sync",
+    "ssh_access",
+    "foundation_services",
+    "graceful_shutdown",
+    "reboot",
+    "power_interruption",
+)
+
+
+class VerificationError(Exception):
+    """A physical validation record verification failure."""
+
+
+def fail(message):
+    raise VerificationError(message)
+
+
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for block in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def git_revision(project_root):
+    try:
+        return subprocess.run(
+            ["git", "-C", str(project_root), "rev-parse", "HEAD"],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError) as error:
+        fail(f"cannot resolve Git revision: {error}")
+
+
+def load_json(path):
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        fail(f"cannot read validation record {path}: {error}")
+
+
+def require_string(record, key):
+    value = record.get(key)
+    if not isinstance(value, str) or not value.strip() or value == "REQUIRED":
+        fail(f"validation record field {key!r} is missing or incomplete")
+    return value
+
+
+def main():
+    if len(sys.argv) != 3:
+        print(
+            "Usage: ./scripts/verify-physical-validation-record "
+            "<record.json> <candidate-image>",
+            file=sys.stderr,
+        )
+        return 2
+
+    record_path = Path(sys.argv[1])
+    image_path = Path(sys.argv[2])
+    if not record_path.is_file():
+        fail(f"validation record does not exist: {record_path}")
+    if not image_path.is_file():
+        fail(f"candidate image does not exist: {image_path}")
+
+    record = load_json(record_path)
+    if record.get("schema_version") != 1:
+        fail("validation record schema_version must be 1")
+
+    require_string(record, "foldingos_version")
+    record_revision = require_string(record, "git_revision")
+    record_digest = require_string(record, "image_sha256")
+    require_string(record, "validation_date")
+    require_string(record, "validator")
+
+    if record.get("overall") != "pass":
+        fail('validation record overall result must be "pass"')
+
+    tests = record.get("tests")
+    if not isinstance(tests, dict):
+        fail("validation record tests must be an object")
+    for name in REQUIRED_TESTS:
+        result = tests.get(name)
+        if result != "pass":
+            fail(f"required test {name!r} must be pass; found {result!r}")
+
+    hardware = record.get("hardware")
+    if not isinstance(hardware, dict):
+        fail("validation record hardware must be an object")
+    for key in (
+        "manufacturer",
+        "model",
+        "firmware_version",
+        "cpu",
+        "storage_model",
+        "storage_serial",
+        "storage_transport",
+        "ethernet_controller",
+        "ethernet_interface",
+    ):
+        value = hardware.get(key)
+        if not isinstance(value, str) or not value.strip() or value == "REQUIRED":
+            fail(f"validation record hardware.{key} is missing or incomplete")
+
+    image_digest = sha256_file(image_path)
+    if record_digest != image_digest:
+        fail(
+            "validation record image_sha256 does not match candidate image: "
+            f"expected {image_digest}, found {record_digest}"
+        )
+
+    current_revision = git_revision(PROJECT_ROOT)
+    if record_revision != current_revision:
+        fail(
+            "validation record git_revision does not match current HEAD: "
+            f"expected {current_revision}, found {record_revision}"
+        )
+
+    print(
+        "FoldingOS appliance physical validation record verified for "
+        f"{record['foldingos_version']} on {hardware['manufacturer']} "
+        f"{hardware['model']}."
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except VerificationError as error:
+        print(f"ERROR: {error}", file=sys.stderr)
+        sys.exit(1)
