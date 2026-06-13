@@ -40,6 +40,8 @@ if [ ! -f "${DEFCONFIG}" ]; then
   exit 1
 fi
 
+"${PROJECT_ROOT}/scripts/verify-fah-manifest"
+
 "${PROJECT_ROOT}/scripts/fetch-sources"
 
 cd "${BUILDROOT_DIR}"

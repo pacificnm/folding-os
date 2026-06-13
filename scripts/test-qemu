@@ -662,6 +662,7 @@ fi
 "${PROJECT_ROOT}/scripts/verify-systemd-graph" "${ROOTFS_TAR}"
 "${PROJECT_ROOT}/scripts/verify-persistent-logging" "${ROOTFS_TAR}"
 "${PROJECT_ROOT}/scripts/verify-config" "${ROOTFS_TAR}"
+"${PROJECT_ROOT}/scripts/verify-fah-manifest" "${ROOTFS_TAR}"
 mkdir -p "${TEST_DIR}"
 ROOTFS_MANIFEST="${TEST_DIR}/rootfs-manifest.txt"
 tar -tf "${ROOTFS_TAR}" >"${ROOTFS_MANIFEST}"

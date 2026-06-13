@@ -1,0 +1,141 @@
+#!/usr/bin/env python3
+"""Verify the embedded approved Folding@home acquisition manifest."""
+
+import re
+import sys
+import tarfile
+import tomllib
+from pathlib import Path
+from urllib.parse import urlparse
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_MANIFEST = PROJECT_ROOT / "overlay/usr/share/foldingos/manifests/fah.toml"
+DEFAULT_ROOTFS = PROJECT_ROOT / "build/output/images/rootfs.tar"
+ROOTFS_MANIFEST = "usr/share/foldingos/manifests/fah.toml"
+PLACEHOLDER = "REQUIRED_BEFORE_RELEASE"
+SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+APPROVED_ORIGIN = "download.foldingathome.org"
+
+
+class VerificationError(Exception):
+    """A manifest verification failure."""
+
+
+def fail(message):
+    raise VerificationError(message)
+
+
+def load_manifest_bytes(data):
+    try:
+        manifest = tomllib.loads(data.decode("utf-8"))
+    except tomllib.TOMLDecodeError as error:
+        fail(f"manifest is not valid TOML: {error}")
+    if PLACEHOLDER in data.decode("utf-8"):
+        fail(f"manifest contains unresolved placeholder: {PLACEHOLDER}")
+    return manifest
+
+
+def validate_manifest(manifest):
+    required_string_fields = (
+        "client_version",
+        "architecture",
+        "artifact_url",
+        "sha256",
+        "artifact_format",
+        "minimum_foldingos_version",
+        "terms_url",
+        "executable_path",
+    )
+    for field in required_string_fields:
+        value = manifest.get(field)
+        if not isinstance(value, str) or not value.strip():
+            fail(f"manifest field {field} must be a non-empty string")
+
+    if manifest.get("schema_version") != 1:
+        fail("manifest schema_version must be 1")
+    if manifest.get("architecture") != "x86_64":
+        fail("manifest architecture must be x86_64")
+    if manifest.get("artifact_format") != "deb":
+        fail("manifest artifact_format must be deb")
+    if manifest.get("minimum_foldingos_version") != "0.1.0":
+        fail("manifest minimum_foldingos_version must be 0.1.0")
+
+    artifact_size = manifest.get("artifact_size")
+    if not isinstance(artifact_size, int) or artifact_size <= 0:
+        fail("manifest artifact_size must be a positive integer")
+
+    sha256 = manifest["sha256"]
+    if not SHA256_PATTERN.fullmatch(sha256):
+        fail("manifest sha256 must be a 64-character lowercase hex digest")
+
+    artifact_url = manifest["artifact_url"]
+    parsed = urlparse(artifact_url)
+    if parsed.scheme != "https" or parsed.netloc != APPROVED_ORIGIN:
+        fail(
+            "manifest artifact_url must use HTTPS from the approved official "
+            f"origin: {APPROVED_ORIGIN}"
+        )
+    if parsed.path.endswith("/latest.deb"):
+        fail("manifest artifact_url must not reference an unpinned latest artifact")
+
+    terms_url = manifest["terms_url"]
+    terms_parsed = urlparse(terms_url)
+    if terms_parsed.scheme != "https" or not terms_parsed.netloc.endswith("foldingathome.org"):
+        fail("manifest terms_url must use HTTPS on foldingathome.org")
+
+    executable_path = manifest["executable_path"]
+    if not executable_path.startswith("/data/apps/fah/current/"):
+        fail("manifest executable_path must remain under /data/apps/fah/current")
+
+    arguments = manifest.get("arguments")
+    if not isinstance(arguments, list) or not arguments:
+        fail("manifest arguments must be a non-empty array")
+    for argument in arguments:
+        if not isinstance(argument, str) or not argument.strip():
+            fail("manifest arguments must contain only non-empty strings")
+
+
+def read_overlay_manifest(path):
+    if not path.is_file():
+        fail(f"manifest does not exist: {path}")
+    return load_manifest_bytes(path.read_bytes())
+
+
+def read_rootfs_manifest(rootfs_path):
+    if not rootfs_path.is_file():
+        fail(f"root filesystem archive does not exist: {rootfs_path}")
+    with tarfile.open(rootfs_path) as archive:
+        try:
+            member = archive.getmember(f"./{ROOTFS_MANIFEST}")
+        except KeyError:
+            fail(f"required manifest is absent from rootfs: {ROOTFS_MANIFEST}")
+        if not member.isfile():
+            fail(f"required manifest is not a regular file: {ROOTFS_MANIFEST}")
+        source = archive.extractfile(member)
+        if source is None:
+            fail(f"cannot read required manifest: {ROOTFS_MANIFEST}")
+        return load_manifest_bytes(source.read())
+
+
+def main():
+    if len(sys.argv) > 2:
+        print("Usage: ./scripts/verify-fah-manifest [rootfs.tar]", file=sys.stderr)
+        return 2
+
+    if len(sys.argv) == 2:
+        manifest = read_rootfs_manifest(Path(sys.argv[1]))
+    else:
+        manifest = read_overlay_manifest(DEFAULT_MANIFEST)
+
+    validate_manifest(manifest)
+    print("FoldingOS approved Folding@home manifest verified.")
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except VerificationError as error:
+        print(f"ERROR: {error}", file=sys.stderr)
+        raise SystemExit(1) from error
