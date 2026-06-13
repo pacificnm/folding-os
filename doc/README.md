@@ -8,6 +8,7 @@ This index groups the project's documentation by purpose.
 - [Engineering principles](../PRINCIPLES.md) - active decision-making principles
 - [Vision](vision.md) - intended user experience and long-term direction
 - [Architecture](architecture.md) - high-level system components and boundaries
+- [Operations](operations.md) - build, deploy, administer, diagnose, and recover
 - [Roadmap](../ROADMAP.md) - planned implementation milestones
 - [AI context](ai-context.md) - condensed project context for AI assistants
 
@@ -30,6 +31,8 @@ This index groups the project's documentation by purpose.
   combining roadmap Milestones 1 and 2
 - [v0.1.0 engineering specification](milestone/1-engineering-spec.md) - concrete
   implementation blueprint for the first release
+- [Milestone 1 readiness review](milestone/1-readiness-review.md) - foundation
+  completion status and validation evidence
 - [Installer](installer.md) - approved combined-image installation architecture
 - [Installer engineering specification](milestone/3-engineering-spec.md) -
   approved concrete implementation contract for the combined-image installer
