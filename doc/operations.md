@@ -1,15 +1,16 @@
 # FoldingOS Operations
 
-Version: 1.0
+**Version:** 1.0
 
-Status: Approved for Milestone 1 foundation
+**Status:** Approved for v0.1.0 appliance operation
 
 ---
 
 # Purpose
 
 This document describes how operators and developers build, deploy, administer,
-diagnose, and recover a FoldingOS v0.1.0 foundation appliance.
+diagnose, and recover a FoldingOS v0.1.0 appliance, including the Folding@home
+runtime introduced in Milestone 2.
 
 FoldingOS is a headless appliance. Normal administration uses SSH. A monitor
 and keyboard are not required in production.
@@ -71,6 +72,7 @@ Additional static verification helpers:
 ./scripts/verify-systemd-graph build/output/images/rootfs.tar
 ./scripts/verify-config build/output/images/rootfs.tar
 ./scripts/verify-persistent-logging build/output/images/rootfs.tar
+./scripts/verify-fah-manifest build/output/images/rootfs.tar
 ```
 
 Reproducibility verification requires two independent clean builds. See
@@ -208,16 +210,115 @@ journalctl -b --no-pager
 foldingosctl config effective system
 ```
 
-Folding@home acquisition and runtime are Milestone 2 scope. FoldingOS does not
-redistribute the Folding@home client or FahCore binaries. After deployment, the
-acquisition service downloads the exact artifact pinned in
-`/usr/share/foldingos/manifests/fah.toml` directly from official Folding@home
-HTTPS infrastructure.
+---
 
-The approved v0.1.0 client is Folding@home `8.5.6`
-(`fah-client_8.5.6_amd64.deb`). The client is GPL-3.0-or-later; see the manifest
-`terms_url` and upstream documentation. FahCore binaries remain separately
-governed downloads managed by the client at runtime.
+# Folding@home Runtime
+
+FoldingOS does not redistribute the Folding@home client or FahCore binaries.
+Release images contain only the approved acquisition manifest. After deployment,
+the node downloads the exact pinned artifact from official Folding@home HTTPS
+infrastructure, verifies it, installs it into versioned persistent storage, and
+runs it as the dedicated `fah` service account.
+
+References:
+
+- [ADR-0006](adr/0006-fah-packaging-and-privilege-model.md)
+- [ADR-0009](adr/0009-fah-acquisition-and-update-model.md)
+- [Milestone 2 readiness review](milestone/2-readiness-review.md)
+
+## Approved v0.1.0 client
+
+| Item | Value |
+| --- | --- |
+| Client version | `8.5.6` |
+| Package | `fah-client_8.5.6_amd64.deb` |
+| Manifest | `/usr/share/foldingos/manifests/fah.toml` |
+| Upstream origin | `download.foldingathome.org` |
+| License / terms | GPL-3.0-or-later; see manifest `terms_url` and [foldingathome.org](https://foldingathome.org/faq/opensource/) |
+
+FahCore binaries are not part of the FoldingOS image. The running client may
+download them separately from Folding@home infrastructure during normal
+operation. FoldingOS does not mirror, cache, or proxy those downloads.
+
+FoldOps is not required for acquisition or continued Folding@home operation.
+
+## Boot and service sequence
+
+After networking and time synchronization:
+
+1. `foldingos-fah-acquire.timer` triggers `foldingos-fah-acquire.service`
+2. `foldingosctl fah acquire` reads the embedded manifest and, when needed,
+   downloads and verifies the pinned artifact
+3. A verified install is activated under `/data/apps/fah/<version>/` with
+   `/data/apps/fah/current` pointing at the active version
+4. `foldingos-fah-prepare.service` renders `/run/foldingos/fah/config.xml`
+5. `folding-at-home.service` execs the manifest-defined `fah-client` as user
+   `fah` (UID/GID `200`)
+
+An already verified active client skips re-download on later acquire attempts.
+
+## Persistent locations
+
+| Path | Purpose |
+| --- | --- |
+| `/data/apps/fah/<version>/` | Verified client installation |
+| `/data/apps/fah/current` | Relative symlink to active version |
+| `/data/fah/` | Client work, checkpoints, and logs |
+| `/data/config/foldinghome.toml` | Operator Folding@home configuration |
+| `/data/config/secrets/` | Passkey and other secrets referenced by config |
+| `/run/foldingos/fah/config.xml` | Rendered runtime configuration |
+| `/data/state/fah-acquire.state` | Acquisition retry state after failure |
+
+## Acquisition retries
+
+When download, verification, or activation fails:
+
+- the partial artifact and staging directory are removed
+- the last verified installed client remains available
+- retry state is written to `/data/state/fah-acquire.state`
+- the timer retries using this schedule: `1m`, `5m`, `15m`, `1h`, then `6h`
+  indefinitely
+
+Successful acquisition clears retry state.
+
+## Runtime acceptance
+
+After the node reaches multi-user operation and time synchronization:
+
+```bash
+./scripts/run-physical-acceptance <host> <ssh-private-key> [port]
+```
+
+The command waits for `folding-at-home.service`, then verifies the verified
+client install, rendered runtime configuration, and `fah` process execution.
+
+## Useful inspection commands
+
+```bash
+foldingosctl fah validate-manifest
+systemctl status foldingos-fah-acquire.timer foldingos-fah-acquire.service
+systemctl status foldingos-fah-prepare.service folding-at-home.service
+readlink /data/apps/fah/current
+sudo test -f /data/apps/fah/8.5.6/.foldingos-verified
+sudo test -f /run/foldingos/fah/config.xml
+sudo cat /data/state/fah-acquire.state
+```
+
+To inspect the running client without `ps` on the appliance image:
+
+```bash
+main_pid="$(systemctl show folding-at-home.service -p MainPID --value)"
+sudo grep -a -Fq 'fah-client' "/proc/${main_pid}/cmdline"
+```
+
+Administrators with passwordless `sudo` may trigger acquisition manually:
+
+```bash
+sudo foldingosctl fah acquire
+```
+
+Manual acquisition follows the same verification rules as the scheduled
+service and does not install unpinned or unverified artifacts.
 
 ---
 
@@ -254,6 +355,17 @@ foldingosctl storage expand-data
 sudo sshd -T | grep -E 'permitrootlogin|passwordauthentication|allowusers'
 ```
 
+## Folding@home runtime
+
+```bash
+foldingosctl fah validate-manifest
+systemctl status foldingos-fah-acquire.timer folding-at-home.service
+sudo cat /data/state/fah-acquire.state
+sudo journalctl -u foldingos-fah-acquire.service -u folding-at-home.service -b --no-pager
+```
+
+`journalctl` may require `sudo` on the appliance image.
+
 ## Build and release artifacts
 
 ```bash
@@ -284,6 +396,56 @@ sha256sum -c build/output/images/foldingos-x86_64-0.1.0.img.sha256
 
 Wireless networking is not part of the foundation image.
 
+## Folding@home acquisition failing
+
+1. Confirm DNS and time synchronization:
+
+   ```bash
+   resolvectl query download.foldingathome.org
+   timedatectl show -p NTPSynchronized --value
+   ```
+
+2. Inspect acquisition state and recent service output:
+
+   ```bash
+   sudo cat /data/state/fah-acquire.state
+   sudo journalctl -u foldingos-fah-acquire.service -b --no-pager
+   ```
+
+3. Wait for the timer retry or run a manual attempt:
+
+   ```bash
+   sudo foldingosctl fah acquire
+   ```
+
+An already verified active client continues running while acquisition retries.
+Failed attempts do not execute or activate unverified artifacts.
+
+## Folding@home service not running
+
+1. Confirm a verified active install exists:
+
+   ```bash
+   readlink /data/apps/fah/current
+   test -f /data/apps/fah/8.5.6/.foldingos-verified
+   ```
+
+2. Confirm runtime configuration was rendered:
+
+   ```bash
+   sudo test -f /run/foldingos/fah/config.xml
+   systemctl status foldingos-fah-prepare.service
+   ```
+
+3. Inspect the runtime service:
+
+   ```bash
+   systemctl status folding-at-home.service
+   sudo journalctl -u folding-at-home.service -b --no-pager
+   ```
+
+`folding-at-home.service` restarts on failure with bounded burst limits.
+
 ## Unexpected power loss
 
 Boot again and rerun:
@@ -292,9 +454,9 @@ Boot again and rerun:
 ./scripts/run-physical-acceptance <host> <ssh-private-key>
 ```
 
-The foundation appliance is designed to recover persistent configuration,
-journal records, and node identity across reboot and unclean shutdown when
-storage remains intact.
+The appliance is designed to recover persistent configuration, verified Folding@home
+client state, journal records, and node identity across reboot and unclean
+shutdown when storage remains intact.
 
 ## Full appliance replacement
 
@@ -304,12 +466,14 @@ partition across reflashes is not guaranteed in v0.1.0.
 
 ---
 
-# Known Foundation Limitations
+# Known Limitations
 
-- No local GUI or installer UI in Milestone 1
+- No local GUI or installer UI in v0.1.0
 - No package manager on the target image
 - No FoldOps services in v0.1.0
-- No Folding@home client embedded in the foundation image
+- No Folding@home client embedded in the release image
+- CPU-only Folding@home in v0.1.0; GPU support is out of scope
+- First client acquisition requires upstream HTTPS reachability
 - Local display is for commissioning only; no keyboard or console login is provided
 - Unsupported hardware may still show no local output if UEFI framebuffer is unavailable
 - Only documented validated hardware carries a support claim
@@ -323,5 +487,6 @@ Validated physical systems are listed in [hardware-support.md](hardware-support.
 - [Build system](build-system.md)
 - [Boot process](boot-process.md)
 - [Physical validation](physical-validation.md)
+- [Milestone 2 readiness review](milestone/2-readiness-review.md)
 - [Security model](security.md)
 - [Testing strategy](testing-strategy.md)
