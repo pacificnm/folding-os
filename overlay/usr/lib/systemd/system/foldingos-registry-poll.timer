@@ -1,0 +1,13 @@
+[Unit]
+Description=Poll upstream FoldingOS releases periodically
+ConditionPathExists=/data/config/installation-role
+
+[Timer]
+OnBootSec=15min
+OnUnitInactiveSec=1h
+AccuracySec=1min
+Persistent=true
+Unit=foldingos-registry-poll.service
+
+[Install]
+WantedBy=timers.target
