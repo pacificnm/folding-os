@@ -1,7 +1,7 @@
 {
   "foldingos_version": "0.1.0",
-  "git_revision": "56c65f7c43b33665e115f56050b3dd9f9720486e",
-  "image_sha256": "ee2dfb2b5f7a98c95d5837f41e259825e883cac4bfbba868d53ebc84540ea76f",
+  "git_revision": "1a0ba70a85f62f4c25fb577c672c8c1ff9e0ef92",
+  "image_sha256": "993c2cec8e136b6af5363eb49a8572943bbdd4a4a40d0f8a9573f53af6034e05",
   "overall": "pass",
   "schema_version": 1,
   "tests": {
@@ -10,6 +10,9 @@
     "ethernet_dhcp": "pass",
     "filesystem_mounts": "pass",
     "foundation_services": "pass",
+    "fah_acquisition": "pass",
+    "fah_runtime_reboot": "pass",
+    "fah_runtime_service": "pass",
     "graceful_shutdown": "pass",
     "power_interruption": "pass",
     "reboot": "pass",
@@ -17,7 +20,7 @@
     "time_sync": "pass",
     "uefi_boot": "pass"
   },
-  "validation_date": "2026-06-12",
+  "validation_date": "2026-06-13",
   "validator": "Jaimie Garner",
   "hardware": {
     "cpu": "Intel x86_64",

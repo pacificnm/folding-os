@@ -372,6 +372,9 @@ PRETTY_NAME=\"FoldingOS 0.1.0\""
     systemctl is-active --quiet foldingos-identity.service
     systemctl is-active --quiet foldingos-config-validate.service
     foldingosctl fah validate-manifest
+    systemctl is-enabled --quiet foldingos-fah-acquire.timer
+    test -f /usr/lib/systemd/system/foldingos-fah-acquire.service
+    test -f /usr/lib/systemd/system/folding-at-home.service
     systemctl is-active --quiet foldingos-ssh-provision.service
     systemctl is-active --quiet foldingos-boot-status.service
     systemctl is-active --quiet sshd.service
@@ -874,5 +877,6 @@ if [ "${invalid_table_before}" != "${invalid_table_after}" ]; then
   exit 1
 fi
 
-echo "QEMU/OVMF boot, storage expansion, node identity, configuration management, persistent logging, networking, and secure SSH provisioning verified."
+echo "QEMU/OVMF boot, storage expansion, node identity, configuration management, persistent logging, networking, secure SSH provisioning, and Folding@home unit wiring verified."
 echo "Serial logs: ${EXACT_SERIAL_LOG}, ${LARGER_SERIAL_LOG}, ${REPEAT_SERIAL_LOG}, ${PROVISION_SERIAL_LOG}, ${JOURNAL_BREAK_SERIAL_LOG}, ${JOURNAL_FAILURE_SERIAL_LOG}, ${JOURNAL_PRESSURE_SERIAL_LOG}, ${CONFIG_SERIAL_LOG}, ${PRESERVATION_SERIAL_LOG}, ${INVALID_PROVISION_SERIAL_LOG}, ${RECOVERY_SERIAL_LOG}, ${REPLACEMENT_SERIAL_LOG}, ${INVALID_SERIAL_LOG}"
+echo "Folding@home acquisition and runtime behavior are validated on approved physical hardware."
