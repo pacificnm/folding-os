@@ -208,8 +208,16 @@ journalctl -b --no-pager
 foldingosctl config effective system
 ```
 
-Folding@home acquisition and runtime are Milestone 2 scope and are not part of
-the Milestone 1 foundation image.
+Folding@home acquisition and runtime are Milestone 2 scope. FoldingOS does not
+redistribute the Folding@home client or FahCore binaries. After deployment, the
+acquisition service downloads the exact artifact pinned in
+`/usr/share/foldingos/manifests/fah.toml` directly from official Folding@home
+HTTPS infrastructure.
+
+The approved v0.1.0 client is Folding@home `8.5.6`
+(`fah-client_8.5.6_amd64.deb`). The client is GPL-3.0-or-later; see the manifest
+`terms_url` and upstream documentation. FahCore binaries remain separately
+governed downloads managed by the client at runtime.
 
 ---
 
