@@ -43,7 +43,8 @@ mkdir -p \
   "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants" \
   "${TARGET_DIR}/etc/systemd/system/network-online.target.wants" \
   "${TARGET_DIR}/etc/systemd/system/sockets.target.wants" \
-  "${TARGET_DIR}/etc/systemd/system/sysinit.target.wants"
+  "${TARGET_DIR}/etc/systemd/system/sysinit.target.wants" \
+  "${TARGET_DIR}/etc/systemd/system/timers.target.wants"
 ln -snf \
   /usr/lib/systemd/system/sshd.service \
   "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/sshd.service"
@@ -68,6 +69,9 @@ ln -snf \
 ln -snf \
   /usr/lib/systemd/system/folding-at-home.service \
   "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/folding-at-home.service"
+ln -snf \
+  /usr/lib/systemd/system/foldingos-fah-acquire.timer \
+  "${TARGET_DIR}/etc/systemd/system/timers.target.wants/foldingos-fah-acquire.timer"
 ln -snf \
   /usr/lib/systemd/system/systemd-networkd.service \
   "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/systemd-networkd.service"

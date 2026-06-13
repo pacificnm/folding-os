@@ -1,0 +1,9 @@
+[Unit]
+Description=Acquire verified Folding@home client
+After=network-online.target systemd-time-wait-sync.service data.mount
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/foldingosctl fah acquire
+RemainAfterExit=no

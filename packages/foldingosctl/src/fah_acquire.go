@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 var (
@@ -20,36 +21,58 @@ var (
 )
 
 func fahAcquire() error {
-	manifest, err := loadFAHManifest(embeddedFAHManifestPath)
+	manifest, err := fahLoadApprovedManifest(embeddedFAHManifestPath)
 	if err != nil {
 		return err
 	}
-	if err := validateFoldingOSCompatibility(manifest.MinimumFoldingOSVersion); err != nil {
+	if err := fahValidateFoldingOSCompatibility(manifest.MinimumFoldingOSVersion); err != nil {
 		return err
 	}
 	if fahHasVerifiedActiveClient(manifest) {
+		if err := clearFAHAcquireState(); err != nil {
+			return err
+		}
 		fmt.Printf(
 			"Verified Folding@home client %s is already active; acquisition not required.\n",
 			manifest.ClientVersion,
 		)
 		return nil
 	}
-	if err := fahCheckAcquisitionPrerequisites(); err != nil {
+
+	state, err := loadFAHAcquireState()
+	if err != nil {
 		return err
+	}
+	if deferred, remaining, err := deferFAHAcquisitionAttempt(state); err != nil {
+		return err
+	} else if deferred {
+		fmt.Printf(
+			"Folding@home acquisition deferred for %s (next attempt at %s).\n",
+			remaining.Round(time.Second),
+			time.Unix(state.NextAttemptUnix, 0).UTC().Format(time.RFC3339),
+		)
+		return nil
+	}
+
+	if err := fahCheckAcquisitionPrerequisites(); err != nil {
+		return recordFAHAcquisitionFailure(err)
 	}
 	stagedPath, err := downloadAndStageFAHArtifact(manifest)
 	if err != nil {
-		return err
+		return recordFAHAcquisitionFailure(err)
 	}
 	fmt.Printf("Staged verified Folding@home %s artifact at %s.\n", manifest.ClientVersion, stagedPath)
 
 	versionDir, err := extractAndInstallFAHArtifact(manifest)
 	if err != nil {
-		return err
+		return recordFAHAcquisitionFailure(err)
 	}
 	fmt.Printf("Installed and verified Folding@home %s at %s.\n", manifest.ClientVersion, versionDir)
 
 	if err := fahActivate(manifest.ClientVersion); err != nil {
+		return recordFAHAcquisitionFailure(err)
+	}
+	if err := clearFAHAcquireState(); err != nil {
 		return err
 	}
 	return nil
