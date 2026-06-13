@@ -2,6 +2,9 @@
 
 **Status:** Accepted
 
+**Amended by:** [ADR-0016](0016-network-provisioning-via-supervisor.md) (role
+assignment and provisioning mechanism)
+
 **Version:** 1.0
 
 **Date:** 2026-06-11
@@ -92,19 +95,23 @@ specification before implementation.
 
 ---
 
-# Installer And Direct-Flash Provisioning
+# Installer, Direct-Flash, And Network Provisioning
 
-The combined-image installer must collect an explicit role selection and
-provision that selection onto the installed target. The installed appliance
-must validate and persist the role before starting role-specific services.
+[ADR-0016](0016-network-provisioning-via-supervisor.md) supersedes the
+combined-image USB installer defined by ADR-0013.
 
-Direct-flash deployment remains supported, but the exact mechanism used to
-select a role before first boot is not defined by this ADR. It must be defined
-before role-specific services are implemented.
+Role assignment occurs during provisioning:
 
-The exact target EFI provisioning path, persistent role path, validation
-rules, and first-boot consumption transaction require an approved amendment to
-the installer engineering specification.
+- the **supervisor** role is assigned when the first node is direct-flashed
+- **agent** roles are assigned by the supervisor during network provisioning
+
+The installed appliance must validate and persist the role before starting
+role-specific services. Direct-flash deployment remains supported for
+supervisor bootstrap and emergency recovery.
+
+The exact target EFI provisioning path, persistent role path, validation rules,
+network-boot transaction, and first-boot consumption behavior are defined by the
+[Milestone 3 engineering specification](../milestone/3-engineering-spec.md).
 
 ---
 
@@ -126,7 +133,8 @@ supervisor role may be implemented.
 
 # Service And Failure Behavior
 
-Role-specific services must not start in installer mode.
+Role-specific FoldOps services must not start before the installation role is
+validated and persisted.
 
 In appliance mode:
 
@@ -207,8 +215,8 @@ Implementation is blocked until approved specifications define:
 
 # Related Documents
 
-- [ADR-0013: Combined Appliance And Installer Image](0013-combined-appliance-and-installer-image.md)
-- [FoldingOS Installer](../installer.md)
+- [ADR-0016: Network Provisioning Via Supervisor](0016-network-provisioning-via-supervisor.md)
+- [FoldingOS deployment and provisioning](../installer.md)
 - [FoldOps Integration](../foldops-integration.md)
 - [FoldingOS Security Model](../security.md)
 

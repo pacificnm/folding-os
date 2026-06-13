@@ -1,6 +1,6 @@
 # ADR-0013: Combined Appliance And Installer Image
 
-**Status:** Accepted
+**Status:** Superseded by [ADR-0016](0016-network-provisioning-via-supervisor.md)
 
 **Version:** 1.0
 

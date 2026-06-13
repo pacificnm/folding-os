@@ -487,6 +487,8 @@ Validated physical systems are listed in [hardware-support.md](hardware-support.
 - [Build system](build-system.md)
 - [Boot process](boot-process.md)
 - [Physical validation](physical-validation.md)
+- [Deployment and provisioning](installer.md)
+- [Milestone 3 engineering specification](milestone/3-engineering-spec.md)
 - [Milestone 2 readiness review](milestone/2-readiness-review.md)
 - [Security model](security.md)
 - [Testing strategy](testing-strategy.md)

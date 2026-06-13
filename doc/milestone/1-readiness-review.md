@@ -182,8 +182,9 @@ metadata workflow is implemented for the full v0.1.0 gate set.
   unavailable
 - Only hardware listed in [hardware-support.md](../hardware-support.md) is
   validated for v0.1.0 foundation testing.
-- USB-source installation to internal SATA or NVMe targets remains Milestone 3
-  scope even though direct flash and USB boot testing are documented.
+- USB-source installation to internal SATA or NVMe targets is superseded by
+  network fleet provisioning in Milestone 3; see
+  [ADR-0016](adr/0016-network-provisioning-via-supervisor.md)
 - Full-image reflashing remains the supported update path in v0.1.0.
 
 ---

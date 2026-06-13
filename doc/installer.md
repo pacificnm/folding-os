@@ -1,54 +1,76 @@
-# FoldingOS Installer
+# FoldingOS Deployment and Provisioning
 
-Version: 0.3
-Status: Approved Architecture
+**Version:** 1.0
 
-## Purpose
+**Status:** Approved Architecture
 
-This document defines the intended FoldingOS installation experience.
+---
 
-FoldingOS is an appliance operating system. Installation must remain simple,
-reproducible, explicit, and safe while supporting systems whose intended boot
-disk is installed internally.
+# Purpose
 
-The governing architecture decision is
-[ADR-0013](adr/0013-combined-appliance-and-installer-image.md). Fixed
-installation roles are defined by
-[ADR-0014](adr/0014-fixed-installation-roles.md).
+This document defines how FoldingOS nodes are deployed and how fleets expand
+after the first supervisor is installed.
 
-## Installation Philosophy
+FoldingOS is an appliance operating system. Deployment must remain simple,
+reproducible, explicit, and safe while supporting headless fleet operation.
 
-FoldingOS uses one combined appliance and installer image.
+The governing architecture decisions are:
 
-The project does not maintain a separate installer operating system. The same
-release image, kernel, root filesystem, packages, and tools boot in one of two
-modes:
+- [ADR-0016](adr/0016-network-provisioning-via-supervisor.md)
+- [ADR-0014](adr/0014-fixed-installation-roles.md)
+
+The combined-image USB installer described by superseded
+[ADR-0013](adr/0013-combined-appliance-and-installer-image.md) is no longer the
+project direction.
+
+---
+
+# Deployment Philosophy
+
+FoldingOS ships one reproducible release image per version. The image always
+boots in appliance mode. Fleet expansion is supervisor-centric:
 
 ```text
-FoldingOS appliance mode
-FoldingOS installer mode
+Direct-flash the first supervisor
+↓
+Supervisor caches approved release images
+↓
+Blank machines network boot
+↓
+Supervisor installs agent image and registers the node
+↓
+Agents check supervisor for updates on boot
 ```
 
-The image remains directly flashable for deployments where the target storage
-can be prepared from another machine.
+Direct flash remains supported for supervisor bootstrap and emergency recovery.
 
-For systems with internal target disks, an administrator can flash the image
-to USB media, boot installer mode, and install FoldingOS onto the internal
-disk.
+---
 
-## Supported Installation Methods
+# Installation Roles
 
-### Direct Flash
+FoldingOS supports exactly two fixed roles:
 
-The complete bootable image may be written directly to the intended appliance
-storage.
+```text
+supervisor
+agent
+```
 
-Prepare removable boot media or directly attached storage with
-`scripts/make-bootable-usb`. The script writes the release image, relocates the
-backup GPT header when the target device is larger than the 4 GiB release
-image, verifies the EFI bootloader layout, and can stage administrator public
-keys on the EFI System Partition as defined by
-[ADR-0007](adr/0007-first-boot-administrator-and-ssh-provisioning.md).
+| Role | Purpose |
+| --- | --- |
+| `supervisor` | First node; fleet management, image registry, network provisioning, FoldOps supervisor and web |
+| `agent` | Compute node; FoldOps agent and Folding@home runtime |
+
+Roles are fixed for the life of an installation. Changing roles requires fresh
+destructive reinstallation.
+
+---
+
+# Supervisor Bootstrap (First Node)
+
+The first node is always the supervisor. Install it by direct flash to internal
+NVMe or SATA.
+
+## Prepare boot media
 
 ```bash
 sudo ./scripts/make-bootable-usb \
@@ -57,271 +79,171 @@ sudo ./scripts/make-bootable-usb \
   build/output/images/foldingos-x86_64-0.1.0.img
 ```
 
-For internal disks written from another machine, use the whole-disk device node
-for the target storage. Do not target a partition path such as `/dev/sdX1`.
+Boot the target system from the prepared media or write the image directly to
+internal storage from another machine. Use the whole-disk device node, not a
+partition path such as `/dev/sdX1`.
 
-The equivalent direct-flash mechanism for selecting a fixed installation role
-before first boot remains to be defined. Role-specific services must not be
-implemented until that mechanism is approved.
+See [physical-validation.md](physical-validation.md) and
+[operations.md](operations.md) for the validated direct-flash workflow.
 
-### Combined-Image Installer
+## First supervisor boot
 
-The same image may be booted from USB media in installer mode:
+After boot the supervisor must:
 
-```text
-Prepare USB media with scripts/make-bootable-usb
-↓
-Boot USB and select installer mode
-↓
-Select an internal target disk
-↓
-Select the fixed installation role
-↓
-Provide administrator public keys
-↓
-Confirm the destructive installation
-↓
-Install and verify FoldingOS
-↓
-Remove USB and boot the installed appliance
-```
+1. acquire DHCP, DNS, and time synchronization
+2. import the staged SSH administrator key
+3. persist `role=supervisor`
+4. complete FoldOps supervisor administrator and TLS provisioning
+5. start the provisioning control plane
+6. import the current approved release image into the local registry
 
-Installer mode copies the fixed release image from the source boot device to
-the selected target. The installed appliance then performs its normal
-first-boot initialization and data-partition expansion.
+The supervisor then polls the upstream release server for newer approved images.
 
-Source media that has previously booted in appliance mode and contains
-appliance-generated persistent node state is not eligible installation media.
+---
 
-## Boot Modes
+# Agent Provisioning (Network Boot)
 
-GRUB provides explicit boot entries for:
+Additional nodes do not use USB media.
+
+## Prerequisites
+
+- supervisor is operational
+- DHCP, TFTP, and HTTP boot services are available (hosted by or coordinated
+  with the supervisor)
+- blank agent machine has wired Ethernet and internal SATA or NVMe storage
+- UEFI network boot is enabled for the agent machine
+
+## Workflow
 
 ```text
-Start FoldingOS
-Install FoldingOS
+Enable network boot on blank machine
+↓
+Machine PXE/iPXE boots
+↓
+Supervisor recognizes MAC / enrollment token
+↓
+Supervisor assigns role=agent
+↓
+Supervisor streams verified image to internal disk over HTTP(S)
+↓
+Supervisor stages SSH public keys on target EFI partition
+↓
+Machine reboots into installed appliance
+↓
+Agent registers with supervisor and begins normal operation
 ```
 
-Appliance mode is the default and passes:
+TFTP is used only for the PXE/iPXE bootstrap chain. The full release image is
+transferred over HTTP or HTTPS.
 
-```text
-foldingos.mode=appliance
-```
+---
 
-Installer mode requires local selection and passes:
+# Updates
 
-```text
-foldingos.mode=installer
-```
+The supervisor maintains a registry of approved FoldingOS release images and
+polls upstream for new versions.
 
-Installer mode activates `foldingos-installer.target` instead of the normal
-appliance target.
+On boot, each agent asks the supervisor for its desired image version. When a
+newer approved version is assigned:
 
-## Installer Scope
+1. the agent downloads and verifies the image
+2. stages the update
+3. applies it on reboot
 
-The first combined-image installer will:
+See [update-system.md](update-system.md) for trust model and failure behavior.
 
-- run through the local console
-- identify and exclude its source boot device
-- verify that the source retains the expected release layout and contains no
-  appliance-generated persistent node state
-- discover eligible target disks
-- display target path, capacity, and stable identifying information
-- require explicit target selection
-- require explicit selection of the `agent` or `supervisor` role
-- require target-specific destructive confirmation
-- reject targets smaller than the release image
-- write the fixed release image to the selected target
-- provision administrator public keys on the target EFI partition
-- provision the selected fixed role onto the target
-- verify and flush the completed installation
-- require reboot or poweroff after completion
+Folding@home client acquisition remains independent of operating-system updates
+and is governed by [ADR-0009](adr/0009-fah-acquisition-and-update-model.md).
 
-The first implementation performs fresh destructive installation only.
+---
 
-## Installation Roles
+# SSH-Key Provisioning
 
-The installer offers exactly:
-
-```text
-agent
-supervisor
-```
-
-The agent role enables the FoldOps agent without the FoldOps supervisor or web
-interface.
-
-The supervisor role enables the FoldOps agent, supervisor, and web interface.
-It also requires successful initial administrator and TLS provisioning before
-the web interface becomes remotely available.
-
-The selected role cannot be changed in place. Changing roles requires fresh
-destructive reinstallation.
-
-Role selection activates approved payloads already present in the image. It is
-not arbitrary package selection and does not require network access.
-
-The exact role-provisioning transaction and supervisor administrator and TLS
-workflow require an approved installer engineering-specification amendment
-before implementation.
-
-## Installer-Mode Isolation
-
-Installer mode must preserve a pristine source image and must not behave as an
-appliance.
-
-It must not:
-
-- expand the source data partition
-- create persistent node identity
-- generate SSH host keys
-- start OpenSSH
-- acquire or start Folding@home
-- create deployment-specific persistent state
-- write to any disk before destructive confirmation
-
-## SSH-Key Provisioning
-
-The installer provisions public keys through the target EFI System Partition:
+Administrator public keys are staged on the EFI System Partition during
+installation:
 
 ```text
 /foldingos/provision/authorized_keys
 ```
 
-The first implementation accepts:
+Direct-flash supervisor bootstrap and network-provisioned agents both use this
+path. First appliance boot imports keys into persistent configuration per
+[ADR-0007](adr/0007-first-boot-administrator-and-ssh-provisioning.md).
 
-- a public-key file from the source EFI System Partition
-- public keys entered through the local console
+---
 
-Keys use the validation rules defined by ADR-0007. The installer never requests
-or stores private keys.
+# Direct Flash (Recovery)
 
-On first appliance boot, FoldingOS imports the keys into persistent
-configuration and starts OpenSSH.
+Direct flash remains supported when:
 
-## Storage Behavior
+- bootstrapping the first supervisor
+- recovering a node without working network provisioning
+- performing development and validation
 
-The release image remains exactly the deterministic fixed size defined by
-[ADR-0008](adr/0008-raw-image-size-and-data-expansion.md).
+The workflow matches the supervisor bootstrap procedure. Role assignment must be
+provisioned as part of the direct-flash transaction defined in the
+[Milestone 3 engineering specification](milestone/3-engineering-spec.md).
 
-Installer mode copies only that fixed release-image byte range. The installed
-target expands its final persistent data partition during its first appliance
-boot.
+---
 
-Devices smaller than the release image are unsupported.
+# Safety Requirements
 
-## Safety Requirements
+Provisioning must:
 
-The installer must:
+- authenticate enrollment or operator-approved install requests
+- install only verified images from the supervisor registry
+- reject targets smaller than the release image
+- never modify the wrong disk
+- fail closed on verification errors
+- clearly report success or failure
 
-- fail closed if the source boot device cannot be identified
-- never offer the source boot device as a target
-- never select a target automatically
-- revalidate source and target identities immediately before writing
-- require confirmation that identifies the selected target
-- clearly warn that the selected target will be overwritten
-- write only to the selected target
-- stop on verification failure
-- clearly report whether installation completed
+Interrupted network installation may leave the target unbootable. Re-run
+network provisioning after correcting the fault.
 
-An interrupted installation may leave the selected target unbootable.
-Repeating installation is the recovery path.
+---
 
-## Reinstallation
+# Non-Goals
 
-Reinstallation uses the same fresh destructive installation workflow:
-
-```text
-Boot pristine FoldingOS installer USB
-↓
-Select the existing internal FoldingOS disk
-↓
-Confirm erasure
-↓
-Install and provision FoldingOS again
-```
-
-An existing FoldingOS installation remains an eligible target when it
-otherwise satisfies the target safety rules. Reinstallation does not require
-removing the internal disk.
-
-The installer USB must remain eligible source media. If it has previously
-booted in appliance mode or accumulated persistent appliance state, it must be
-reflashed from the release image before it can be used to reinstall a node.
-
-The first installer does not preserve existing target configuration, node
-identity, logs, Folding@home work, or checkpoints during reinstallation.
-
-## Non-Goals
-
-The first installer does not provide:
+Milestone 3 deployment does not provide:
 
 - a separate installer operating system
-- GUI installation
-- arbitrary package selection beyond the two approved fixed roles
+- USB installer mode with local-console target selection
 - custom partitioning
-- network-required installation
-- unattended destructive installation
-- preservation of existing target data
-- installation to multiple targets at once
-- network-booted installation
+- in-place role changes
+- runtime FoldOps package installation from the network
+- Folding@home client redistribution inside the OS image
 
-## Implementation Plan
+---
 
-Implementation follows the approved installer engineering specification, which
-defines the concrete commands, units, dependencies, and failure behavior
-required by ADR-0013.
+# Implementation And Validation
 
-The approved specification is:
+The approved implementation specification is:
 
-[Milestone 3 installer engineering specification](milestone/3-engineering-spec.md)
+[Milestone 3 engineering specification](milestone/3-engineering-spec.md)
 
-The implementation sequence is:
+Validation must include:
 
-1. Define the installer engineering specification.
-2. Add appliance and installer GRUB entries and boot parameters.
-3. Define and add `foldingos-installer.target`.
-4. Implement safe source-media eligibility and source-device identification.
-5. Implement target discovery, selection, identity revalidation, and
-   target-specific destructive confirmation.
-6. Implement `foldingosctl install`.
-7. Implement target EFI administrator-key provisioning.
-8. Add QEMU tests proving installer mode cannot overwrite its source device or
-   any unselected disk.
-9. Add installed-target boot, expansion, and SSH acceptance tests.
-10. Complete physical USB-source installation validation for approved SATA and
-    NVMe targets.
+- QEMU network provisioning and update tests
+- physical supervisor bootstrap by direct flash
+- physical agent provisioning to internal SATA or NVMe
+- post-update Folding@home runtime behavior on agents
 
-Installer support must not be claimed until the automated and physical
-validation gates pass.
+---
 
-## Validation
+# Related Documents
 
-Automated QEMU validation must prove:
+- [ADR-0016: Network Provisioning Via Supervisor](adr/0016-network-provisioning-via-supervisor.md)
+- [Operations](operations.md)
+- [Physical validation](physical-validation.md)
+- [FoldOps integration](foldops-integration.md)
+- [Update system](update-system.md)
 
-- installer mode cannot overwrite its source boot device
-- source media containing appliance-generated persistent state is rejected
-- no target changes before explicit confirmation
-- only the selected target changes
-- undersized targets are rejected
-- invalid SSH keys are rejected
-- installed targets boot and expand successfully
-- provisioned SSH access becomes available
+---
 
-Physical validation must cover approved USB-source and SATA/NVMe target
-combinations before installer support is claimed for them.
-
-## Summary
-
-FoldingOS remains one reproducible appliance image:
+# Summary
 
 ```text
-Flash directly, or boot the image and install it locally.
+Flash the supervisor once.
+Boot the rest from the network.
+Let the supervisor keep the fleet current.
 ```
-
-The combined installer solves internal-disk deployment without creating a
-second operating system.
-
-Future releases may provide network-booted deployment using the same installer
-logic and safety requirements without introducing a separate installer
-operating system.

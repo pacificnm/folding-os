@@ -137,7 +137,8 @@ Rejected as over-engineering. A one-shot boot-status service is sufficient.
 - operators can confirm successful boot with a temporarily attached monitor
 - DHCP address discovery does not require router or SSH access
 - implementation remains small and aligned with the appliance model
-- Milestone 3 installer work can reuse the same local display path
+- Milestone 3 network provisioning may add supervisor status messages on the same
+  display path during commissioning
 
 ## Negative
 
@@ -158,8 +159,8 @@ Rejected as over-engineering. A one-shot boot-status service is sufficient.
 
 # Future Considerations
 
-- installer mode may add additional local-console interaction on the same
-  display path
+- network provisioning may add supervisor status messages on the same display
+  path
 - serial-console commissioning remains supported through `ttyS0`
 - full GPU drivers may be considered later only with explicit hardware-support
   justification

@@ -18,6 +18,8 @@ This index groups the project's documentation by purpose.
 - [Build system](build-system.md) - build goals, expected framework, and outputs
 - [Hardware support](hardware-support.md) - target platforms and support policy
 - [Physical validation](physical-validation.md) - Milestone 1 physical acceptance procedure and boot-media preparation
+- [Deployment and provisioning](installer.md) - supervisor bootstrap and network fleet provisioning
+- [ADR-0016: Network provisioning via supervisor](adr/0016-network-provisioning-via-supervisor.md)
 - [ADR-0015: Local commissioning display](adr/0015-local-commissioning-display.md) - boot messages and ready status on `tty1`
 - [Networking](networking.md) - networking behavior and capabilities
 - [Storage layout](storage-layout.md) - logical storage and persistence model
@@ -36,9 +38,10 @@ This index groups the project's documentation by purpose.
   completion status and validation evidence
 - [Milestone 2 readiness review](milestone/2-readiness-review.md) - Folding@home
   runtime completion status and validation evidence
-- [Installer](installer.md) - approved combined-image installation architecture
-- [Installer engineering specification](milestone/3-engineering-spec.md) -
-  approved concrete implementation contract for the combined-image installer
+- [Deployment and provisioning](installer.md) - supervisor bootstrap and network
+  fleet provisioning
+- [Milestone 3 engineering specification](milestone/3-engineering-spec.md) -
+  approved concrete implementation contract for network fleet provisioning
 - [Update system](update-system.md) - draft update requirements and trust model
 
 ## Engineering Process

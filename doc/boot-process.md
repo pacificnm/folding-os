@@ -123,12 +123,10 @@ The initial x86_64 implementation uses GRUB 2 on UEFI systems, as defined by
 Local commissioning display behavior on `tty1` is defined by
 [ADR-0015](adr/0015-local-commissioning-display.md).
 
-Installer-capable releases provide explicit appliance and installer boot
-entries as defined by
-[ADR-0013](adr/0013-combined-appliance-and-installer-image.md). Appliance mode
-is the default. Installer mode requires local selection and activates a
-restricted local-console installation target instead of normal appliance
-startup.
+Fleet provisioning uses supervisor-led network boot as defined by
+[ADR-0016](adr/0016-network-provisioning-via-supervisor.md). The first
+supervisor is direct-flashed to internal storage. Additional agent nodes
+network boot and receive their image from the supervisor.
 
 ---
 
