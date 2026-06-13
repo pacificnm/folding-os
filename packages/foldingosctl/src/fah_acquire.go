@@ -48,6 +48,10 @@ func fahAcquire() error {
 		return err
 	}
 	fmt.Printf("Installed and verified Folding@home %s at %s.\n", manifest.ClientVersion, versionDir)
+
+	if err := fahActivate(manifest.ClientVersion); err != nil {
+		return err
+	}
 	return nil
 }
 
