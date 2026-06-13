@@ -12,9 +12,14 @@ import (
 )
 
 const (
-	provisionedKeys = "/boot/efi/foldingos/provision/authorized_keys"
-	activeKeys      = "/data/config/ssh/authorized_keys"
-	hostKey         = "/data/config/ssh/host-keys/ssh_host_ed25519_key"
+	provisionedKeysDefault = "/boot/efi/foldingos/provision/authorized_keys"
+	activeKeysDefault      = "/data/config/ssh/authorized_keys"
+	hostKey                = "/data/config/ssh/host-keys/ssh_host_ed25519_key"
+)
+
+var (
+	provisionedKeys = provisionedKeysDefault
+	activeKeys      = activeKeysDefault
 )
 
 func provisionSSH() error {

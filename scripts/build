@@ -44,6 +44,11 @@ BUILDROOT_ASSETS=(
   "../../../packages/foldingosctl/src/provision_enroll.go"
   "../../../packages/foldingosctl/src/provision_assign.go"
   "../../../packages/foldingosctl/src/provision_enrollment_test.go"
+  "../../../packages/foldingosctl/src/provision_targets.go"
+  "../../../packages/foldingosctl/src/provision_authorize.go"
+  "../../../packages/foldingosctl/src/provision_stream_handlers.go"
+  "../../../packages/foldingosctl/src/provision_install.go"
+  "../../../packages/foldingosctl/src/provision_stream_test.go"
 )
 
 echo "FoldingOS build"

@@ -18,8 +18,9 @@ const (
 	registryIndexPathDefault        = "/data/registry/index.json"
 	upstreamReleasesURLPathDefault  = "/data/config/provision/upstream-releases.url"
 	embeddedBuildRevisionPath       = "/usr/share/foldingos/build-revision"
-	releaseImageSizeBytes     int64 = 4294967296
 )
+
+var releaseImageSizeBytes int64 = 4294967296
 
 var (
 	registryDir              = registryDirDefault

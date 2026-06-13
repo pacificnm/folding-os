@@ -63,6 +63,9 @@ func dispatch(args []string) error {
 	if len(args) >= 3 && args[0] == "provision" && args[1] == "assign" {
 		return provisionAssign(args[2:])
 	}
+	if len(args) >= 2 && args[0] == "provision" && args[1] == "install" {
+		return provisionInstall(args[2:])
+	}
 	if len(args) == 2 && args[0] == "registry" && args[1] == "import-bootstrap" {
 		return registryImportBootstrap()
 	}
