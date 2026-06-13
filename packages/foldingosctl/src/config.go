@@ -14,7 +14,7 @@ import (
 	"unicode/utf8"
 )
 
-const (
+var (
 	defaultsDir  = "/etc/foldingos/defaults"
 	configDir    = "/data/config"
 	effectiveDir = "/run/foldingos/effective"
@@ -24,6 +24,7 @@ var (
 	domains         = []string{"system", "network", "foldinghome"}
 	hostnamePattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$`)
 	secretPattern   = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
+	validateSecretReferenceFn func(string) error
 )
 
 type configValue struct {
@@ -375,6 +376,9 @@ func validateDomain(domain string, values domainConfig) error {
 }
 
 func validateSecretReference(name string) error {
+	if validateSecretReferenceFn != nil {
+		return validateSecretReferenceFn(name)
+	}
 	if name == "" {
 		return nil
 	}
