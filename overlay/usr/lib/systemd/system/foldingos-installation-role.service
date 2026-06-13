@@ -1,0 +1,13 @@
+[Unit]
+Description=Provision and validate FoldingOS installation role
+Requires=boot-efi.mount foldingos-persistent-dirs.service
+After=boot-efi.mount foldingos-persistent-dirs.service
+Before=foldingos-provision.service foldingos-agent-register.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/foldingosctl provision role
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

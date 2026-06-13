@@ -16,6 +16,7 @@ FOUNDATION_UNITS = {
     "foldingos-identity.service",
     "foldingos-journal-dir.service",
     "foldingos-journal-flush.service",
+    "foldingos-installation-role.service",
     "foldingos-persistent-dirs.service",
     "foldingos-ssh-provision.service",
     "var-log-journal.mount",
@@ -43,6 +44,8 @@ REQUIRED_LINKS = {
         "/usr/lib/systemd/system/foldingos-journal-flush.service",
     "etc/systemd/system/multi-user.target.wants/foldingos-ssh-provision.service":
         "/usr/lib/systemd/system/foldingos-ssh-provision.service",
+    "etc/systemd/system/multi-user.target.wants/foldingos-installation-role.service":
+        "/usr/lib/systemd/system/foldingos-installation-role.service",
     "etc/systemd/system/multi-user.target.wants/foldingos-boot-status.service":
         "/usr/lib/systemd/system/foldingos-boot-status.service",
     "etc/systemd/system/multi-user.target.wants/foldingos-fah-prepare.service":
@@ -73,6 +76,12 @@ UNIT_REQUIREMENTS = {
     "foldingos-persistent-dirs.service": {
         ("Unit", "Requires"): {"data.mount"},
         ("Unit", "After"): {"data.mount"},
+        ("Unit", "Before"): {
+            "foldingos-installation-role.service",
+            "foldingos-identity.service",
+            "foldingos-config-validate.service",
+            "foldingos-ssh-provision.service",
+        },
     },
     "foldingos-journal-dir.service": {
         ("Unit", "DefaultDependencies"): {"no"},
@@ -109,6 +118,20 @@ UNIT_REQUIREMENTS = {
             "foldingos-persistent-dirs.service",
         },
         ("Unit", "Before"): {"sshd.service"},
+    },
+    "foldingos-installation-role.service": {
+        ("Unit", "Requires"): {
+            "boot-efi.mount",
+            "foldingos-persistent-dirs.service",
+        },
+        ("Unit", "After"): {
+            "boot-efi.mount",
+            "foldingos-persistent-dirs.service",
+        },
+        ("Unit", "Before"): {
+            "foldingos-provision.service",
+            "foldingos-agent-register.service",
+        },
     },
     "foldingos-boot-status.service": {
         ("Unit", "After"): {
@@ -183,6 +206,12 @@ FAILURE_ISOLATION_FORBIDDEN_REQUIRES = {
         "systemd-time-wait-sync.service",
     },
     "foldingos-ssh-provision.service": {
+        "var-log-journal.mount",
+        "foldingos-journal-flush.service",
+        "network-online.target",
+        "systemd-time-wait-sync.service",
+    },
+    "foldingos-installation-role.service": {
         "var-log-journal.mount",
         "foldingos-journal-flush.service",
         "network-online.target",

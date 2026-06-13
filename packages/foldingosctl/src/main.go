@@ -45,6 +45,9 @@ func dispatch(args []string) error {
 	if len(args) == 2 && args[0] == "provision" && args[1] == "ssh" {
 		return provisionSSH()
 	}
+	if len(args) == 2 && args[0] == "provision" && args[1] == "role" {
+		return provisionRole()
+	}
 	if len(args) == 2 && args[0] == "boot" && args[1] == "status" {
 		return bootStatus()
 	}

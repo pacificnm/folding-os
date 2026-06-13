@@ -8,6 +8,7 @@ DEFAULT_IMAGE="${IMAGES_DIR}/foldingos-x86_64-0.1.0.img"
 EFI_PARTITION_OFFSET=1048576
 SKIP_CONFIRM=0
 SSH_PUBLIC_KEY=""
+INSTALLATION_ROLE=""
 DEVICE=""
 IMAGE=""
 
@@ -24,6 +25,9 @@ Options:
   --yes                 Skip the interactive confirmation prompt
   --ssh-public-key FILE Stage an administrator public key at:
                         /boot/efi/foldingos/provision/authorized_keys
+  --role ROLE           Stage the installation role at:
+                        /boot/efi/foldingos/provision/installation-role
+                        ROLE must be supervisor or agent
 
 Arguments:
   device                Whole-disk block device (for example /dev/sdb)
@@ -219,6 +223,34 @@ stage_ssh_public_key() {
     "${key_file}" ::/foldingos/provision/authorized_keys
 }
 
+validate_installation_role() {
+  local role="$1"
+
+  case "${role}" in
+    supervisor|agent)
+      ;;
+    *)
+      echo "ERROR: Installation role must be supervisor or agent: ${role}" >&2
+      exit 1
+      ;;
+  esac
+}
+
+stage_installation_role() {
+  local device="$1"
+  local role="$2"
+  local efi_target
+  local temp_file
+
+  validate_installation_role "${role}"
+  efi_target="$(efi_mtools_target "${device}")"
+  temp_file="$(mktemp)"
+  printf '%s' "${role}" >"${temp_file}"
+  "${MCOPY}" -o -i "${efi_target}" \
+    "${temp_file}" ::/foldingos/provision/installation-role
+  rm -f "${temp_file}"
+}
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --yes)
@@ -231,6 +263,14 @@ while [ "$#" -gt 0 ]; do
         exit 2
       fi
       SSH_PUBLIC_KEY="$2"
+      shift 2
+      ;;
+    --role)
+      if [ "$#" -lt 2 ]; then
+        usage >&2
+        exit 2
+      fi
+      INSTALLATION_ROLE="$2"
       shift 2
       ;;
     -h|--help)
@@ -335,6 +375,11 @@ if [ -n "${SSH_PUBLIC_KEY}" ]; then
   echo "Administrator SSH public key: ${SSH_PUBLIC_KEY}"
   echo
 fi
+if [ -n "${INSTALLATION_ROLE}" ]; then
+  validate_installation_role "${INSTALLATION_ROLE}"
+  echo "Installation role: ${INSTALLATION_ROLE}"
+  echo
+fi
 echo "WARNING: This will destroy all existing data on ${DEVICE}."
 echo
 
@@ -371,6 +416,11 @@ if [ -n "${SSH_PUBLIC_KEY}" ]; then
   stage_ssh_public_key "${DEVICE}" "${SSH_PUBLIC_KEY}"
 fi
 
+if [ -n "${INSTALLATION_ROLE}" ]; then
+  echo "Staging installation role"
+  stage_installation_role "${DEVICE}" "${INSTALLATION_ROLE}"
+fi
+
 efi_partition="$(partition_path "${DEVICE}" 1)"
 echo
 echo "Bootable media prepared successfully."
@@ -386,6 +436,9 @@ if [ -n "${SSH_PUBLIC_KEY}" ]; then
   echo "  4. After first boot, SSH to foldingos-admin@<dhcp-address> using the matching private key."
 else
   echo "  4. Stage an administrator public key before first boot, or rerun this script with --ssh-public-key."
+fi
+if [ -n "${INSTALLATION_ROLE}" ]; then
+  echo "  5. First boot persists installation role ${INSTALLATION_ROLE} before role-specific services start."
 fi
 if [ "${partprobe_available}" -eq 0 ]; then
   echo
