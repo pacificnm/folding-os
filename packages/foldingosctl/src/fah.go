@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	embeddedFAHManifestPath      = "/usr/share/foldingos/manifests/fah.toml"
-	fahManifestPlaceholder       = "REQUIRED_BEFORE_RELEASE"
+	embeddedFAHManifestPath   = "/usr/share/foldingos/manifests/fah.toml"
+	fahVerifiedMarkerName     = ".foldingos-verified"
+	fahManifestPlaceholder    = "REQUIRED_BEFORE_RELEASE"
 	fahApprovedArtifactOrigin    = "download.foldingathome.org"
 	fahExecutablePathPrefix      = "/data/apps/fah/current/"
 	fahManifestSchemaVersion     = 1
@@ -21,6 +22,11 @@ const (
 	fahManifestArtifactFormat    = "deb"
 	fahManifestMinimumVersion    = "0.1.0"
 	fahClientVersionMajorPattern = `^8\.5\.[0-9]+$`
+)
+
+var (
+	fahAppsRoot     = "/data/apps/fah"
+	fahDownloadsDir = "/data/apps/fah/.downloads"
 )
 
 var (
