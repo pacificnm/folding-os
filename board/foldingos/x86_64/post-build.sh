@@ -2,6 +2,8 @@
 set -euo pipefail
 
 TARGET_DIR="${1:?target directory argument is required}"
+BOARD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${BOARD_DIR}/../../.." && pwd)"
 
 mkdir -p \
   "${TARGET_DIR}/boot/efi" \
@@ -17,6 +19,13 @@ VERSION_ID="0.1.0"
 PRETTY_NAME="FoldingOS 0.1.0"
 EOF
 ln -snf ../usr/lib/os-release "${TARGET_DIR}/etc/os-release"
+
+mkdir -p "${TARGET_DIR}/usr/share/foldingos"
+BUILD_REVISION="unknown"
+if command -v git >/dev/null 2>&1 && [ -d "${PROJECT_ROOT}/.git" ]; then
+  BUILD_REVISION="$(git -C "${PROJECT_ROOT}" rev-parse HEAD 2>/dev/null || echo unknown)"
+fi
+printf '%s\n' "${BUILD_REVISION}" > "${TARGET_DIR}/usr/share/foldingos/build-revision"
 
 # systemd-resolved owns the runtime resolver file.
 ln -snf /run/systemd/resolve/stub-resolv.conf "${TARGET_DIR}/etc/resolv.conf"
@@ -64,6 +73,9 @@ ln -snf \
   /usr/lib/systemd/system/foldingos-installation-role.service \
   "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/foldingos-installation-role.service"
 ln -snf \
+  /usr/lib/systemd/system/foldingos-registry-bootstrap.service \
+  "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/foldingos-registry-bootstrap.service"
+ln -snf \
   /usr/lib/systemd/system/foldingos-boot-status.service \
   "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/foldingos-boot-status.service"
 ln -snf \
@@ -75,6 +87,9 @@ ln -snf \
 ln -snf \
   /usr/lib/systemd/system/foldingos-fah-acquire.timer \
   "${TARGET_DIR}/etc/systemd/system/timers.target.wants/foldingos-fah-acquire.timer"
+ln -snf \
+  /usr/lib/systemd/system/foldingos-registry-poll.timer \
+  "${TARGET_DIR}/etc/systemd/system/timers.target.wants/foldingos-registry-poll.timer"
 ln -snf \
   /usr/lib/systemd/system/systemd-networkd.service \
   "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/systemd-networkd.service"

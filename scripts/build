@@ -33,6 +33,12 @@ BUILDROOT_ASSETS=(
   "../../../packages/foldingosctl/src/main.go"
   "../../../packages/foldingosctl/src/main_test.go"
   "../../../packages/foldingosctl/src/provision.go"
+  "../../../packages/foldingosctl/src/installation_role.go"
+  "../../../packages/foldingosctl/src/installation_role_test.go"
+  "../../../packages/foldingosctl/src/registry.go"
+  "../../../packages/foldingosctl/src/registry_import.go"
+  "../../../packages/foldingosctl/src/registry_poll.go"
+  "../../../packages/foldingosctl/src/registry_test.go"
 )
 
 echo "FoldingOS build"

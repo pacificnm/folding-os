@@ -48,6 +48,18 @@ func dispatch(args []string) error {
 	if len(args) == 2 && args[0] == "provision" && args[1] == "role" {
 		return provisionRole()
 	}
+	if len(args) == 2 && args[0] == "registry" && args[1] == "import-bootstrap" {
+		return registryImportBootstrap()
+	}
+	if len(args) == 2 && args[0] == "registry" && args[1] == "poll" {
+		return registryPoll()
+	}
+	if len(args) == 2 && args[0] == "registry" && args[1] == "list" {
+		return listRegistry()
+	}
+	if len(args) == 3 && args[0] == "registry" && args[1] == "show" {
+		return showRegistry(args[2])
+	}
 	if len(args) == 2 && args[0] == "boot" && args[1] == "status" {
 		return bootStatus()
 	}
@@ -79,7 +91,7 @@ func dispatch(args []string) error {
 		return activateConfig(args[2], args[3])
 	}
 
-	fmt.Fprintln(os.Stderr, "usage: foldingosctl <boot|config|fah|identity|provision|storage> <command> [arguments]")
+	fmt.Fprintln(os.Stderr, "usage: foldingosctl <boot|config|fah|identity|provision|registry|storage> <command> [arguments]")
 	os.Exit(2)
 	return nil
 }

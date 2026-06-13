@@ -18,6 +18,9 @@ FOUNDATION_UNITS = {
     "foldingos-journal-flush.service",
     "foldingos-installation-role.service",
     "foldingos-persistent-dirs.service",
+    "foldingos-registry-bootstrap.service",
+    "foldingos-registry-poll.service",
+    "foldingos-registry-poll.timer",
     "foldingos-ssh-provision.service",
     "var-log-journal.mount",
 }
@@ -46,6 +49,8 @@ REQUIRED_LINKS = {
         "/usr/lib/systemd/system/foldingos-ssh-provision.service",
     "etc/systemd/system/multi-user.target.wants/foldingos-installation-role.service":
         "/usr/lib/systemd/system/foldingos-installation-role.service",
+    "etc/systemd/system/multi-user.target.wants/foldingos-registry-bootstrap.service":
+        "/usr/lib/systemd/system/foldingos-registry-bootstrap.service",
     "etc/systemd/system/multi-user.target.wants/foldingos-boot-status.service":
         "/usr/lib/systemd/system/foldingos-boot-status.service",
     "etc/systemd/system/multi-user.target.wants/foldingos-fah-prepare.service":
@@ -66,6 +71,8 @@ REQUIRED_LINKS = {
         "/usr/lib/systemd/system/systemd-time-wait-sync.service",
     "etc/systemd/system/timers.target.wants/foldingos-fah-acquire.timer":
         "/usr/lib/systemd/system/foldingos-fah-acquire.timer",
+    "etc/systemd/system/timers.target.wants/foldingos-registry-poll.timer":
+        "/usr/lib/systemd/system/foldingos-registry-poll.timer",
 }
 UNIT_REQUIREMENTS = {
     "foldingos-data-expand.service": {
@@ -131,7 +138,30 @@ UNIT_REQUIREMENTS = {
         ("Unit", "Before"): {
             "foldingos-provision.service",
             "foldingos-agent-register.service",
+            "foldingos-registry-bootstrap.service",
         },
+    },
+    "foldingos-registry-bootstrap.service": {
+        ("Unit", "Requires"): {"foldingos-installation-role.service"},
+        ("Unit", "After"): {"foldingos-installation-role.service"},
+        ("Unit", "ConditionPathExists"): {"/data/config/installation-role"},
+        ("Service", "ExecCondition"): {"/bin/sh -c 'grep -qx supervisor /data/config/installation-role'"},
+    },
+    "foldingos-registry-poll.service": {
+        ("Unit", "After"): {
+            "network-online.target",
+            "foldingos-registry-bootstrap.service",
+        },
+        ("Unit", "Wants"): {"network-online.target"},
+        ("Unit", "ConditionPathExists"): {"/data/config/installation-role"},
+        ("Service", "ExecCondition"): {"/bin/sh -c 'grep -qx supervisor /data/config/installation-role'"},
+        ("Service", "Type"): {"oneshot"},
+    },
+    "foldingos-registry-poll.timer": {
+        ("Unit", "Requires"): {"foldingos-registry-poll.service"},
+        ("Timer", "OnBootSec"): {"15min"},
+        ("Timer", "OnUnitInactiveSec"): {"1h"},
+        ("Timer", "Persistent"): {"true"},
     },
     "foldingos-boot-status.service": {
         ("Unit", "After"): {
@@ -215,6 +245,17 @@ FAILURE_ISOLATION_FORBIDDEN_REQUIRES = {
         "var-log-journal.mount",
         "foldingos-journal-flush.service",
         "network-online.target",
+        "systemd-time-wait-sync.service",
+    },
+    "foldingos-registry-bootstrap.service": {
+        "var-log-journal.mount",
+        "foldingos-journal-flush.service",
+        "network-online.target",
+        "systemd-time-wait-sync.service",
+    },
+    "foldingos-registry-poll.service": {
+        "var-log-journal.mount",
+        "foldingos-journal-flush.service",
         "systemd-time-wait-sync.service",
     },
     "foldingos-fah-prepare.service": {
