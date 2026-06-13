@@ -18,6 +18,7 @@ This index groups the project's documentation by purpose.
 - [Build system](build-system.md) - build goals, expected framework, and outputs
 - [Hardware support](hardware-support.md) - target platforms and support policy
 - [Physical validation](physical-validation.md) - Milestone 1 physical acceptance procedure and boot-media preparation
+- [ADR-0015: Local commissioning display](adr/0015-local-commissioning-display.md) - boot messages and ready status on `tty1`
 - [Networking](networking.md) - networking behavior and capabilities
 - [Storage layout](storage-layout.md) - logical storage and persistence model
 - [Security model](security.md) - runtime security architecture

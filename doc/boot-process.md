@@ -120,6 +120,9 @@ Responsibilities include:
 The initial x86_64 implementation uses GRUB 2 on UEFI systems, as defined by
 [ADR-0003](adr/0003-x86_64-bootloader-and-image-format.md).
 
+Local commissioning display behavior on `tty1` is defined by
+[ADR-0015](adr/0015-local-commissioning-display.md).
+
 Installer-capable releases provide explicit appliance and installer boot
 entries as defined by
 [ADR-0013](adr/0013-combined-appliance-and-installer-image.md). Appliance mode
@@ -142,7 +145,10 @@ The Linux kernel initializes:
 
 Kernel configuration should remain as minimal as practical.
 
-Only required functionality should be enabled.
+Only required functionality should be enabled. UEFI x86_64 images must include
+the firmware-backed framebuffer support required for local commissioning
+display on `tty1`, as defined by
+[ADR-0015](adr/0015-local-commissioning-display.md).
 
 ---
 
@@ -204,9 +210,29 @@ Typical responsibilities:
 
 Network initialization failures should be detectable and recoverable.
 
+When a monitor is attached, network readiness contributes to the final local
+commissioning message defined by
+[ADR-0015](adr/0015-local-commissioning-display.md).
+
 ---
 
-# Stage 8 - Time Synchronization
+# Stage 8 - Local Commissioning Display
+
+After wired Ethernet acquires a routable IPv4 address, FoldingOS writes a final
+ready message to `/dev/tty1` and `/dev/console`:
+
+```text
+FoldingOS 0.1.0 ready
+Address: 192.168.4.32
+SSH: foldingos-admin@192.168.4.32
+```
+
+The message is informational only. It does not enable local login and does not
+replace SSH provisioning or administration.
+
+---
+
+# Stage 9 - Time Synchronization
 
 Accurate system time is required for:
 
@@ -220,7 +246,7 @@ Time synchronization should occur automatically whenever possible.
 
 ---
 
-# Stage 9 - Configuration Validation
+# Stage 10 - Configuration Validation
 
 Before application startup, FoldingOS validates:
 
@@ -242,7 +268,7 @@ Configuration validation and recovery are defined by
 
 ---
 
-# Stage 10 - Folding@home Acquisition
+# Stage 11 - Folding@home Acquisition
 
 If no verified Folding@home client is installed, FoldingOS downloads the exact
 pinned artifact from the approved official upstream origin and verifies it
@@ -256,7 +282,7 @@ Acquisition behavior is defined by
 
 ---
 
-# Stage 11 - Folding@home
+# Stage 12 - Folding@home
 
 The Folding@home client starts.
 
@@ -278,6 +304,8 @@ A node is considered operational when:
 
 - operating system startup has completed
 - networking is functional
+- the commissioning ready message has been written when local display support
+  is available
 - Folding@home is executing normally
 - health monitoring is active
 - required services are healthy

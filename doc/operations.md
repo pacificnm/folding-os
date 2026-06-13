@@ -11,9 +11,13 @@ Status: Approved for Milestone 1 foundation
 This document describes how operators and developers build, deploy, administer,
 diagnose, and recover a FoldingOS v0.1.0 foundation appliance.
 
-FoldingOS is a headless appliance. Normal administration uses SSH. A local
-display may remain blank on physical hardware that lacks framebuffer or GPU
-drivers in the v0.1.0 kernel.
+FoldingOS is a headless appliance. Normal administration uses SSH. A monitor
+and keyboard are not required in production.
+
+During commissioning, a temporarily attached monitor shows kernel and service
+boot messages on `tty1` and a final ready message with the DHCP IPv4 address
+and SSH entry point. See
+[ADR-0015](adr/0015-local-commissioning-display.md).
 
 ---
 
@@ -107,8 +111,30 @@ On the target system:
 3. Select the UEFI USB or internal-disk boot entry.
 4. Confirm GRUB loads the FoldingOS entry.
 
-The appliance reaches normal operation when it acquires DHCP on wired Ethernet
-and accepts SSH from a provisioned administrator key.
+The appliance reaches normal operation when it acquires DHCP on wired Ethernet,
+accepts SSH from a provisioned administrator key, and writes the commissioning
+ready message to the local display when a monitor is attached.
+
+## Commissioning display
+
+When a monitor is temporarily attached during setup, the node shows:
+
+1. kernel and service boot messages on `tty1`
+2. a final ready message after DHCP networking is online:
+
+```text
+FoldingOS 0.1.0 ready
+Address: 192.168.4.32
+SSH: foldingos-admin@192.168.4.32
+```
+
+The version string comes from `/usr/lib/os-release`. The address is the actual
+routable IPv4 address acquired on wired Ethernet. The example above is
+illustrative only.
+
+This display is informational. It does not provide local login, and production
+nodes are not expected to keep a monitor or keyboard attached. See
+[ADR-0015](adr/0015-local-commissioning-display.md).
 
 ---
 
@@ -276,7 +302,8 @@ partition across reflashes is not guaranteed in v0.1.0.
 - No package manager on the target image
 - No FoldOps services in v0.1.0
 - No Folding@home client embedded in the foundation image
-- Physical display may remain blank even when the system is healthy
+- Local display is for commissioning only; no keyboard or console login is provided
+- Unsupported hardware may still show no local output if UEFI framebuffer is unavailable
 - Only documented validated hardware carries a support claim
 
 Validated physical systems are listed in [hardware-support.md](hardware-support.md).

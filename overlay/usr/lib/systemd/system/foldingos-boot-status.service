@@ -1,0 +1,12 @@
+[Unit]
+Description=Write FoldingOS commissioning display status
+After=network-online.target systemd-networkd-wait-online.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/foldingosctl boot status
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

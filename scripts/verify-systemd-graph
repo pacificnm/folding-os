@@ -10,6 +10,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_ROOTFS = PROJECT_ROOT / "build/output/images/rootfs.tar"
 FOUNDATION_UNITS = {
+    "foldingos-boot-status.service",
     "foldingos-config-validate.service",
     "foldingos-data-expand.service",
     "foldingos-identity.service",
@@ -42,6 +43,8 @@ REQUIRED_LINKS = {
         "/usr/lib/systemd/system/foldingos-journal-flush.service",
     "etc/systemd/system/multi-user.target.wants/foldingos-ssh-provision.service":
         "/usr/lib/systemd/system/foldingos-ssh-provision.service",
+    "etc/systemd/system/multi-user.target.wants/foldingos-boot-status.service":
+        "/usr/lib/systemd/system/foldingos-boot-status.service",
     "etc/systemd/system/multi-user.target.wants/sshd.service":
         "/usr/lib/systemd/system/sshd.service",
     "etc/systemd/system/multi-user.target.wants/systemd-networkd.service":
@@ -98,6 +101,13 @@ UNIT_REQUIREMENTS = {
             "foldingos-persistent-dirs.service",
         },
         ("Unit", "Before"): {"sshd.service"},
+    },
+    "foldingos-boot-status.service": {
+        ("Unit", "After"): {
+            "network-online.target",
+            "systemd-networkd-wait-online.service",
+        },
+        ("Unit", "Wants"): {"network-online.target"},
     },
     "sshd.service.d/foldingos.conf": {
         ("Unit", "Requires"): {"foldingos-ssh-provision.service"},

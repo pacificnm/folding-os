@@ -58,8 +58,8 @@ approved document change.
 
 # Documentation Reconciliation
 
-The following operator and engineering documents now match implemented
-foundation behavior:
+The following operator and engineering documents define or match foundation
+behavior:
 
 | Topic | Document |
 | --- | --- |
@@ -67,13 +67,13 @@ foundation behavior:
 | Direct flash and USB preparation | [operations.md](../operations.md), [physical-validation.md](../physical-validation.md), [installer.md](../installer.md) |
 | SSH provisioning | [operations.md](../operations.md), [ADR-0007](../adr/0007-first-boot-administrator-and-ssh-provisioning.md), [security.md](../security.md) |
 | Diagnostics and recovery | [operations.md](../operations.md), [boot-process.md](../boot-process.md) |
+| Local commissioning display | [ADR-0015](../adr/0015-local-commissioning-display.md), [boot-process.md](../boot-process.md), [operations.md](../operations.md) |
 | Automated and physical validation | [testing-strategy.md](../testing-strategy.md), [physical-validation.md](../physical-validation.md) |
 | Validated hardware | [hardware-support.md](../hardware-support.md) |
 
 Approved architectural requirements for the foundation appliance are documented
 in accepted ADRs and the Milestone 1 implementation and engineering
-specifications. No reviewed contradiction was found between those sources and
-the implemented image, scripts, or validation records.
+specifications.
 
 ---
 
@@ -176,8 +176,10 @@ metadata workflow is implemented for the full v0.1.0 gate set.
 
 # Known Limitations
 
-- Local display output is not guaranteed on physical hardware without
-  framebuffer or GPU drivers.
+- Local display is for commissioning only; production nodes do not keep a
+  monitor or keyboard attached
+- Unsupported hardware may still show no local output if UEFI framebuffer is
+  unavailable
 - Only hardware listed in [hardware-support.md](../hardware-support.md) is
   validated for v0.1.0 foundation testing.
 - USB-source installation to internal SATA or NVMe targets remains Milestone 3
@@ -192,6 +194,8 @@ Milestone 1 foundation work ends with a bootable, reproducible, headless
 appliance that:
 
 - boots through UEFI and GRUB
+- shows boot messages and a commissioning ready message on `tty1` when a monitor
+  is attached
 - mounts persistent storage
 - acquires network, DNS, and time synchronization
 - provisions SSH administrator access

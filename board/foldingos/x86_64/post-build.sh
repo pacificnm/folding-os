@@ -60,6 +60,9 @@ ln -snf \
   /usr/lib/systemd/system/foldingos-ssh-provision.service \
   "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/foldingos-ssh-provision.service"
 ln -snf \
+  /usr/lib/systemd/system/foldingos-boot-status.service \
+  "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/foldingos-boot-status.service"
+ln -snf \
   /usr/lib/systemd/system/systemd-networkd.service \
   "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/systemd-networkd.service"
 ln -snf \

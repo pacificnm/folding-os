@@ -312,6 +312,9 @@ Required built-in capabilities include:
 - common wired Ethernet support selected for validated physical hardware
 - namespaces, seccomp, cgroups, and capabilities required by systemd hardening
 - random-number generation suitable for node identity and SSH host keys
+- EFI framebuffer and framebuffer-console support required for local
+  commissioning display on `tty1`, as defined by
+  [ADR-0015](../adr/0015-local-commissioning-display.md)
 
 Drivers not required by the QEMU reference platform or validated physical
 hardware should remain disabled or modular.
@@ -392,6 +395,7 @@ foldingosctl config validate [--all | <domain>]
 foldingosctl config effective <domain>
 foldingosctl config activate <domain> <candidate>
 foldingosctl identity ensure
+foldingosctl boot status
 foldingosctl provision ssh
 foldingosctl storage expand-data
 foldingosctl fah acquire
@@ -710,6 +714,41 @@ The sudo policy is:
 ```text
 foldingos-admin ALL=(ALL:ALL) NOPASSWD: ALL
 ```
+
+---
+
+# Local Commissioning Display
+
+Local commissioning display is defined by
+[ADR-0015](../adr/0015-local-commissioning-display.md).
+
+The image must provide `foldingos-boot-status.service` as a `Type=oneshot`
+service that:
+
+1. starts after `network-online.target`
+2. runs `/usr/bin/foldingosctl boot status`
+3. writes boot-status output to `/dev/tty1` and `/dev/console`
+4. does not start `getty`, local login, or keyboard-driven administration
+
+Successful ready output format:
+
+```text
+FoldingOS 0.1.0 ready
+Address: 192.168.4.32
+SSH: foldingos-admin@192.168.4.32
+```
+
+Rules:
+
+- line 1 uses `PRETTY_NAME` or `VERSION` from `/usr/lib/os-release`
+- line 2 prints the selected routable IPv4 address from `networkctl` or
+  equivalent appliance tooling
+- line 3 prints `foldingos-admin@<address>`
+- example addresses in documentation are illustrative only
+- if no routable IPv4 address is available, the service writes a failure status
+  instead of inventing an address
+
+The service is enabled in `multi-user.target` and must not block SSH startup.
 
 ---
 
@@ -1093,6 +1132,7 @@ foldingos-journal-flush.service
 foldingos-identity.service
 foldingos-config-validate.service
 foldingos-ssh-provision.service
+foldingos-boot-status.service
 sshd.service
 systemd-networkd.service
 systemd-networkd-wait-online.service
@@ -1123,6 +1163,7 @@ foldingos-config-validate.service
   -> systemd-networkd.service
   -> systemd-networkd-wait-online.service
   -> network-online.target
+     -> foldingos-boot-status.service
      -> systemd-timesyncd.service
         -> systemd-time-wait-sync.service
            -> foldingos-fah-acquire.service
@@ -1574,9 +1615,10 @@ Implementation should proceed in this order:
 5. persistent directories and journald
 6. node identity, TOML validation, and configuration activation
 7. administrator account, SSH policy, and EFI key provisioning
-8. FAH manifest, acquisition, verification, activation, and service
-9. automated QEMU acceptance suite
-10. reproducibility verification and physical hardware validation
+8. local commissioning display on UEFI framebuffer
+9. FAH manifest, acquisition, verification, activation, and service
+10. automated QEMU acceptance suite
+11. reproducibility verification and physical hardware validation
 
 Each step must add its required automated tests before proceeding to dependent
 steps.
