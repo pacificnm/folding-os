@@ -1,0 +1,16 @@
+[Unit]
+Description=FoldingOS supervisor provisioning API
+Requires=foldingos-installation-role.service
+After=foldingos-installation-role.service network-online.target
+Wants=network-online.target
+ConditionPathExists=/data/config/installation-role
+
+[Service]
+Type=simple
+ExecCondition=/bin/sh -c 'grep -qx supervisor /data/config/installation-role'
+ExecStart=/usr/bin/foldingosctl provision serve
+Restart=on-failure
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target

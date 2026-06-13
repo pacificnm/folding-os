@@ -70,6 +70,14 @@ type upstreamRelease struct {
 }
 
 func requireSupervisorRole() error {
+	return requireInstallationRole("supervisor")
+}
+
+func requireAgentRole() error {
+	return requireInstallationRole("agent")
+}
+
+func requireInstallationRole(expected string) error {
 	content, err := os.ReadFile(activeInstallationRole)
 	if err != nil {
 		return err
@@ -78,8 +86,8 @@ func requireSupervisorRole() error {
 	if err != nil {
 		return err
 	}
-	if role != "supervisor" {
-		return fmt.Errorf("registry operations require supervisor role, found %q", role)
+	if role != expected {
+		return fmt.Errorf("operation requires %s role, found %q", expected, role)
 	}
 	return nil
 }

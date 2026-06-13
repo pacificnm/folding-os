@@ -48,6 +48,21 @@ func dispatch(args []string) error {
 	if len(args) == 2 && args[0] == "provision" && args[1] == "role" {
 		return provisionRole()
 	}
+	if len(args) == 2 && args[0] == "provision" && args[1] == "serve" {
+		return provisionServe()
+	}
+	if len(args) == 2 && args[0] == "provision" && args[1] == "enroll" {
+		return provisionEnroll()
+	}
+	if len(args) == 2 && args[0] == "provision" && args[1] == "check-version" {
+		return provisionCheckVersion()
+	}
+	if len(args) == 2 && args[0] == "provision" && args[1] == "list-enrollments" {
+		return provisionListEnrollments()
+	}
+	if len(args) >= 3 && args[0] == "provision" && args[1] == "assign" {
+		return provisionAssign(args[2:])
+	}
 	if len(args) == 2 && args[0] == "registry" && args[1] == "import-bootstrap" {
 		return registryImportBootstrap()
 	}
