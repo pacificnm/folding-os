@@ -1,0 +1,2 @@
+# Folding@home acquisition requires synchronized kernel time before HTTPS download.
+enable systemd-time-wait-sync.service

@@ -1,0 +1,12 @@
+[Unit]
+Description=Schedule Folding@home client acquisition retries
+Requires=foldingos-fah-acquire.service
+
+[Timer]
+OnBootSec=1min
+OnUnitInactiveSec=1min
+AccuracySec=1s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

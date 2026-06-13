@@ -21,12 +21,10 @@ FOUNDATION_UNITS = {
     "var-log-journal.mount",
 }
 FAH_RUNTIME_UNITS = {
-    "foldingos-fah-prepare.service",
-    "folding-at-home.service",
-}
-DEFERRED_FAH_UNITS = {
     "foldingos-fah-acquire.service",
     "foldingos-fah-acquire.timer",
+    "foldingos-fah-prepare.service",
+    "folding-at-home.service",
 }
 REQUIRED_LINKS = {
     "etc/systemd/system/local-fs.target.wants/foldingos-data-expand.service":
@@ -61,6 +59,10 @@ REQUIRED_LINKS = {
         "/usr/lib/systemd/system/systemd-resolved.service",
     "etc/systemd/system/sysinit.target.wants/systemd-timesyncd.service":
         "/usr/lib/systemd/system/systemd-timesyncd.service",
+    "etc/systemd/system/sysinit.target.wants/systemd-time-wait-sync.service":
+        "/usr/lib/systemd/system/systemd-time-wait-sync.service",
+    "etc/systemd/system/timers.target.wants/foldingos-fah-acquire.timer":
+        "/usr/lib/systemd/system/foldingos-fah-acquire.timer",
 }
 UNIT_REQUIREMENTS = {
     "foldingos-data-expand.service": {
@@ -150,6 +152,22 @@ UNIT_REQUIREMENTS = {
             "/run/foldingos/fah",
         },
     },
+    "foldingos-fah-acquire.service": {
+        ("Unit", "After"): {
+            "network-online.target",
+            "systemd-time-wait-sync.service",
+            "data.mount",
+        },
+        ("Unit", "Wants"): {"network-online.target"},
+        ("Service", "Type"): {"oneshot"},
+    },
+    "foldingos-fah-acquire.timer": {
+        ("Unit", "Requires"): {"foldingos-fah-acquire.service"},
+        ("Timer", "OnBootSec"): {"1min"},
+        ("Timer", "OnUnitInactiveSec"): {"1min"},
+        ("Timer", "AccuracySec"): {"1s"},
+        ("Timer", "Persistent"): {"true"},
+    },
 }
 FAILURE_ISOLATION_FORBIDDEN_REQUIRES = {
     "foldingos-identity.service": {
@@ -177,6 +195,12 @@ FAILURE_ISOLATION_FORBIDDEN_REQUIRES = {
     "folding-at-home.service": {
         "network-online.target",
         "systemd-time-wait-sync.service",
+    },
+    "foldingos-fah-acquire.service": {
+        "var-log-journal.mount",
+        "foldingos-journal-flush.service",
+        "folding-at-home.service",
+        "foldingos-fah-prepare.service",
     },
 }
 
@@ -266,7 +290,6 @@ def main():
             name
             for name in members
             if "foldops" in name.lower()
-            or any(unit in name for unit in DEFERRED_FAH_UNITS)
         ]
         if forbidden:
             fail(f"premature or undocumented runtime unit is present: {forbidden[0]}")
@@ -338,8 +361,7 @@ def main():
             fail(f"foundation unit ordering cycle found: {' -> '.join(cycle)}")
 
     print("FoldingOS foundation systemd graph verified.")
-    print("FAH prepare and runtime units are present.")
-    print("Deferred FAH acquire units remain absent for issue #20.")
+    print("Folding@home acquisition, prepare, and runtime units are present.")
     return 0
 
 
