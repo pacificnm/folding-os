@@ -43,9 +43,22 @@ disk.
 The complete bootable image may be written directly to the intended appliance
 storage.
 
-After flashing, administrator public keys are placed on the EFI System
-Partition as defined by
+Prepare removable boot media or directly attached storage with
+`scripts/make-bootable-usb`. The script writes the release image, relocates the
+backup GPT header when the target device is larger than the 4 GiB release
+image, verifies the EFI bootloader layout, and can stage administrator public
+keys on the EFI System Partition as defined by
 [ADR-0007](adr/0007-first-boot-administrator-and-ssh-provisioning.md).
+
+```bash
+sudo ./scripts/make-bootable-usb \
+  --ssh-public-key /path/to/admin-key.pub \
+  /dev/sdX \
+  build/output/images/foldingos-x86_64-0.1.0.img
+```
+
+For internal disks written from another machine, use the whole-disk device node
+for the target storage. Do not target a partition path such as `/dev/sdX1`.
 
 The equivalent direct-flash mechanism for selecting a fixed installation role
 before first boot remains to be defined. Role-specific services must not be
@@ -56,7 +69,7 @@ implemented until that mechanism is approved.
 The same image may be booted from USB media in installer mode:
 
 ```text
-Flash FoldingOS image to USB
+Prepare USB media with scripts/make-bootable-usb
 ↓
 Boot USB and select installer mode
 ↓

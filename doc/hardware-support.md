@@ -136,6 +136,22 @@ Expected storage technologies include:
 
 Future recommendations should prioritize reliability over cost.
 
+## Boot Media Preparation
+
+Release images are 4 GiB raw GPT disk images. USB sticks and other removable
+media are often much larger. Writing the image with `dd` alone leaves the backup
+GPT header at the image end and can make UEFI firmware refuse to boot the
+device.
+
+Administrators must prepare boot media with
+[scripts/make-bootable-usb](../scripts/make-bootable-usb). The script writes the
+release image, relocates the backup GPT header when required, verifies the EFI
+bootloader layout, and can stage administrator SSH public keys before first
+boot.
+
+Physical validation, installer USB workflows, and direct-flash recovery all use
+this preparation step when the target media is larger than the release image.
+
 ---
 
 # Networking
@@ -217,6 +233,16 @@ Future releases should publish a compatibility matrix documenting:
 - known limitations
 
 Transparency is preferred over unsupported claims.
+
+## v0.1.0 Validated Physical Systems
+
+A system is listed here only after it completes
+[physical-validation.md](physical-validation.md) and a passing record is
+committed under `validation/`.
+
+| Manufacturer | Model | Firmware | Storage transport | Validation record | Notes |
+| --- | --- | --- | --- | --- | --- |
+| Dell | OptiPlex Micro | Dell UEFI | USB | [appliance-physical-0.1.0.json](../validation/appliance-physical-0.1.0.json) | Headless validation over wired Ethernet; local display remains blank without framebuffer drivers |
 
 ---
 

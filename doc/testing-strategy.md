@@ -361,6 +361,21 @@ Expected recovery behavior should be documented.
 
 ---
 
+# Boot Media Preparation
+
+Physical validation and installer testing must prepare USB or other removable
+boot media with `scripts/make-bootable-usb`.
+
+The script is required because the release artifact is a fixed 4 GiB raw GPT
+image. Larger removable devices need backup GPT relocation before UEFI firmware
+can boot them reliably. The script also verifies the EFI bootloader layout and
+can stage administrator SSH public keys on the EFI System Partition.
+
+Manual `dd` without `sgdisk -e` is not an approved preparation method for
+physical validation.
+
+---
+
 # Hardware Testing
 
 Supported hardware should undergo validation for:
@@ -380,7 +395,8 @@ Supported hardware should undergo validation for:
 Hardware compatibility should be documented separately.
 
 For a physical x86_64 UEFI system to be listed as validated for a release, it
-must complete the release acceptance criteria and additionally:
+must complete the procedure in
+[physical-validation.md](physical-validation.md) and additionally:
 
 - boot from the release image using UEFI without legacy BIOS compatibility
 

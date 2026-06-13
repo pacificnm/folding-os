@@ -92,10 +92,13 @@ scripts/
   check-host-tools
   clean
   fetch-sources
+  make-bootable-usb
   test-qemu
   verify-reproducible
+  run-physical-acceptance
   verify-config
   verify-persistent-logging
+  verify-physical-validation-record
   verify-systemd-graph
 
 tools/
@@ -1287,12 +1290,31 @@ Required user-facing commands:
 ./scripts/build
 ./scripts/build-a
 ./scripts/build-b
+./scripts/make-bootable-usb
 ./scripts/test-qemu
 ./scripts/verify-reproducible
 ./scripts/verify-config
 ./scripts/verify-persistent-logging
+./scripts/verify-physical-validation-record
 ./scripts/verify-systemd-graph
 ```
+
+Physical hardware validation uses:
+
+```bash
+sudo ./scripts/make-bootable-usb --ssh-public-key <public-key> <device> [image]
+./scripts/run-physical-acceptance <host> <ssh-private-key> [port]
+./scripts/verify-physical-validation-record validation/appliance-physical-0.1.0.json build/output/images/foldingos-x86_64-0.1.0.img
+```
+
+The committed validation record, procedure, and verification requirements are
+defined by [physical-validation.md](../physical-validation.md).
+
+`scripts/make-bootable-usb` writes a release image to removable block storage,
+relocates the backup GPT header when the target device is larger than the
+release image, verifies the EFI bootloader layout, and can stage administrator
+SSH public keys on the EFI System Partition before first boot. It refuses host
+system disks, mounted targets, and partition device paths.
 
 `scripts/check-host-tools` verifies the Debian 13 amd64 build-host baseline,
 all required build and test tools, and the OVMF firmware files. It reports the
@@ -1525,6 +1547,10 @@ Physical validation must verify, at minimum:
 Until this gate is satisfied, `physical_validation_complete` must be `false`.
 Any build produced while that value is `false` is a development build only and
 is not eligible for public release.
+
+The Milestone 1 foundation acceptance procedure, validation record format, and
+record verification command are defined by
+[physical-validation.md](../physical-validation.md).
 
 ## Additional Release Gates
 

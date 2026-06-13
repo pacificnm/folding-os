@@ -1,0 +1,394 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export LC_ALL=C
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+IMAGES_DIR="${PROJECT_ROOT}/build/output/images"
+DEFAULT_IMAGE="${IMAGES_DIR}/foldingos-x86_64-0.1.0.img"
+EFI_PARTITION_OFFSET=1048576
+SKIP_CONFIRM=0
+SSH_PUBLIC_KEY=""
+DEVICE=""
+IMAGE=""
+
+usage() {
+  cat <<'EOF'
+Usage: ./scripts/make-bootable-usb [options] <device> [image]
+
+Write a FoldingOS release image to USB or other removable block storage and
+prepare it for UEFI boot. When the target device is larger than the release
+image, the script relocates the backup GPT header so physical UEFI firmware can
+boot the stick.
+
+Options:
+  --yes                 Skip the interactive confirmation prompt
+  --ssh-public-key FILE Stage an administrator public key at:
+                        /boot/efi/foldingos/provision/authorized_keys
+
+Arguments:
+  device                Whole-disk block device (for example /dev/sdb)
+  image                 Release image path (default:
+                        build/output/images/foldingos-x86_64-0.1.0.img)
+
+The device must not be a partition path such as /dev/sdb1.
+
+See doc/physical-validation.md for the full physical validation procedure.
+EOF
+}
+
+find_tool() {
+  local name="$1"
+  local candidate
+
+  for candidate in "/usr/sbin/${name}" "/sbin/${name}"; do
+    if [ -x "${candidate}" ]; then
+      printf '%s\n' "${candidate}"
+      return
+    fi
+  done
+
+  command -v "${name}" 2>/dev/null || {
+    echo "ERROR: Required tool is unavailable: ${name}" >&2
+    exit 1
+  }
+}
+
+partition_path() {
+  local device="$1"
+  local number="$2"
+
+  if [[ "${device}" == *"nvme"* ]] || [[ "${device}" == *"mmcblk"* ]]; then
+    printf '%sp%s\n' "${device}" "${number}"
+    return
+  fi
+
+  printf '%s%s\n' "${device}" "${number}"
+}
+
+efi_mtools_target() {
+  local device="$1"
+
+  if [ -b "${device}" ]; then
+    partition_path "${device}" 1
+    return
+  fi
+
+  printf '%s@@%s\n' "${device}" "${EFI_PARTITION_OFFSET}"
+}
+
+is_whole_disk() {
+  local device="$1"
+
+  if [[ "${device}" =~ ^/dev/(sd[a-z]+|vd[a-z]+|hd[a-z]+)$ ]]; then
+    return 0
+  fi
+  if [[ "${device}" =~ ^/dev/nvme[0-9]+n[0-9]+$ ]]; then
+    return 0
+  fi
+  if [[ "${device}" =~ ^/dev/mmcblk[0-9]+$ ]]; then
+    return 0
+  fi
+
+  return 1
+}
+
+system_disk() {
+  local source
+
+  source="$(findmnt -n -o SOURCE / 2>/dev/null || true)"
+  if [ -z "${source}" ]; then
+    return 1
+  fi
+
+  lsblk -no PKNAME "${source}" 2>/dev/null | awk 'NF { print $1; exit }'
+}
+
+device_mounted_paths() {
+  local device="$1"
+  local child mountpoint
+
+  while IFS= read -r child; do
+    [ -n "${child}" ] || continue
+    mountpoint="$(lsblk -no MOUNTPOINT "/dev/${child}" 2>/dev/null || true)"
+    if [ -n "${mountpoint}" ]; then
+      printf '%s\n' "${mountpoint}"
+    fi
+  done < <(lsblk -ln -o NAME "${device}" | tail -n +2)
+}
+
+validate_ssh_public_key_file() {
+  local key_file="$1"
+
+  if [ ! -f "${key_file}" ]; then
+    echo "ERROR: SSH public key file does not exist: ${key_file}" >&2
+    exit 1
+  fi
+
+  if ! grep -Eq '^(ssh-(ed25519|rsa|ecdsa)|ecdsa-sha2-nistp256) ' "${key_file}"; then
+    echo "ERROR: SSH public key file does not contain a valid public key line: ${key_file}" >&2
+    exit 1
+  fi
+
+  if grep -Eq '^(-----BEGIN|-----BEGIN OPENSSH PRIVATE KEY-----)' "${key_file}"; then
+    echo "ERROR: Refusing to stage a private key file: ${key_file}" >&2
+    exit 1
+  fi
+}
+
+verify_release_image() {
+  local image="$1"
+  local checksum_file="${image}.sha256"
+  local image_size
+
+  if [ ! -f "${image}" ]; then
+    echo "ERROR: Release image does not exist: ${image}" >&2
+    exit 1
+  fi
+
+  if [ ! -r "${image}" ]; then
+    echo "ERROR: Release image is not readable: ${image}" >&2
+    exit 1
+  fi
+
+  image_size="$(stat -c '%s' "${image}")"
+  if [ "${image_size}" -lt 4294967296 ]; then
+    echo "ERROR: Release image is smaller than the required 4 GiB layout: ${image}" >&2
+    exit 1
+  fi
+
+  if [ -f "${checksum_file}" ]; then
+    echo "Verifying image checksum"
+    (
+      cd "$(dirname "${image}")"
+      sha256sum --check --status "$(basename "${checksum_file}")"
+    )
+  fi
+}
+
+verify_boot_structure() {
+  local device="$1"
+  local efi_target
+  local efi_files
+  local efi_foldingos_directory
+
+  efi_target="$(efi_mtools_target "${device}")"
+  efi_files="$("${MDIR}" -b -i "${efi_target}" \
+    ::/EFI/BOOT/BOOTX64.EFI \
+    ::/boot/grub/grub.cfg)"
+  efi_foldingos_directory="$("${MDIR}" -b -i "${efi_target}" ::/foldingos)"
+
+  if ! grep -Fq "BOOTX64.EFI" <<<"${efi_files}"; then
+    echo "ERROR: EFI fallback bootloader is absent from the written device." >&2
+    exit 1
+  fi
+  if ! grep -Fq "grub.cfg" <<<"${efi_files}"; then
+    echo "ERROR: GRUB configuration is absent from the EFI partition." >&2
+    exit 1
+  fi
+  if ! grep -Fq "::/foldingos/provision/" <<<"${efi_foldingos_directory}"; then
+    echo "ERROR: EFI provisioning directory is absent from the written device." >&2
+    exit 1
+  fi
+}
+
+verify_gpt_layout() {
+  local device="$1"
+  local partition_info
+
+  partition_info="$("${SGDISK}" -i 1 "${device}")"
+  if ! grep -Fq 'C12A7328-F81F-11D2-BA4B-00A0C93EC93B' <<<"${partition_info}"; then
+    echo "ERROR: Partition 1 is not an EFI System Partition after preparation." >&2
+    echo "${partition_info}" >&2
+    exit 1
+  fi
+  if ! grep -Fq "Partition name: 'FOLDINGOS_EFI'" <<<"${partition_info}"; then
+    echo "ERROR: Partition 1 does not have the expected FoldingOS EFI name." >&2
+    echo "${partition_info}" >&2
+    exit 1
+  fi
+}
+
+stage_ssh_public_key() {
+  local device="$1"
+  local key_file="$2"
+  local efi_target
+
+  validate_ssh_public_key_file "${key_file}"
+  efi_target="$(efi_mtools_target "${device}")"
+  "${MCOPY}" -o -i "${efi_target}" \
+    "${key_file}" ::/foldingos/provision/authorized_keys
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --yes)
+      SKIP_CONFIRM=1
+      shift
+      ;;
+    --ssh-public-key)
+      if [ "$#" -lt 2 ]; then
+        usage >&2
+        exit 2
+      fi
+      SSH_PUBLIC_KEY="$2"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -*)
+      echo "ERROR: Unknown option: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+    *)
+      if [ -z "${DEVICE}" ]; then
+        DEVICE="$1"
+      elif [ -z "${IMAGE}" ]; then
+        IMAGE="$1"
+      else
+        usage >&2
+        exit 2
+      fi
+      shift
+      ;;
+  esac
+done
+
+if [ -z "${DEVICE}" ]; then
+  usage >&2
+  exit 2
+fi
+
+if [ -z "${IMAGE}" ]; then
+  IMAGE="${DEFAULT_IMAGE}"
+fi
+
+if [ "$(id -u)" -ne 0 ]; then
+  echo "ERROR: Root privileges are required to write block devices." >&2
+  echo "Re-run with sudo." >&2
+  exit 1
+fi
+
+if ! is_whole_disk "${DEVICE}"; then
+  echo "ERROR: Device must be a whole-disk block device, not a partition: ${DEVICE}" >&2
+  exit 1
+fi
+
+if [ ! -b "${DEVICE}" ]; then
+  echo "ERROR: Device is not a block special file: ${DEVICE}" >&2
+  exit 1
+fi
+
+DD="$(find_tool dd)"
+LSBLK="$(find_tool lsblk)"
+BLOCKDEV="$(find_tool blockdev)"
+SGDISK="$(find_tool sgdisk)"
+SYNC="$(find_tool sync)"
+MCOPY="$(find_tool mcopy)"
+MDIR="$(find_tool mdir)"
+
+verify_release_image "${IMAGE}"
+
+image_size="$(stat -c '%s' "${IMAGE}")"
+device_size="$("${BLOCKDEV}" --getsize64 "${DEVICE}")"
+device_name="$(basename "${DEVICE}")"
+host_system_disk="$(system_disk || true)"
+
+if [ -n "${host_system_disk}" ] && [ "${device_name}" = "${host_system_disk}" ]; then
+  echo "ERROR: Refusing to write the host system disk: ${DEVICE}" >&2
+  exit 1
+fi
+
+if [ "${device_size}" -lt "${image_size}" ]; then
+  echo "ERROR: Target device is smaller than the release image." >&2
+  echo "Device size: ${device_size} bytes" >&2
+  echo "Image size:  ${image_size} bytes" >&2
+  exit 1
+fi
+
+mounted_paths="$(device_mounted_paths "${DEVICE}" || true)"
+if [ -n "${mounted_paths}" ]; then
+  echo "ERROR: Target device has mounted filesystems:" >&2
+  printf '%s\n' "${mounted_paths}" >&2
+  echo "Unmount them before continuing." >&2
+  exit 1
+fi
+
+echo "FoldingOS bootable USB preparation"
+echo
+echo "Image:  ${IMAGE}"
+echo "Device: ${DEVICE}"
+"${LSBLK}" -o NAME,MODEL,SIZE,TYPE,TRAN,MOUNTPOINTS "${DEVICE}"
+echo
+if [ "${device_size}" -gt "${image_size}" ]; then
+  echo "The target device is larger than the release image."
+  echo "The backup GPT header will be relocated to the device end."
+  echo
+fi
+if [ -n "${SSH_PUBLIC_KEY}" ]; then
+  echo "Administrator SSH public key: ${SSH_PUBLIC_KEY}"
+  echo
+fi
+echo "WARNING: This will destroy all existing data on ${DEVICE}."
+echo
+
+if [ "${SKIP_CONFIRM}" -ne 1 ]; then
+  read -r -p "Type the device name (${device_name}) to continue: " confirmation
+  if [ "${confirmation}" != "${device_name}" ]; then
+    echo "Aborted."
+    exit 1
+  fi
+fi
+
+echo "Writing release image"
+"${DD}" if="${IMAGE}" of="${DEVICE}" bs=4M status=progress conv=fsync
+"${SYNC}"
+
+if [ "${device_size}" -gt "${image_size}" ]; then
+  echo "Relocating backup GPT header"
+  "${SGDISK}" -e "${DEVICE}"
+  "${SYNC}"
+fi
+
+partprobe_available=0
+if command -v partprobe >/dev/null 2>&1; then
+  partprobe_available=1
+  partprobe "${DEVICE}" || true
+  "${SYNC}"
+fi
+
+verify_gpt_layout "${DEVICE}"
+verify_boot_structure "${DEVICE}"
+
+if [ -n "${SSH_PUBLIC_KEY}" ]; then
+  echo "Staging administrator SSH public key"
+  stage_ssh_public_key "${DEVICE}" "${SSH_PUBLIC_KEY}"
+fi
+
+efi_partition="$(partition_path "${DEVICE}" 1)"
+echo
+echo "Bootable media prepared successfully."
+echo
+echo "EFI partition: ${efi_partition}"
+echo "Boot path:     UEFI fallback loader at EFI/BOOT/BOOTX64.EFI"
+echo
+echo "On the target system:"
+echo "  1. Disable Secure Boot for initial validation when firmware requires it."
+echo "  2. Select the UEFI USB entry in the firmware boot menu."
+echo "  3. Confirm GRUB loads the FoldingOS entry."
+if [ -n "${SSH_PUBLIC_KEY}" ]; then
+  echo "  4. After first boot, SSH to foldingos-admin@<dhcp-address> using the matching private key."
+else
+  echo "  4. Stage an administrator public key before first boot, or rerun this script with --ssh-public-key."
+fi
+if [ "${partprobe_available}" -eq 0 ]; then
+  echo
+  echo "Note: partprobe is unavailable. If the host does not expose ${efi_partition}"
+  echo "immediately, unplug and reinsert the media or reboot the host."
+fi

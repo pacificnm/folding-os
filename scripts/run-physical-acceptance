@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export LC_ALL=C
+
+usage() {
+  cat <<'EOF'
+Usage: ./scripts/run-physical-acceptance <host> <ssh-private-key> [port]
+
+Run Milestone 1 foundation acceptance checks against a provisioned FoldingOS
+node over SSH. See doc/physical-validation.md for the full physical validation
+procedure.
+EOF
+}
+
+if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
+  usage >&2
+  exit 2
+fi
+
+HOST="$1"
+IDENTITY="$2"
+PORT="${3:-22}"
+LOG="${RUN_PHYSICAL_ACCEPTANCE_LOG:-/tmp/foldingos-physical-acceptance.log}"
+
+if [ ! -f "${IDENTITY}" ]; then
+  echo "ERROR: SSH private key does not exist: ${IDENTITY}" >&2
+  exit 1
+fi
+
+SSH=(ssh
+  -F /dev/null
+  -i "${IDENTITY}"
+  -p "${PORT}"
+  -o BatchMode=yes
+  -o ConnectTimeout=10
+  -o LogLevel=ERROR
+  -o StrictHostKeyChecking=no
+  -o UserKnownHostsFile=/dev/null
+  "foldingos-admin@${HOST}"
+)
+
+if ! "${SSH[@]}" true >/dev/null 2>&1; then
+  echo "ERROR: SSH access to foldingos-admin@${HOST}:${PORT} is unavailable." >&2
+  exit 1
+fi
+
+if ! "${SSH[@]}" sh -s >"${LOG}" 2>&1 <<'EOF'
+set -eux
+test "$(id -u)" = 1000
+sudo -n true
+sudo grep -Fxq "foldingos-admin:NP:::::::" /etc/shadow
+test "$(readlink /etc/os-release)" = ../usr/lib/os-release
+test "$(cat /usr/lib/os-release)" = "NAME=\"FoldingOS\"
+ID=foldingos
+VERSION=\"0.1.0\"
+VERSION_ID=\"0.1.0\"
+PRETTY_NAME=\"FoldingOS 0.1.0\""
+findmnt /boot/efi >/dev/null
+findmnt / >/dev/null
+findmnt /data >/dev/null
+interface="$(networkctl --no-legend --no-pager list | awk '$2 == "routable" { print $1; exit }')"
+if [ -z "${interface}" ]; then
+  interface="$(networkctl --no-legend --no-pager list | awk 'NR > 1 { print $1; exit }')"
+fi
+test -n "${interface}"
+networkctl status --no-pager "${interface}" >/dev/null
+systemctl is-active --quiet systemd-networkd.service
+systemctl is-active --quiet systemd-resolved.service
+systemctl is-active --quiet systemd-timesyncd.service
+systemctl is-active --quiet foldingos-data-expand.service
+systemctl is-active --quiet foldingos-persistent-dirs.service
+systemctl is-active --quiet foldingos-journal-dir.service
+systemctl is-active --quiet var-log-journal.mount
+systemctl is-active --quiet foldingos-journal-flush.service
+systemctl is-active --quiet foldingos-identity.service
+systemctl is-active --quiet foldingos-config-validate.service
+systemctl is-active --quiet foldingos-ssh-provision.service
+systemctl is-active --quiet sshd.service
+test "$(sudo find /data/logs/journal -maxdepth 0 -user root -group systemd-journal -perm 2755 -print)" = /data/logs/journal
+attempts=0
+until resolvectl query time.cloudflare.com >/dev/null 2>&1; do
+  attempts=$((attempts + 1))
+  test "${attempts}" -lt 30
+  sleep 1
+done
+sudo sshd -T | grep -Fxq "permitrootlogin no"
+sudo sshd -T | grep -Fxq "passwordauthentication no"
+sudo sshd -T | grep -Fxq "permitemptypasswords no"
+sudo sshd -T | grep -Fxq "kbdinteractiveauthentication no"
+sudo sshd -T | grep -Fxq "pubkeyauthentication yes"
+sudo sshd -T | grep -Fxq "allowusers foldingos-admin"
+attempts=0
+while [ "$(timedatectl show -p NTPSynchronized --value)" != yes ]; do
+  attempts=$((attempts + 1))
+  test "${attempts}" -lt 180
+  sleep 1
+done
+test -s /data/config/node-id
+test -s /data/config/ssh/authorized_keys
+test ! -e /boot/efi/foldingos/provision/authorized_keys
+EOF
+then
+  echo "ERROR: Physical acceptance checks failed for ${HOST}:${PORT}." >&2
+  echo "Diagnostic log: ${LOG}" >&2
+  cat "${LOG}" >&2
+  exit 1
+fi
+
+echo "Physical acceptance checks passed for ${HOST}:${PORT}."
+echo "Diagnostic log: ${LOG}"
