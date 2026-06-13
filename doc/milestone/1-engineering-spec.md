@@ -1632,3 +1632,13 @@ Milestone 1 foundation implementation and validation are complete as of
 [operations.md](../operations.md). The readiness review, issue closure matrix,
 non-goals verification, and remaining v0.1.0 release-gate status are recorded
 in [1-readiness-review.md](1-readiness-review.md).
+
+---
+
+# Milestone 2 Readiness Review
+
+Milestone 2 Folding@home runtime implementation and validation are complete as
+of 2026-06-13. Operator acquisition, service, retry, and recovery procedures are
+documented in [operations.md](../operations.md). The readiness review, issue
+closure matrix, licensing disclosure, and v0.1.0 runtime gate status are recorded
+in [2-readiness-review.md](2-readiness-review.md).

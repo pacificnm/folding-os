@@ -34,6 +34,8 @@ This index groups the project's documentation by purpose.
   implementation blueprint for the first release
 - [Milestone 1 readiness review](milestone/1-readiness-review.md) - foundation
   completion status and validation evidence
+- [Milestone 2 readiness review](milestone/2-readiness-review.md) - Folding@home
+  runtime completion status and validation evidence
 - [Installer](installer.md) - approved combined-image installation architecture
 - [Installer engineering specification](milestone/3-engineering-spec.md) -
   approved concrete implementation contract for the combined-image installer

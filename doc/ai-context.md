@@ -84,8 +84,10 @@ precedence or silently choose one statement.
   systems are validated per release rather than universally supported.
 - Milestone 1 foundation implementation and validation are complete; see
   [milestone/1-readiness-review.md](milestone/1-readiness-review.md).
-- Operator build, deployment, and recovery procedures are in
-  [operations.md](operations.md).
+- Milestone 2 Folding@home runtime implementation and validation are complete;
+  see [milestone/2-readiness-review.md](milestone/2-readiness-review.md).
+- Operator build, deployment, recovery, and Folding@home runtime procedures are
+  in [operations.md](operations.md).
 - Next planned platform: Raspberry Pi 5 using ARM64.
 - Initial networking may be IPv4-only; IPv6 is a planned first-class
   capability.
