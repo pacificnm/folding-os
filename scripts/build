@@ -20,6 +20,8 @@ BUILDROOT_ASSETS=(
   "../../../packages/foldingosctl/src/config.go"
   "../../../packages/foldingosctl/src/files.go"
   "../../../packages/foldingosctl/src/identity.go"
+  "../../../packages/foldingosctl/src/boot.go"
+  "../../../packages/foldingosctl/src/fah.go"
   "../../../packages/foldingosctl/src/main.go"
   "../../../packages/foldingosctl/src/main_test.go"
   "../../../packages/foldingosctl/src/provision.go"

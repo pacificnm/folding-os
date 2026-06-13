@@ -371,6 +371,7 @@ PRETTY_NAME=\"FoldingOS 0.1.0\""
     systemctl is-active --quiet foldingos-persistent-dirs.service
     systemctl is-active --quiet foldingos-identity.service
     systemctl is-active --quiet foldingos-config-validate.service
+    foldingosctl fah validate-manifest
     systemctl is-active --quiet foldingos-ssh-provision.service
     systemctl is-active --quiet foldingos-boot-status.service
     systemctl is-active --quiet sshd.service
