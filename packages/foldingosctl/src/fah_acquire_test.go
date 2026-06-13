@@ -223,10 +223,6 @@ func TestFAHAcquireRequiresSynchronizedTime(t *testing.T) {
 	})
 	defer restorePrereqs()
 
-	manifest, err := parseFAHManifest(validFAHManifest)
-	if err != nil {
-		t.Fatal(err)
-	}
 	if err := fahCheckAcquisitionPrerequisites(); err == nil {
 		t.Fatal("unsynchronized time was accepted")
 	}
