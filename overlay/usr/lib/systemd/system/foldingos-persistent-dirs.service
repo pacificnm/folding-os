@@ -3,7 +3,7 @@ Description=Create FoldingOS persistent directories
 DefaultDependencies=no
 Requires=data.mount
 After=data.mount
-Before=var-log-journal.mount foldingos-identity.service foldingos-config-validate.service foldingos-ssh-provision.service
+Before=var-log-journal.mount foldingos-identity.service foldingos-config-validate.service foldingos-installation-role.service foldingos-ssh-provision.service
 
 [Service]
 Type=oneshot
