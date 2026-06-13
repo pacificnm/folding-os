@@ -139,10 +139,9 @@ Remote administration should be:
 Initial administrator and SSH-key provisioning is defined by
 [ADR-0007](adr/0007-first-boot-administrator-and-ssh-provisioning.md).
 
-Installer-capable releases use the same FoldingOS image, kernel, root
-filesystem, and package set for both appliance operation and local-console
-installation. The combined-image installer architecture is defined by
-[ADR-0013](adr/0013-combined-appliance-and-installer-image.md).
+Installer-capable releases are superseded by supervisor-led network
+provisioning. Deployment architecture is defined by
+[ADR-0016](adr/0016-network-provisioning-via-supervisor.md).
 
 Installations use one of the fixed `agent` or `supervisor` roles defined by
 [ADR-0014](adr/0014-fixed-installation-roles.md). Roles cannot be changed in

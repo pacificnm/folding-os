@@ -1,139 +1,174 @@
 # FoldingOS Update System
 
-Version: 0.1
-Status: Draft
+**Version:** 0.2
 
-## Purpose
+**Status:** Approved Architecture (supervisor-mediated updates)
 
-This document defines the scope, requirements, trust model, and unresolved decisions for the FoldingOS update system.
+---
 
-FoldingOS updates must prioritize reliability, integrity, rollback safety, and preservation of Folding@home work data.
+# Purpose
 
-## Scope
+This document defines the scope, requirements, trust model, and update workflow
+for FoldingOS operating-system image updates in supervisor-managed fleets.
+
+FoldingOS updates must prioritize reliability, integrity, rollback safety, and
+preservation of Folding@home work data.
+
+Network fleet provisioning is defined by
+[ADR-0016](adr/0016-network-provisioning-via-supervisor.md) and
+[milestone/3-engineering-spec.md](milestone/3-engineering-spec.md).
+
+---
+
+# Scope
 
 The update system covers:
 
-- Operating system image updates
-- FoldingOS agent updates
-- Approved Folding@home workload-manifest updates
-- Build/version metadata
-- Update verification
-- Rollback behavior
-- Preservation of persistent data
+- operating-system image updates for `agent` and `supervisor` nodes
+- supervisor-local image registry and upstream release polling
+- desired-version assignment and agent boot-time version checks
+- update verification and staged activation
+- preservation of approved persistent data
+- update status reporting to the supervisor and FoldOps when available
 
 The update system does not initially cover:
 
-- General-purpose package management
-- User-installed software
-- Desktop software updates
-- Arbitrary third-party packages
+- general-purpose package management
+- user-installed software
+- desktop software updates
+- arbitrary third-party packages
 
-The Folding@home client is a separately managed workload. Nodes download
+The Folding@home client remains a separately managed workload. Nodes download
 approved, pinned client artifacts directly from official Folding@home
-infrastructure. FoldOps may coordinate approved manifest rollout but does not
-serve the binaries. See
+infrastructure. See
 [ADR-0009](adr/0009-fah-acquisition-and-update-model.md).
 
-## Requirements
+---
 
-The update system should:
+# Update Philosophy
 
-- Verify update authenticity
-- Verify update integrity
-- Preserve node configuration
-- Preserve Folding@home work/checkpoint data
-- Support rollback after failed updates
-- Report update status to FoldOps when available
-- Avoid leaving nodes in a partially updated state
+FoldingOS uses image-based updates, not runtime package management.
 
-## Trust Model
-
-FoldingOS nodes should only trust updates that are:
-
-- Produced by the official build process
-- Versioned
-- Checksummed
-- Cryptographically signed
-- Retrieved from a trusted source
-
-Nodes must not install unsigned or unverifiable updates.
-
-## Update Philosophy
-
-FoldingOS should prefer image-based updates over in-place package updates.
-
-The operating system image is replaceable.
+The operating-system root filesystem is replaceable.
 
 Persistent data is not.
 
 Persistent data includes:
 
-- Node identity
-- FoldOps registration
+- node identity
+- installation role
+- FoldOps registration state
 - Folding@home configuration
-- Folding@home work data
-- Checkpoints
-- Logs, depending on retention policy
+- Folding@home work data and checkpoints
+- bounded journal history under `/data/logs/journal`
+- operator configuration under `/data/config`
 
-## Future A/B Update Model
+---
 
-A future update system may use:
+# Trust Model
 
-```text
-boot
-rootfs-a
-rootfs-b
-data
-```
+Nodes must install only images that are:
 
-The node boots from one root filesystem while updating the inactive root filesystem.
+- produced by the official FoldingOS build process
+- versioned and checksummed
+- cryptographically signed when signing is enabled for the release channel
+- present in the supervisor registry or fetched from an approved upstream origin
+  named by the supervisor
 
-If the updated system boots successfully and passes health checks, it is marked good.
+Nodes must fail closed on checksum or signature mismatch.
 
-If it fails, the system rolls back to the previous root filesystem.
+The supervisor must not publish unverified images to agents.
 
-## Health Checks
+---
 
-Post-update health checks may include:
+# Supervisor-Mediated Workflow
 
-- Successful boot
-- Network availability
-- Time synchronization
-- FoldOps agent startup
-- Folding@home startup
-- Persistent data availability
+## Upstream polling
 
-## Rollback Requirements
+The supervisor periodically polls the upstream release server. When a new
+approved image is available it:
 
-Rollback should occur when:
+1. downloads image and metadata
+2. verifies digest and signature when present
+3. stores the image in the local registry
+4. marks it ready for operator-approved rollout
 
-- The updated system fails to boot
-- Required services fail repeatedly
-- Persistent data cannot be mounted
-- Health checks fail
+## Desired version assignment
 
-Rollback should not erase configuration or Folding work data.
+The supervisor assigns a desired image version to each enrolled agent. Rollout
+may be:
 
-## Unresolved Decisions
+- fleet-wide
+- per-node
+- staged in batches
 
-The following decisions require ADRs:
+## Agent boot-time check
 
-- Exact update framework
-- A/B partition implementation
-- Signing mechanism
-- Update server model
-- FoldOps-controlled rollout behavior
-- External workload-manifest signing and publication mechanism
-- Whether automatic updates are enabled by default
-- Rollback health-check timeout
-- Whether updates can be manually triggered over SSH
+On boot each agent:
 
-## Summary
+1. queries the supervisor for its desired image version
+2. compares the desired version to the running image
+3. downloads and verifies a newer image when assigned
+4. stages the update
+5. applies it on reboot
 
-The FoldingOS update system must be boring, safe, and predictable.
+If the supervisor is unreachable, the agent continues running the current image.
+Folding@home operation must not depend on supervisor availability after initial
+installation.
 
-A failed update should not destroy a node.
+---
 
-A failed update should not destroy scientific work.
+# Milestone 3 Update Mechanism
 
-Reliability is more important than update convenience.
+Milestone 3 uses verified full-image replacement.
+
+Required behavior:
+
+- stage the new image before activation
+- verify the staged image against registry metadata
+- activate only after successful verification
+- retain the previous bootable image until the new image is verified
+- fail closed and keep the previous image on any error
+- report update outcome to the supervisor
+
+A/B root slots, automatic rollback, and signed update bundles remain planned
+enhancements beyond Milestone 3.
+
+---
+
+# Supervisor Updates
+
+The supervisor updates itself from the same registry and upstream polling model.
+
+Supervisor self-update must not delete the only verified image while agents still
+depend on that supervisor for provisioning or update coordination.
+
+---
+
+# Failure And Recovery
+
+If update staging or activation fails:
+
+- the currently bootable image remains active
+- persistent configuration and Folding@home work remain intact where the update
+  specification preserves them
+- the failure is logged and reported
+- the agent retries on a later boot or supervisor instruction
+
+If network provisioning fails before first boot:
+
+- the target disk may be unbootable
+- repeat network provisioning after correcting enrollment, networking, or image
+  availability
+
+Direct flash remains the recovery path for a single node.
+
+---
+
+# Related Documents
+
+- [ADR-0016: Network Provisioning Via Supervisor](adr/0016-network-provisioning-via-supervisor.md)
+- [Deployment and provisioning](installer.md)
+- [Milestone 3 engineering specification](milestone/3-engineering-spec.md)
+- [FoldOps integration](foldops-integration.md)
+- [Release strategy](release-strategy.md)

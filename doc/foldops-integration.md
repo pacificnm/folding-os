@@ -35,7 +35,28 @@ Management complexity belongs in FoldOps rather than on individual nodes.
 Nodes should remain simple appliances.
 
 FoldingOS uses the fixed installation roles defined by
-[ADR-0014](adr/0014-fixed-installation-roles.md).
+[ADR-0014](adr/0014-fixed-installation-roles.md) and provisions fleets through
+the supervisor model defined by
+[ADR-0016](adr/0016-network-provisioning-via-supervisor.md).
+
+---
+
+# Fleet Bootstrap
+
+The first node in a deployment is a `supervisor` installed by direct flash.
+
+The supervisor:
+
+- runs FoldOps management services
+- hosts or coordinates network boot services for agent provisioning
+- maintains a registry of approved FoldingOS release images
+- polls upstream for new releases
+- assigns desired image versions to enrolled agents
+
+Additional nodes are `agent` roles provisioned over the network by the
+supervisor. They do not require USB media or local-console installation.
+
+See [Deployment and provisioning](installer.md).
 
 ---
 
@@ -63,8 +84,11 @@ The web interface is enabled by default for the supervisor role, but it must
 not become remotely available until initial administrator and TLS provisioning
 succeeds.
 
-Roles are selected during installation and cannot be changed in place.
+Roles are assigned during provisioning and cannot be changed in place.
 Changing roles requires fresh destructive reinstallation.
+
+The supervisor role is assigned during direct-flash bootstrap. Agent roles are
+assigned by the supervisor during network provisioning.
 
 Whether the supervisor role also runs Folding@home remains unresolved.
 

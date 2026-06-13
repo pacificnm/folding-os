@@ -86,6 +86,9 @@ precedence or silently choose one statement.
   [milestone/1-readiness-review.md](milestone/1-readiness-review.md).
 - Milestone 2 Folding@home runtime implementation and validation are complete;
   see [milestone/2-readiness-review.md](milestone/2-readiness-review.md).
+- Milestone 3 network fleet provisioning is the active implementation target;
+  see [ADR-0016](adr/0016-network-provisioning-via-supervisor.md) and
+  [milestone/3-engineering-spec.md](milestone/3-engineering-spec.md).
 - Operator build, deployment, recovery, and Folding@home runtime procedures are
   in [operations.md](operations.md).
 - Next planned platform: Raspberry Pi 5 using ARM64.
@@ -97,13 +100,12 @@ precedence or silently choose one statement.
 - Local commissioning display shows boot messages and a final ready message with
   the DHCP IPv4 address on a temporarily attached monitor. See
   [ADR-0015](adr/0015-local-commissioning-display.md).
-- A future installer-capable release uses one combined appliance and installer
-  image with explicit GRUB boot modes; it does not introduce a separate
-  installer operating system.
+- A future installer-capable release used one combined appliance and installer
+  image; that approach was superseded by supervisor-led network provisioning.
+  See [ADR-0016](adr/0016-network-provisioning-via-supervisor.md).
 - FoldingOS supports fixed `agent` and `supervisor` installation roles from
-  the same combined image. The supervisor includes the FoldOps agent,
-  supervisor, and web services; its web interface requires initial
-  administrator and TLS provisioning. Roles cannot be changed in place.
+  the same release image. The supervisor is direct-flashed first; agents are
+  provisioned over the network. Roles cannot be changed in place.
 - FoldOps package artifacts are pinned and verified at Buildroot build time.
   FoldingOS does not use APT at runtime or install FoldOps packages from the
   network during installation.

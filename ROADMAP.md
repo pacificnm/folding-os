@@ -25,11 +25,15 @@ Status: **Complete** (foundation scope, 2026-06-12)
 See [doc/milestone/1-readiness-review.md](doc/milestone/1-readiness-review.md)
 for validation evidence and release-gate status.
 
-Milestones 1 and 2 together define the first working v0.1.0 release scope.
-Public v0.1.0 release publication remains blocked until Milestone 2
-Folding@home runtime gates are satisfied.
+Milestones 1 and 2 together define the first working v0.1.0 runtime scope.
+Milestone 3 adds supervisor-led network fleet provisioning. Public v0.1.0
+release publication remains blocked until all mandatory release gates in
+[doc/milestone/1-engineering-spec.md](doc/milestone/1-engineering-spec.md) are
+satisfied and release metadata finalization is implemented.
 
 ## Milestone 2: Folding@home Integration
+
+Status: **Complete** (2026-06-13)
 
 - Implement verified Folding@home client acquisition
 - Configure automatic startup
@@ -37,15 +41,23 @@ Folding@home runtime gates are satisfied.
 - Define FAH configuration management
 - Add FAH health checks
 
-## Milestone 3: Combined-Image Installer
+See [doc/milestone/2-readiness-review.md](doc/milestone/2-readiness-review.md).
 
-- Add appliance and installer GRUB boot modes
-- Add `foldingos-installer.target`
-- Implement safe local-console `foldingosctl install`
-- Add fixed `agent` and `supervisor` role selection and target provisioning
-- Provision administrator public keys onto installed targets
-- Add QEMU source-device protection and installation tests
-- Validate USB-source installation to approved SATA and NVMe targets
+## Milestone 3: Network Fleet Provisioning
+
+- Bootstrap the first supervisor by direct flash to NVMe or SATA
+- Add supervisor image registry and upstream release polling
+- Provision agent nodes over UEFI PXE/iPXE with HTTP image transfer
+- Register agents with the supervisor
+- Assign fixed `agent` and `supervisor` roles at provision time
+- Check desired image version on agent boot and stage updates
+- Validate network provisioning on approved SATA and NVMe targets
+
+See [ADR-0016](doc/adr/0016-network-provisioning-via-supervisor.md) and
+[doc/milestone/3-engineering-spec.md](doc/milestone/3-engineering-spec.md).
+
+The superseded combined-image USB installer is recorded in
+[ADR-0013](doc/adr/0013-combined-appliance-and-installer-image.md).
 
 ## Milestone 4: FoldOps Integration
 
