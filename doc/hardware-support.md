@@ -149,6 +149,10 @@ release image, relocates the backup GPT header when required, verifies the EFI
 bootloader layout, and can stage administrator SSH public keys before first
 boot.
 
+During commissioning, a temporarily attached monitor shows boot progress and a
+final ready message with the DHCP IPv4 address. See
+[ADR-0015](adr/0015-local-commissioning-display.md).
+
 Physical validation, installer USB workflows, and direct-flash recovery all use
 this preparation step when the target media is larger than the release image.
 
@@ -242,7 +246,7 @@ committed under `validation/`.
 
 | Manufacturer | Model | Firmware | Storage transport | Validation record | Notes |
 | --- | --- | --- | --- | --- | --- |
-| Dell | OptiPlex Micro | Dell UEFI | USB | [appliance-physical-0.1.0.json](../validation/appliance-physical-0.1.0.json) | Headless validation over wired Ethernet; local display remains blank without framebuffer drivers |
+| Dell | OptiPlex Micro | Dell UEFI | USB | [appliance-physical-0.1.0.json](../validation/appliance-physical-0.1.0.json) | Validated over wired Ethernet; local commissioning display approved by ADR-0015 |
 
 ---
 

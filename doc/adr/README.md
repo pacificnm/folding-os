@@ -52,6 +52,7 @@ design decisions years after they were originally made.
 - [ADR-0012: Reproducible Build Environment And Verification](0012-reproducible-build-environment-and-verification.md)
 - [ADR-0013: Combined Appliance And Installer Image](0013-combined-appliance-and-installer-image.md)
 - [ADR-0014: Fixed Installation Roles](0014-fixed-installation-roles.md)
+- [ADR-0015: Local Commissioning Display](0015-local-commissioning-display.md)
 
 ---
 

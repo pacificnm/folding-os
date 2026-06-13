@@ -124,22 +124,25 @@ An administrator must:
    administrator public key when SSH acceptance checks are required.
 4. Boot the system through physical UEFI firmware and confirm GRUB loads the
    FoldingOS entry.
-5. Wait for the system to reach multi-user operation.
-6. Run the SSH acceptance checks:
+5. When a monitor is attached, confirm boot messages appear on the local
+   display and the final commissioning ready message is shown after DHCP comes
+   up, as defined by [ADR-0015](adr/0015-local-commissioning-display.md).
+6. Wait for the system to reach multi-user operation.
+7. Run the SSH acceptance checks:
 
    ```bash
    ./scripts/run-physical-acceptance <host> <ssh-private-key> [port]
    ```
 
-7. Confirm required mounts, services, networking, DNS, time sync, SSH policy,
+8. Confirm required mounts, services, networking, DNS, time sync, SSH policy,
    node identity, and persistent storage behavior pass.
-8. Run graceful shutdown, cold boot, and confirm acceptance checks still pass.
-9. Run graceful reboot and confirm acceptance checks still pass.
-10. While the system is running, remove power without shutdown.
-11. Restore power, boot again, and confirm acceptance checks still pass.
-12. Complete `validation/appliance-physical.template.json` using the recorded
+9. Run graceful shutdown, cold boot, and confirm acceptance checks still pass.
+10. Run graceful reboot and confirm acceptance checks still pass.
+11. While the system is running, remove power without shutdown.
+12. Restore power, boot again, and confirm acceptance checks still pass.
+13. Complete `validation/appliance-physical.template.json` using the recorded
     results.
-13. Verify the record against the candidate image:
+14. Verify the record against the candidate image:
 
     ```bash
     ./scripts/verify-physical-validation-record \
@@ -147,8 +150,8 @@ An administrator must:
       build/output/images/foldingos-x86_64-0.1.0.img
     ```
 
-14. List the validated system in [hardware-support.md](hardware-support.md).
-15. Commit the completed validation record with the documentation update.
+15. List the validated system in [hardware-support.md](hardware-support.md).
+16. Commit the completed validation record with the documentation update.
 
 ---
 
@@ -185,7 +188,7 @@ required test marked `pass`.
 
 | Test | Requirement |
 | --- | --- |
-| `uefi_boot` | Boots through physical UEFI and GRUB |
+| `uefi_boot` | Boots through physical UEFI and GRUB; local commissioning display shows boot messages and ready status when a monitor is attached |
 | `filesystem_mounts` | `/`, `/boot/efi`, and `/data` mount correctly |
 | `data_expansion` | Data partition expands on disks larger than the image |
 | `ethernet_dhcp` | Wired Ethernet acquires DHCP |

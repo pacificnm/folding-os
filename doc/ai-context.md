@@ -92,6 +92,9 @@ precedence or silently choose one statement.
 - v0.1.0 networking uses Ethernet DHCP; static networking is out of scope.
 - Initial remote administration uses OpenSSH with the `foldingos-admin` account
   and public keys provisioned through the EFI System Partition.
+- Local commissioning display shows boot messages and a final ready message with
+  the DHCP IPv4 address on a temporarily attached monitor. See
+  [ADR-0015](adr/0015-local-commissioning-display.md).
 - A future installer-capable release uses one combined appliance and installer
   image with explicit GRUB boot modes; it does not introduce a separate
   installer operating system.

@@ -152,6 +152,11 @@ No local desktop environment is planned.
 
 No local browser interface is planned.
 
+Production nodes do not keep a monitor or keyboard attached. During
+commissioning, a temporarily attached monitor shows boot messages and a final
+ready message with the DHCP IPv4 address and SSH entry point, as defined by
+[ADR-0015](adr/0015-local-commissioning-display.md).
+
 ---
 
 ## Folding@home Runtime

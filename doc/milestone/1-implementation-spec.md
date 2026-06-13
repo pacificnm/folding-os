@@ -61,6 +61,12 @@ No package manager.
 
 No desktop.
 
+No local keyboard administration.
+
+Commissioning display only: boot messages and a final ready message with the
+DHCP IPv4 address on a temporarily attached monitor, as defined by
+[ADR-0015](../adr/0015-local-commissioning-display.md).
+
 No unnecessary services.
 
 ---

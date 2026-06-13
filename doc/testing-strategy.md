@@ -366,6 +366,10 @@ Expected recovery behavior should be documented.
 Physical validation and installer testing must prepare USB or other removable
 boot media with `scripts/make-bootable-usb`.
 
+Validated nodes must show local boot messages and the commissioning ready
+message on `tty1` when a monitor is attached, as defined by
+[ADR-0015](adr/0015-local-commissioning-display.md).
+
 The script is required because the release artifact is a fixed 4 GiB raw GPT
 image. Larger removable devices need backup GPT relocation before UEFI firmware
 can boot them reliably. The script also verifies the EFI bootloader layout and
