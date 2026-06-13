@@ -75,6 +75,7 @@ systemctl is-active --quiet foldingos-journal-flush.service
 systemctl is-active --quiet foldingos-identity.service
 systemctl is-active --quiet foldingos-config-validate.service
 systemctl is-active --quiet foldingos-ssh-provision.service
+systemctl is-active --quiet foldingos-boot-status.service
 systemctl is-active --quiet sshd.service
 test "$(sudo find /data/logs/journal -maxdepth 0 -user root -group systemd-journal -perm 2755 -print)" = /data/logs/journal
 attempts=0

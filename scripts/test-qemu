@@ -274,6 +274,16 @@ boot_image() {
     echo "Serial log: ${serial_log}" >&2
     exit 1
   fi
+  if ! grep -Fq 'FoldingOS 0.1.0 ready' "${serial_log}"; then
+    echo "ERROR: Commissioning display did not report ready status." >&2
+    echo "Serial log: ${serial_log}" >&2
+    exit 1
+  fi
+  if ! grep -Fq 'SSH: foldingos-admin@' "${serial_log}"; then
+    echo "ERROR: Commissioning display did not report SSH entry point." >&2
+    echo "Serial log: ${serial_log}" >&2
+    exit 1
+  fi
   if grep -Fq "Ordering cycle found" "${serial_log}"; then
     echo "ERROR: systemd detected an ordering cycle." >&2
     echo "Serial log: ${serial_log}" >&2
@@ -362,6 +372,7 @@ PRETTY_NAME=\"FoldingOS 0.1.0\""
     systemctl is-active --quiet foldingos-identity.service
     systemctl is-active --quiet foldingos-config-validate.service
     systemctl is-active --quiet foldingos-ssh-provision.service
+    systemctl is-active --quiet foldingos-boot-status.service
     systemctl is-active --quiet sshd.service
     test "$(sudo find /data/apps/fah -maxdepth 0 -user root -group root -perm 0755 -print)" = /data/apps/fah
     test "$(sudo find /data/config -maxdepth 0 -user root -group root -perm 0755 -print)" = /data/config

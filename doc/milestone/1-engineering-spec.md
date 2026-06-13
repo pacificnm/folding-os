@@ -395,6 +395,7 @@ foldingosctl config validate [--all | <domain>]
 foldingosctl config effective <domain>
 foldingosctl config activate <domain> <candidate>
 foldingosctl identity ensure
+foldingosctl boot status
 foldingosctl provision ssh
 foldingosctl storage expand-data
 foldingosctl fah acquire
@@ -725,8 +726,7 @@ The image must provide `foldingos-boot-status.service` as a `Type=oneshot`
 service that:
 
 1. starts after `network-online.target`
-2. waits until wired Ethernet has a routable IPv4 address or a documented
-   timeout expires
+2. runs `/usr/bin/foldingosctl boot status`
 3. writes boot-status output to `/dev/tty1` and `/dev/console`
 4. does not start `getty`, local login, or keyboard-driven administration
 

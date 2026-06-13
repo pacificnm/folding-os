@@ -73,8 +73,7 @@ behavior:
 
 Approved architectural requirements for the foundation appliance are documented
 in accepted ADRs and the Milestone 1 implementation and engineering
-specifications. [ADR-0015](../adr/0015-local-commissioning-display.md) is
-approved and specified but not yet implemented in the image.
+specifications.
 
 ---
 
@@ -186,11 +185,6 @@ metadata workflow is implemented for the full v0.1.0 gate set.
 - USB-source installation to internal SATA or NVMe targets remains Milestone 3
   scope even though direct flash and USB boot testing are documented.
 - Full-image reflashing remains the supported update path in v0.1.0.
-
-Local commissioning display is approved by
-[ADR-0015](../adr/0015-local-commissioning-display.md) and specified in the
-engineering specification. Kernel framebuffer support and
-`foldingos-boot-status.service` implementation remain outstanding.
 
 ---
 
