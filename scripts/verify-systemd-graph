@@ -18,6 +18,9 @@ FOUNDATION_UNITS = {
     "foldingos-journal-flush.service",
     "foldingos-installation-role.service",
     "foldingos-persistent-dirs.service",
+    "foldingos-provision.service",
+    "foldingos-agent-register.service",
+    "foldingos-agent-version-check.service",
     "foldingos-registry-bootstrap.service",
     "foldingos-registry-poll.service",
     "foldingos-registry-poll.timer",
@@ -51,6 +54,12 @@ REQUIRED_LINKS = {
         "/usr/lib/systemd/system/foldingos-installation-role.service",
     "etc/systemd/system/multi-user.target.wants/foldingos-registry-bootstrap.service":
         "/usr/lib/systemd/system/foldingos-registry-bootstrap.service",
+    "etc/systemd/system/multi-user.target.wants/foldingos-provision.service":
+        "/usr/lib/systemd/system/foldingos-provision.service",
+    "etc/systemd/system/multi-user.target.wants/foldingos-agent-register.service":
+        "/usr/lib/systemd/system/foldingos-agent-register.service",
+    "etc/systemd/system/multi-user.target.wants/foldingos-agent-version-check.service":
+        "/usr/lib/systemd/system/foldingos-agent-version-check.service",
     "etc/systemd/system/multi-user.target.wants/foldingos-boot-status.service":
         "/usr/lib/systemd/system/foldingos-boot-status.service",
     "etc/systemd/system/multi-user.target.wants/foldingos-fah-prepare.service":
@@ -163,6 +172,43 @@ UNIT_REQUIREMENTS = {
         ("Timer", "OnUnitInactiveSec"): {"1h"},
         ("Timer", "Persistent"): {"true"},
     },
+    "foldingos-provision.service": {
+        ("Unit", "Requires"): {
+            "foldingos-installation-role.service",
+        },
+        ("Unit", "After"): {
+            "foldingos-installation-role.service",
+            "network-online.target",
+        },
+        ("Unit", "Wants"): {"network-online.target"},
+        ("Unit", "ConditionPathExists"): {"/data/config/installation-role"},
+        ("Service", "ExecCondition"): {"/bin/sh -c 'grep -qx supervisor /data/config/installation-role'"},
+        ("Service", "Type"): {"simple"},
+        ("Service", "Restart"): {"on-failure"},
+    },
+    "foldingos-agent-register.service": {
+        ("Unit", "Requires"): {"foldingos-installation-role.service"},
+        ("Unit", "After"): {
+            "foldingos-installation-role.service",
+            "network-online.target",
+        },
+        ("Unit", "Before"): {"foldingos-agent-version-check.service"},
+        ("Unit", "Wants"): {"network-online.target"},
+        ("Unit", "ConditionPathExists"): {"/data/config/installation-role"},
+        ("Service", "ExecCondition"): {"/bin/sh -c 'grep -qx agent /data/config/installation-role'"},
+        ("Service", "Type"): {"oneshot"},
+    },
+    "foldingos-agent-version-check.service": {
+        ("Unit", "Requires"): {"foldingos-agent-register.service"},
+        ("Unit", "After"): {
+            "foldingos-agent-register.service",
+            "network-online.target",
+        },
+        ("Unit", "Wants"): {"network-online.target"},
+        ("Unit", "ConditionPathExists"): {"/data/config/installation-role"},
+        ("Service", "ExecCondition"): {"/bin/sh -c 'grep -qx agent /data/config/installation-role'"},
+        ("Service", "Type"): {"oneshot"},
+    },
     "foldingos-boot-status.service": {
         ("Unit", "After"): {
             "network-online.target",
@@ -254,6 +300,21 @@ FAILURE_ISOLATION_FORBIDDEN_REQUIRES = {
         "systemd-time-wait-sync.service",
     },
     "foldingos-registry-poll.service": {
+        "var-log-journal.mount",
+        "foldingos-journal-flush.service",
+        "systemd-time-wait-sync.service",
+    },
+    "foldingos-provision.service": {
+        "var-log-journal.mount",
+        "foldingos-journal-flush.service",
+        "systemd-time-wait-sync.service",
+    },
+    "foldingos-agent-register.service": {
+        "var-log-journal.mount",
+        "foldingos-journal-flush.service",
+        "systemd-time-wait-sync.service",
+    },
+    "foldingos-agent-version-check.service": {
         "var-log-journal.mount",
         "foldingos-journal-flush.service",
         "systemd-time-wait-sync.service",

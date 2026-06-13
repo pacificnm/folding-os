@@ -76,6 +76,15 @@ ln -snf \
   /usr/lib/systemd/system/foldingos-registry-bootstrap.service \
   "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/foldingos-registry-bootstrap.service"
 ln -snf \
+  /usr/lib/systemd/system/foldingos-provision.service \
+  "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/foldingos-provision.service"
+ln -snf \
+  /usr/lib/systemd/system/foldingos-agent-register.service \
+  "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/foldingos-agent-register.service"
+ln -snf \
+  /usr/lib/systemd/system/foldingos-agent-version-check.service \
+  "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/foldingos-agent-version-check.service"
+ln -snf \
   /usr/lib/systemd/system/foldingos-boot-status.service \
   "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/foldingos-boot-status.service"
 ln -snf \
