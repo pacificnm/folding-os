@@ -33,7 +33,44 @@ Milestone 1 foundation validation covers:
 - recovery after unexpected power interruption
 
 Folding@home acquisition and runtime validation are release gates defined
-separately and are not part of this Milestone 1 foundation record.
+separately from this Milestone 1 foundation record. Use the Folding@home
+runtime procedure in the "Folding@home Runtime Validation" section below after
+the foundation record is complete.
+
+---
+
+# Folding@home Runtime Validation
+
+After the foundation record passes, the same approved physical system must
+complete Folding@home runtime validation for the exact candidate release image.
+
+The runtime procedure verifies:
+
+- unattended acquisition through `foldingos-fah-acquire.timer`
+- verified installation and atomic activation of the approved 8.5.6 client
+- least-privilege `folding-at-home.service` execution as UID/GID `fah`
+- runtime configuration rendering under `/run/foldingos/fah`
+- persistence of installed client state across reboot
+
+Run the SSH acceptance checks after the node has reached multi-user operation
+and time synchronization:
+
+```bash
+./scripts/run-physical-acceptance <host> <ssh-private-key> [port]
+```
+
+The command waits for `folding-at-home.service` to become active, then verifies
+the verified client installation, runtime configuration, and `fah` process
+sandboxing.
+
+Record runtime results in the committed validation record by extending the
+`tests` object with:
+
+| Test | Requirement |
+| --- | --- |
+| `fah_acquisition` | Approved client is acquired, verified, and activated |
+| `fah_runtime_service` | `folding-at-home.service` runs `fah-client` as `fah` |
+| `fah_runtime_reboot` | Verified client and runtime state survive reboot |
 
 ---
 

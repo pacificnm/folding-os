@@ -6,9 +6,9 @@ usage() {
   cat <<'EOF'
 Usage: ./scripts/run-physical-acceptance <host> <ssh-private-key> [port]
 
-Run Milestone 1 foundation acceptance checks against a provisioned FoldingOS
-node over SSH. See doc/physical-validation.md for the full physical validation
-procedure.
+Run Milestone 1 foundation and Folding@home runtime acceptance checks against
+a provisioned FoldingOS node over SSH. See doc/physical-validation.md for the
+full physical validation procedure.
 EOF
 }
 
@@ -26,6 +26,14 @@ if [ ! -f "${IDENTITY}" ]; then
   echo "ERROR: SSH private key does not exist: ${IDENTITY}" >&2
   exit 1
 fi
+
+case "${IDENTITY}" in
+  *.pub)
+    echo "ERROR: SSH private key required, not a public key: ${IDENTITY}" >&2
+    echo "Use the matching private key (for example, id_ed25519 without .pub)." >&2
+    exit 1
+    ;;
+esac
 
 SSH=(ssh
   -F /dev/null
@@ -77,6 +85,8 @@ systemctl is-active --quiet foldingos-config-validate.service
 systemctl is-active --quiet foldingos-ssh-provision.service
 systemctl is-active --quiet foldingos-boot-status.service
 systemctl is-active --quiet sshd.service
+foldingosctl fah validate-manifest
+systemctl is-enabled --quiet foldingos-fah-acquire.timer
 test "$(sudo find /data/logs/journal -maxdepth 0 -user root -group systemd-journal -perm 2755 -print)" = /data/logs/journal
 attempts=0
 until resolvectl query time.cloudflare.com >/dev/null 2>&1; do
@@ -96,6 +106,24 @@ while [ "$(timedatectl show -p NTPSynchronized --value)" != yes ]; do
   test "${attempts}" -lt 180
   sleep 1
 done
+attempts=0
+while ! systemctl is-active --quiet folding-at-home.service; do
+  attempts=$((attempts + 1))
+  test "${attempts}" -lt 300
+  sleep 2
+done
+systemctl is-active --quiet foldingos-fah-prepare.service
+test "$(readlink /data/apps/fah/current)" = "8.5.6"
+test -f /data/apps/fah/8.5.6/.foldingos-verified
+sudo test -f /run/foldingos/fah/config.xml
+main_pid="$(systemctl show folding-at-home.service -p MainPID --value)"
+test -n "${main_pid}"
+test "${main_pid}" -gt 0
+fah_uid="$(sudo awk '/^Uid:/{print $2; exit}' "/proc/${main_pid}/status")"
+test "${fah_uid}" = 200
+test "$(id -u fah)" = 200
+sudo grep -a -Fq 'fah-client' "/proc/${main_pid}/cmdline"
+sudo grep -a -Fqe '--config=/run/foldingos/fah/config.xml' "/proc/${main_pid}/cmdline"
 test -s /data/config/node-id
 test -s /data/config/ssh/authorized_keys
 test ! -e /boot/efi/foldingos/provision/authorized_keys

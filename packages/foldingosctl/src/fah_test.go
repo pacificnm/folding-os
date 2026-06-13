@@ -112,3 +112,46 @@ func TestRejectUppercaseSHA256(t *testing.T) {
 		t.Fatal("uppercase sha256 was accepted")
 	}
 }
+
+func TestRejectInvalidFAHArchitecture(t *testing.T) {
+	content := strings.Replace(validFAHManifest, `architecture = "x86_64"`, `architecture = "aarch64"`, 1)
+	manifest, err := parseFAHManifest(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateFAHManifest(manifest); err == nil {
+		t.Fatal("unsupported architecture was accepted")
+	}
+}
+
+func TestRejectHTTPArtifactURL(t *testing.T) {
+	content := strings.Replace(
+		validFAHManifest,
+		`artifact_url = "https://download.foldingathome.org/`,
+		`artifact_url = "http://download.foldingathome.org/`,
+		1,
+	)
+	manifest, err := parseFAHManifest(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateFAHManifest(manifest); err == nil {
+		t.Fatal("non-HTTPS artifact URL was accepted")
+	}
+}
+
+func TestRejectIncompatibleFoldingOSVersion(t *testing.T) {
+	content := strings.Replace(
+		validFAHManifest,
+		`minimum_foldingos_version = "0.1.0"`,
+		`minimum_foldingos_version = "9.9.9"`,
+		1,
+	)
+	manifest, err := parseFAHManifest(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateFAHManifest(manifest); err == nil {
+		t.Fatal("incompatible FoldingOS version was accepted")
+	}
+}
