@@ -1,0 +1,27 @@
+[Unit]
+Description=Folding@home client
+Requires=foldingos-fah-prepare.service data.mount
+After=foldingos-fah-prepare.service data.mount
+ConditionPathExists=/data/apps/fah/current
+ConditionPathExists=/run/foldingos/fah/config.xml
+
+[Service]
+Type=simple
+User=fah
+Group=fah
+WorkingDirectory=/data/fah
+ExecStart=/usr/bin/foldingosctl fah run
+Restart=on-failure
+RestartSec=30s
+StartLimitIntervalSec=10min
+StartLimitBurst=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/data/fah
+ReadOnlyPaths=/data/apps/fah/current
+ReadOnlyPaths=/run/foldingos/fah
+
+[Install]
+WantedBy=multi-user.target
