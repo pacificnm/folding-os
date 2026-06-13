@@ -42,6 +42,12 @@ func fahAcquire() error {
 		return err
 	}
 	fmt.Printf("Staged verified Folding@home %s artifact at %s.\n", manifest.ClientVersion, stagedPath)
+
+	versionDir, err := extractAndInstallFAHArtifact(manifest)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Installed and verified Folding@home %s at %s.\n", manifest.ClientVersion, versionDir)
 	return nil
 }
 
@@ -126,20 +132,7 @@ func fahInstallationVerified(version string, manifest fahManifest) bool {
 }
 
 func fahExecutableForVersion(version, manifestExecutablePath string) (string, error) {
-	if !strings.HasPrefix(manifestExecutablePath, fahExecutablePathPrefix) {
-		return "", errors.New("manifest executable_path is invalid")
-	}
-	relative := strings.TrimPrefix(manifestExecutablePath, fahExecutablePathPrefix)
-	if relative == "" || strings.Contains(relative, "..") {
-		return "", errors.New("manifest executable_path is invalid")
-	}
-	executable := filepath.Join(fahAppsRoot, version, relative)
-	cleaned := filepath.Clean(executable)
-	versionRoot := filepath.Join(fahAppsRoot, version)
-	if cleaned != versionRoot && !strings.HasPrefix(cleaned, versionRoot+string(os.PathSeparator)) {
-		return "", errors.New("resolved executable escapes version directory")
-	}
-	return cleaned, nil
+	return fahExecutableInRoot(filepath.Join(fahAppsRoot, version), manifestExecutablePath)
 }
 
 func parseKeyValueLines(content string) map[string]string {

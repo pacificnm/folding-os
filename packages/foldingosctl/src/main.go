@@ -54,6 +54,9 @@ func dispatch(args []string) error {
 	if len(args) == 2 && args[0] == "fah" && args[1] == "acquire" {
 		return fahAcquire()
 	}
+	if len(args) == 3 && args[0] == "fah" && args[1] == "verify-install" {
+		return fahVerifyInstall(args[2])
+	}
 	if len(args) == 3 && args[0] == "config" && args[1] == "validate" {
 		return validateConfig(args[2])
 	}
