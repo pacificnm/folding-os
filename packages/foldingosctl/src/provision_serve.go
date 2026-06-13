@@ -34,6 +34,8 @@ func provisionServe() error {
 	mux.HandleFunc("/v1/agents/register", handleAgentRegister)
 	mux.HandleFunc("/v1/agents/desired-version", handleDesiredVersion)
 	mux.HandleFunc("/v1/rollouts/assign", handleRolloutAssign)
+	mux.HandleFunc("/v1/provision/authorize", handleProvisionAuthorize)
+	mux.HandleFunc("/v1/provision/images/", handleProvisionImageStream)
 
 	server := &http.Server{
 		Addr:    listenHost,
