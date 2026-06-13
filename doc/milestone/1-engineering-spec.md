@@ -1580,3 +1580,13 @@ Implementation should proceed in this order:
 
 Each step must add its required automated tests before proceeding to dependent
 steps.
+
+---
+
+# Milestone 1 Readiness Review
+
+Milestone 1 foundation implementation and validation are complete as of
+2026-06-12. Operator procedures are documented in
+[operations.md](../operations.md). The readiness review, issue closure matrix,
+non-goals verification, and remaining v0.1.0 release-gate status are recorded
+in [1-readiness-review.md](1-readiness-review.md).

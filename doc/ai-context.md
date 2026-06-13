@@ -82,6 +82,10 @@ precedence or silently choose one statement.
 - First implementation platform: x86_64 UEFI.
 - The required v0.1.0 reference platform is QEMU with OVMF; physical x86_64
   systems are validated per release rather than universally supported.
+- Milestone 1 foundation implementation and validation are complete; see
+  [milestone/1-readiness-review.md](milestone/1-readiness-review.md).
+- Operator build, deployment, and recovery procedures are in
+  [operations.md](operations.md).
 - Next planned platform: Raspberry Pi 5 using ARM64.
 - Initial networking may be IPv4-only; IPv6 is a planned first-class
   capability.

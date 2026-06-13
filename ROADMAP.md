@@ -13,6 +13,8 @@ FoldingOS is being developed as a purpose-built appliance operating system for F
 
 ## Milestone 1: Bootable Base System
 
+Status: **Complete** (foundation scope, 2026-06-12)
+
 - Build first x86_64 image
 - Boot to shell
 - Enable DHCP networking
@@ -20,7 +22,12 @@ FoldingOS is being developed as a purpose-built appliance operating system for F
 - Establish persistent storage layout
 - Add basic service supervision
 
+See [doc/milestone/1-readiness-review.md](doc/milestone/1-readiness-review.md)
+for validation evidence and release-gate status.
+
 Milestones 1 and 2 together define the first working v0.1.0 release scope.
+Public v0.1.0 release publication remains blocked until Milestone 2
+Folding@home runtime gates are satisfied.
 
 ## Milestone 2: Folding@home Integration
 

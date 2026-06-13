@@ -67,6 +67,9 @@ build
 output image
 ```
 
+Operator commands and deployment steps are documented in
+[operations.md](operations.md).
+
 Eventually:
 
 ```bash
