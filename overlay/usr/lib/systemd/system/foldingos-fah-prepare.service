@@ -1,0 +1,14 @@
+[Unit]
+Description=Prepare Folding@home runtime configuration
+Requires=data.mount foldingos-config-validate.service
+After=data.mount foldingos-config-validate.service
+Before=folding-at-home.service
+ConditionPathExists=/data/apps/fah/current
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/foldingosctl fah prepare
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

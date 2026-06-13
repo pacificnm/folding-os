@@ -20,11 +20,13 @@ FOUNDATION_UNITS = {
     "foldingos-ssh-provision.service",
     "var-log-journal.mount",
 }
+FAH_RUNTIME_UNITS = {
+    "foldingos-fah-prepare.service",
+    "folding-at-home.service",
+}
 DEFERRED_FAH_UNITS = {
     "foldingos-fah-acquire.service",
     "foldingos-fah-acquire.timer",
-    "foldingos-fah-prepare.service",
-    "folding-at-home.service",
 }
 REQUIRED_LINKS = {
     "etc/systemd/system/local-fs.target.wants/foldingos-data-expand.service":
@@ -45,6 +47,10 @@ REQUIRED_LINKS = {
         "/usr/lib/systemd/system/foldingos-ssh-provision.service",
     "etc/systemd/system/multi-user.target.wants/foldingos-boot-status.service":
         "/usr/lib/systemd/system/foldingos-boot-status.service",
+    "etc/systemd/system/multi-user.target.wants/foldingos-fah-prepare.service":
+        "/usr/lib/systemd/system/foldingos-fah-prepare.service",
+    "etc/systemd/system/multi-user.target.wants/folding-at-home.service":
+        "/usr/lib/systemd/system/folding-at-home.service",
     "etc/systemd/system/multi-user.target.wants/sshd.service":
         "/usr/lib/systemd/system/sshd.service",
     "etc/systemd/system/multi-user.target.wants/systemd-networkd.service":
@@ -114,6 +120,36 @@ UNIT_REQUIREMENTS = {
         ("Unit", "After"): {"foldingos-ssh-provision.service"},
         ("Unit", "ConditionPathExists"): {"/data/config/ssh/authorized_keys"},
     },
+    "foldingos-fah-prepare.service": {
+        ("Unit", "Requires"): {"data.mount", "foldingos-config-validate.service"},
+        ("Unit", "After"): {"data.mount", "foldingos-config-validate.service"},
+        ("Unit", "Before"): {"folding-at-home.service"},
+        ("Unit", "ConditionPathExists"): {"/data/apps/fah/current"},
+    },
+    "folding-at-home.service": {
+        ("Unit", "Requires"): {"foldingos-fah-prepare.service", "data.mount"},
+        ("Unit", "After"): {"foldingos-fah-prepare.service", "data.mount"},
+        ("Unit", "ConditionPathExists"): {
+            "/data/apps/fah/current",
+            "/run/foldingos/fah/config.xml",
+        },
+        ("Service", "User"): {"fah"},
+        ("Service", "Group"): {"fah"},
+        ("Service", "WorkingDirectory"): {"/data/fah"},
+        ("Service", "Restart"): {"on-failure"},
+        ("Service", "RestartSec"): {"30s"},
+        ("Service", "StartLimitIntervalSec"): {"10min"},
+        ("Service", "StartLimitBurst"): {"5"},
+        ("Service", "NoNewPrivileges"): {"yes"},
+        ("Service", "PrivateTmp"): {"yes"},
+        ("Service", "ProtectHome"): {"yes"},
+        ("Service", "ProtectSystem"): {"strict"},
+        ("Service", "ReadWritePaths"): {"/data/fah"},
+        ("Service", "ReadOnlyPaths"): {
+            "/data/apps/fah/current",
+            "/run/foldingos/fah",
+        },
+    },
 }
 FAILURE_ISOLATION_FORBIDDEN_REQUIRES = {
     "foldingos-identity.service": {
@@ -131,6 +167,14 @@ FAILURE_ISOLATION_FORBIDDEN_REQUIRES = {
     "foldingos-ssh-provision.service": {
         "var-log-journal.mount",
         "foldingos-journal-flush.service",
+        "network-online.target",
+        "systemd-time-wait-sync.service",
+    },
+    "foldingos-fah-prepare.service": {
+        "network-online.target",
+        "systemd-time-wait-sync.service",
+    },
+    "folding-at-home.service": {
         "network-online.target",
         "systemd-time-wait-sync.service",
     },
@@ -214,6 +258,10 @@ def main():
             if f"usr/lib/systemd/system/{unit}" not in members:
                 fail(f"required foundation unit is absent: {unit}")
 
+        for unit in FAH_RUNTIME_UNITS:
+            if f"usr/lib/systemd/system/{unit}" not in members:
+                fail(f"required FAH runtime unit is absent: {unit}")
+
         forbidden = [
             name
             for name in members
@@ -234,7 +282,10 @@ def main():
             )
         }
         expected_project_enabled = {
-            link for link in REQUIRED_LINKS if Path(link).name.startswith("foldingos-")
+            link
+            for link in REQUIRED_LINKS
+            if Path(link).name.startswith("foldingos-")
+            or Path(link).name == "folding-at-home.service"
         }
         if project_enabled != expected_project_enabled:
             fail(
@@ -287,7 +338,8 @@ def main():
             fail(f"foundation unit ordering cycle found: {' -> '.join(cycle)}")
 
     print("FoldingOS foundation systemd graph verified.")
-    print("Deferred FAH units remain absent for issues #16-#20.")
+    print("FAH prepare and runtime units are present.")
+    print("Deferred FAH acquire units remain absent for issue #20.")
     return 0
 
 

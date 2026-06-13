@@ -63,6 +63,12 @@ ln -snf \
   /usr/lib/systemd/system/foldingos-boot-status.service \
   "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/foldingos-boot-status.service"
 ln -snf \
+  /usr/lib/systemd/system/foldingos-fah-prepare.service \
+  "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/foldingos-fah-prepare.service"
+ln -snf \
+  /usr/lib/systemd/system/folding-at-home.service \
+  "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/folding-at-home.service"
+ln -snf \
   /usr/lib/systemd/system/systemd-networkd.service \
   "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/systemd-networkd.service"
 ln -snf \
