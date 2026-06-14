@@ -36,6 +36,10 @@ func provisionServe() error {
 	mux.HandleFunc("/v1/rollouts/assign", handleRolloutAssign)
 	mux.HandleFunc("/v1/provision/authorize", handleProvisionAuthorize)
 	mux.HandleFunc("/v1/provision/images/", handleProvisionImageStream)
+	mux.HandleFunc("/boot/ipxe/bootstrap.ipxe", handleIPXEBootstrap)
+	mux.HandleFunc("/boot/ipxe/script.ipxe", handleIPXEInstallScript)
+	mux.HandleFunc("/boot/vmlinuz", handleProvisionBootAsset("vmlinuz"))
+	mux.HandleFunc("/boot/install-initramfs.cpio.gz", handleProvisionBootAsset("install-initramfs.cpio.gz"))
 
 	server := &http.Server{
 		Addr:    listenHost,

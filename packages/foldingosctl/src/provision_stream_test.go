@@ -31,66 +31,44 @@ func TestAuthorizeProvisionInstallRejectsInvalidToken(t *testing.T) {
 	}
 }
 
-func TestAuthorizeProvisionInstallRejectsUndersizedTarget(t *testing.T) {
+func TestAuthorizeProvisionInstallRejectsMissingSerial(t *testing.T) {
 	root := t.TempDir()
 	restore := setProvisionStreamPaths(root)
 	defer restore()
-	restoreInspect := setProvisionTargetInspect(func(string) (provisionTargetDisk, error) {
-		return provisionTargetDisk{
-			Path:       "/dev/vda",
-			SizeBytes:  1024,
-			Serial:     "DISK-001",
-			Transport:  "sata",
-			DeviceType: "disk",
-		}, nil
-	})
-	defer restoreInspect()
 
-	_, err := authorizeProvisionInstall(sampleAuthorizeRequest())
-	if err == nil || !strings.Contains(err.Error(), "too small") {
+	request := sampleAuthorizeRequest()
+	request.TargetSerial = ""
+	_, err := authorizeProvisionInstall(request)
+	if err == nil || !strings.Contains(err.Error(), "target_serial is required") {
 		t.Fatalf("err = %v", err)
 	}
 }
 
-func TestAuthorizeProvisionInstallRejectsUSBTarget(t *testing.T) {
+func TestAuthorizeProvisionInstallTrustsClientTargetReport(t *testing.T) {
 	root := t.TempDir()
 	restore := setProvisionStreamPaths(root)
 	defer restore()
 	restoreInspect := setProvisionTargetInspect(func(string) (provisionTargetDisk, error) {
 		return provisionTargetDisk{
-			Path:       "/dev/sdb",
+			Path:       "/dev/nvme0n1",
 			SizeBytes:  releaseImageSizeBytes,
-			Serial:     "DISK-001",
-			Transport:  "usb",
+			Serial:     "SUPERVISOR-LOCAL-SERIAL",
+			Transport:  "nvme",
 			DeviceType: "disk",
 		}, nil
 	})
 	defer restoreInspect()
 
-	_, err := authorizeProvisionInstall(sampleAuthorizeRequest())
-	if err == nil || !strings.Contains(err.Error(), "only internal SATA or NVMe") {
-		t.Fatalf("err = %v", err)
+	request := sampleAuthorizeRequest()
+	request.TargetDisk = "/dev/nvme0n1"
+	request.TargetSerial = "CLIENT-REPORTED-SERIAL"
+
+	response, err := authorizeProvisionInstall(request)
+	if err != nil {
+		t.Fatal(err)
 	}
-}
-
-func TestAuthorizeProvisionInstallRejectsSerialMismatch(t *testing.T) {
-	root := t.TempDir()
-	restore := setProvisionStreamPaths(root)
-	defer restore()
-	restoreInspect := setProvisionTargetInspect(func(string) (provisionTargetDisk, error) {
-		return provisionTargetDisk{
-			Path:       "/dev/vda",
-			SizeBytes:  releaseImageSizeBytes,
-			Serial:     "DISK-REAL",
-			Transport:  "sata",
-			DeviceType: "disk",
-		}, nil
-	})
-	defer restoreInspect()
-
-	_, err := authorizeProvisionInstall(sampleAuthorizeRequest())
-	if err == nil || !strings.Contains(err.Error(), "does not match") {
-		t.Fatalf("err = %v", err)
+	if response.TargetSerial != "CLIENT-REPORTED-SERIAL" {
+		t.Fatalf("response serial = %q", response.TargetSerial)
 	}
 }
 
@@ -98,16 +76,6 @@ func TestAuthorizeProvisionInstallSuccess(t *testing.T) {
 	root := t.TempDir()
 	restore := setProvisionStreamPaths(root)
 	defer restore()
-	restoreInspect := setProvisionTargetInspect(func(string) (provisionTargetDisk, error) {
-		return provisionTargetDisk{
-			Path:       "/dev/vda",
-			SizeBytes:  releaseImageSizeBytes,
-			Serial:     "DISK-001",
-			Transport:  "sata",
-			DeviceType: "disk",
-		}, nil
-	})
-	defer restoreInspect()
 
 	response, err := authorizeProvisionInstall(sampleAuthorizeRequest())
 	if err != nil {
@@ -125,16 +93,6 @@ func TestProvisionImageStreamRequiresAuthorizedSession(t *testing.T) {
 	root := t.TempDir()
 	restore := setProvisionStreamPaths(root)
 	defer restore()
-	restoreInspect := setProvisionTargetInspect(func(string) (provisionTargetDisk, error) {
-		return provisionTargetDisk{
-			Path:       "/dev/vda",
-			SizeBytes:  releaseImageSizeBytes,
-			Serial:     "DISK-001",
-			Transport:  "sata",
-			DeviceType: "disk",
-		}, nil
-	})
-	defer restoreInspect()
 
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch {

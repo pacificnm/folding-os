@@ -20,6 +20,9 @@ boot messages on `tty1` and a final ready message with the DHCP IPv4 address
 and SSH entry point. See
 [ADR-0015](adr/0015-local-commissioning-display.md).
 
+For the full on-appliance command surface, see
+[foldingosctl.md](foldingosctl.md).
+
 ---
 
 # Build

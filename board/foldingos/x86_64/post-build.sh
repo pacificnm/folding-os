@@ -134,3 +134,23 @@ ln -snf \
   "${TARGET_DIR}/etc/systemd/system/dbus-org.freedesktop.timesync1.service"
 ln -snf /dev/null \
   "${TARGET_DIR}/etc/systemd/system/systemd-journal-flush.service"
+ln -snf \
+  /usr/lib/systemd/system/foldingos-provision-boot.service \
+  "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/foldingos-provision-boot.service"
+
+mkdir -p "${TARGET_DIR}/usr/share/foldingos/boot/ipxe"
+IPXE_CACHE="${PROJECT_ROOT}/build/cache/ipxe/ipxe.efi"
+if [ ! -f "${IPXE_CACHE}" ]; then
+  echo "ERROR: Missing cached iPXE bootstrap loader at ${IPXE_CACHE}" >&2
+  echo "Run ./scripts/fetch-sources before ./scripts/build." >&2
+  exit 1
+fi
+install -D -m 0644 "${IPXE_CACHE}" \
+  "${TARGET_DIR}/usr/share/foldingos/boot/ipxe/ipxe.efi"
+
+if [ -n "${BINARIES_DIR:-}" ] && [ -f "${BINARIES_DIR}/bzImage" ]; then
+  install -D -m 0644 "${BINARIES_DIR}/bzImage" \
+    "${TARGET_DIR}/usr/share/foldingos/boot/vmlinuz"
+fi
+
+"${BOARD_DIR}/mk-install-initramfs.sh" "${TARGET_DIR}"

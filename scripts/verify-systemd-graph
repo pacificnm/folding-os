@@ -19,6 +19,7 @@ FOUNDATION_UNITS = {
     "foldingos-installation-role.service",
     "foldingos-persistent-dirs.service",
     "foldingos-provision.service",
+    "foldingos-provision-boot.service",
     "foldingos-agent-register.service",
     "foldingos-agent-version-check.service",
     "foldingos-registry-bootstrap.service",
@@ -56,6 +57,8 @@ REQUIRED_LINKS = {
         "/usr/lib/systemd/system/foldingos-registry-bootstrap.service",
     "etc/systemd/system/multi-user.target.wants/foldingos-provision.service":
         "/usr/lib/systemd/system/foldingos-provision.service",
+    "etc/systemd/system/multi-user.target.wants/foldingos-provision-boot.service":
+        "/usr/lib/systemd/system/foldingos-provision-boot.service",
     "etc/systemd/system/multi-user.target.wants/foldingos-agent-register.service":
         "/usr/lib/systemd/system/foldingos-agent-register.service",
     "etc/systemd/system/multi-user.target.wants/foldingos-agent-version-check.service":
@@ -186,6 +189,22 @@ UNIT_REQUIREMENTS = {
         ("Service", "Type"): {"simple"},
         ("Service", "Restart"): {"on-failure"},
     },
+    "foldingos-provision-boot.service": {
+        ("Unit", "Requires"): {
+            "foldingos-installation-role.service",
+            "foldingos-provision.service",
+        },
+        ("Unit", "After"): {
+            "foldingos-installation-role.service",
+            "foldingos-provision.service",
+            "network-online.target",
+        },
+        ("Unit", "Wants"): {"network-online.target"},
+        ("Unit", "ConditionPathExists"): {"/data/config/installation-role"},
+        ("Service", "ExecCondition"): {"/bin/sh -c 'grep -qx supervisor /data/config/installation-role'"},
+        ("Service", "Type"): {"simple"},
+        ("Service", "Restart"): {"on-failure"},
+    },
     "foldingos-agent-register.service": {
         ("Unit", "Requires"): {"foldingos-installation-role.service"},
         ("Unit", "After"): {
@@ -305,6 +324,11 @@ FAILURE_ISOLATION_FORBIDDEN_REQUIRES = {
         "systemd-time-wait-sync.service",
     },
     "foldingos-provision.service": {
+        "var-log-journal.mount",
+        "foldingos-journal-flush.service",
+        "systemd-time-wait-sync.service",
+    },
+    "foldingos-provision-boot.service": {
         "var-log-journal.mount",
         "foldingos-journal-flush.service",
         "systemd-time-wait-sync.service",

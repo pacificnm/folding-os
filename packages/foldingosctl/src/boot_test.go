@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -57,6 +58,41 @@ func TestSelectNetworkInterfacePrefersRoutable(t *testing.T) {
 	}
 	if iface != "enp0s2" {
 		t.Fatalf("selectNetworkInterfaceFromListing() = %q", iface)
+	}
+}
+
+func TestSelectNetworkInterfaceHandlesIndexedNetworkctlList(t *testing.T) {
+	listing := strings.Join([]string{
+		"1 lo       loopback carrier  unmanaged",
+		"2 enp0s31f6 ether    routable configured",
+		"3 wlp3s0   wlan     off      unmanaged",
+	}, "\n")
+	iface, err := selectNetworkInterfaceFromListing(listing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if iface != "enp0s31f6" {
+		t.Fatalf("selectNetworkInterfaceFromListing() = %q", iface)
+	}
+}
+
+func TestParseIPv4AddressHandlesCIDRAndDHCPv4Notation(t *testing.T) {
+	status := `Address: 192.168.4.38/24 (DHCP)
+Address: 192.168.4.22 (DHCPv4 via 192.168.4.1)
+`
+	got, err := parseIPv4Address(status)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "192.168.4.38" {
+		t.Fatalf("parseIPv4Address() = %q", got)
+	}
+}
+
+func TestParseNetworkctlListLineSkipsLoopbackIndex(t *testing.T) {
+	name, routable, skip := parseNetworkctlListLine("1 lo loopback carrier unmanaged")
+	if !skip || name != "" || routable {
+		t.Fatalf("parseNetworkctlListLine() = (%q, %v, %v)", name, routable, skip)
 	}
 }
 

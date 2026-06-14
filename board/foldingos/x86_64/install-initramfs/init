@@ -1,0 +1,57 @@
+#!/bin/sh
+set -eu
+
+mount -t proc proc /proc
+mount -t sysfs sys /sys
+mount -t devtmpfs dev /dev
+mkdir -p /dev/pts /run /tmp
+mount -t devpts devpts /dev/pts
+mount -t tmpfs tmpfs /run
+mount -t tmpfs tmpfs /tmp
+
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+
+SUPERVISOR=""
+TOKEN=""
+DISK=""
+AUTO_DISK=0
+
+for param in $(cat /proc/cmdline); do
+  case "${param}" in
+    foldingos.supervisor=*)
+      SUPERVISOR=${param#foldingos.supervisor=}
+      ;;
+    foldingos.enrollment-token=*)
+      TOKEN=${param#foldingos.enrollment-token=}
+      ;;
+    foldingos.install-disk=*)
+      DISK=${param#foldingos.install-disk=}
+      ;;
+    foldingos.auto-disk=*)
+      AUTO_DISK=1
+      ;;
+  esac
+done
+
+if [ -z "${SUPERVISOR}" ] || [ -z "${TOKEN}" ]; then
+  echo "FoldingOS network install is missing supervisor parameters." >/dev/console
+  exit 1
+fi
+
+ARGS="--supervisor-url ${SUPERVISOR} --enrollment-token ${TOKEN}"
+if [ -n "${DISK}" ]; then
+  ARGS="${ARGS} --disk ${DISK}"
+elif [ "${AUTO_DISK}" -eq 1 ]; then
+  ARGS="${ARGS} --auto-disk"
+else
+  ARGS="${ARGS} --auto-disk"
+fi
+
+echo "FoldingOS network install starting." >/dev/console
+if ! /usr/bin/foldingosctl provision install ${ARGS} >/dev/console 2>&1; then
+  echo "FoldingOS network install failed." >/dev/console
+  exit 1
+fi
+
+echo "FoldingOS network install complete; rebooting." >/dev/console
+/bin/busybox reboot -f

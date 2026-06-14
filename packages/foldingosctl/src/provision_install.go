@@ -19,13 +19,73 @@ var (
 	writeProvisionImageToDisk  = writeProvisionImageToDiskDirect
 	stageProvisionBootFiles    = stageProvisionBootFilesOnDisk
 	relocateProvisionGPT       = relocateProvisionGPTOnDisk
+	installProgressInterval    = int64(128 * 1024 * 1024)
 )
+
+func installLogf(format string, args ...any) {
+	message := fmt.Sprintf(format, args...)
+	if !strings.HasSuffix(message, "\n") {
+		message += "\n"
+	}
+	_ = writeConsole(message)
+	fmt.Print(message)
+}
+
+func formatInstallBytes(size int64) string {
+	const gib = 1024 * 1024 * 1024
+	const mib = 1024 * 1024
+	switch {
+	case size >= gib:
+		return fmt.Sprintf("%.1f GiB", float64(size)/float64(gib))
+	case size >= mib:
+		return fmt.Sprintf("%.1f MiB", float64(size)/float64(mib))
+	default:
+		return fmt.Sprintf("%d B", size)
+	}
+}
+
+type installProgressReader struct {
+	inner      io.Reader
+	total      int64
+	written    int64
+	lastReport int64
+}
+
+func (reader *installProgressReader) Read(buffer []byte) (int, error) {
+	count, err := reader.inner.Read(buffer)
+	if count > 0 {
+		reader.written += int64(count)
+		reader.report(false)
+	}
+	if err == io.EOF {
+		reader.report(true)
+	}
+	return count, err
+}
+
+func (reader *installProgressReader) report(force bool) {
+	if reader.total <= 0 {
+		return
+	}
+	if !force && reader.written-reader.lastReport < installProgressInterval {
+		return
+	}
+	reader.lastReport = reader.written
+	percent := reader.written * 100 / reader.total
+	installLogf(
+		"FoldingOS install: wrote %s / %s (%d%%)",
+		formatInstallBytes(reader.written),
+		formatInstallBytes(reader.total),
+		percent,
+	)
+}
 
 func provisionInstall(args []string) error {
 	var disk string
 	var version string
 	var supervisorURL string
 	var enrollmentToken string
+	autoDisk := false
 
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
@@ -35,6 +95,8 @@ func provisionInstall(args []string) error {
 			}
 			disk = args[i+1]
 			i++
+		case "--auto-disk":
+			autoDisk = true
 		case "--version":
 			if i+1 >= len(args) {
 				return errors.New("missing value for --version")
@@ -57,8 +119,11 @@ func provisionInstall(args []string) error {
 			return fmt.Errorf("unknown install option %q", args[i])
 		}
 	}
-	if disk == "" {
-		return errors.New("target disk is required (--disk)")
+	if disk == "" && !autoDisk {
+		return errors.New("target disk is required (--disk or --auto-disk)")
+	}
+	if disk != "" && autoDisk {
+		return errors.New("use either --disk or --auto-disk, not both")
 	}
 
 	if supervisorURL == "" {
@@ -79,15 +144,32 @@ func provisionInstall(args []string) error {
 		}
 	}
 
+	if autoDisk {
+		selected, err := selectProvisionInstallDisk()
+		if err != nil {
+			return err
+		}
+		disk = selected
+		installLogf("Selected install disk %s.", disk)
+	}
+
 	target, err := validateProvisionTargetDisk(disk)
 	if err != nil {
 		return err
 	}
+	installLogf(
+		"Validated target %s (serial %s, transport %s, size %s).",
+		target.Path,
+		target.Serial,
+		target.Transport,
+		formatInstallBytes(target.SizeBytes),
+	)
 	macAddresses, err := collectMACAddresses()
 	if err != nil {
 		return err
 	}
 
+	installLogf("Requesting install authorization from %s.", supervisorURL)
 	authorizeURL, err := joinSupervisorURL(supervisorURL, "/v1/provision/authorize")
 	if err != nil {
 		return err
@@ -134,6 +216,12 @@ func provisionInstall(args []string) error {
 	if authorization.TargetDisk != target.Path {
 		return fmt.Errorf("supervisor authorized disk %q, expected %q", authorization.TargetDisk, target.Path)
 	}
+	installLogf(
+		"Authorized FoldingOS %s (%s) for session %s.",
+		authorization.ImageVersion,
+		formatInstallBytes(authorization.ImageSizeBytes),
+		authorization.InstallSessionID,
+	)
 
 	streamURL, err := joinSupervisorURL(supervisorURL, authorization.ImageStreamPath)
 	if err != nil {
@@ -145,6 +233,7 @@ func provisionInstall(args []string) error {
 	}
 	streamRequest.Header.Set("X-FoldingOS-Enrollment-Token", enrollmentToken)
 	streamRequest.Header.Set(installSessionHeader, authorization.InstallSessionID)
+	installLogf("Streaming release image from %s.", streamURL)
 	streamResponse, err := provisionInstallHTTPClient.Do(streamRequest)
 	if err != nil {
 		return err
@@ -159,7 +248,11 @@ func provisionInstall(args []string) error {
 		)
 	}
 
-	digest, written, err := writeProvisionImageToDisk(target.Path, streamResponse.Body, authorization.ImageSizeBytes)
+	digest, written, err := writeProvisionImageToDisk(
+		target.Path,
+		&installProgressReader{inner: streamResponse.Body, total: authorization.ImageSizeBytes},
+		authorization.ImageSizeBytes,
+	)
 	if err != nil {
 		return err
 	}
@@ -169,7 +262,7 @@ func provisionInstall(args []string) error {
 	if !strings.EqualFold(digest, authorization.ImageSHA256) {
 		return errors.New("installed image failed SHA-256 verification")
 	}
-	fmt.Printf("Verified FoldingOS %s on %s (%s)\n", authorization.ImageVersion, target.Path, digest)
+	installLogf("Verified FoldingOS %s on %s (%s).", authorization.ImageVersion, target.Path, digest)
 
 	if err := relocateProvisionGPT(target.Path, target.SizeBytes, authorization.ImageSizeBytes); err != nil {
 		return err
@@ -178,12 +271,13 @@ func provisionInstall(args []string) error {
 		return err
 	}
 
-	fmt.Printf("Provisioned %s with role %s.\n", target.Path, authorization.InstallationRole)
-	fmt.Println("Reboot the target into internal storage to complete installation.")
+	installLogf("Provisioned %s with role %s.", target.Path, authorization.InstallationRole)
+	installLogf("Reboot the target into internal storage to complete installation.")
 	return nil
 }
 
 func writeProvisionImageToDiskDirect(disk string, source io.Reader, size int64) (string, int64, error) {
+	installLogf("Writing %s to %s.", formatInstallBytes(size), disk)
 	file, err := os.OpenFile(disk, os.O_WRONLY, 0)
 	if err != nil {
 		return "", 0, err
@@ -205,7 +299,7 @@ func relocateProvisionGPTOnDisk(disk string, deviceSize, imageSize int64) error 
 	if deviceSize <= imageSize {
 		return nil
 	}
-	fmt.Printf("Relocating backup GPT header on %s\n", disk)
+	installLogf("Relocating backup GPT header on %s.", disk)
 	if err := run("sgdisk", "-e", disk); err != nil {
 		return err
 	}
@@ -227,7 +321,7 @@ func stageProvisionBootFilesOnDisk(disk, role string, authorizedKeys []byte) err
 		return fmt.Errorf("EFI partition %s is mounted", efiPartition)
 	}
 
-	mountPoint, err := os.MkdirTemp("", "foldingos-provision-esp-")
+	mountPoint, err := os.MkdirTemp(provisionScratchDir(), "foldingos-provision-esp-")
 	if err != nil {
 		return err
 	}
@@ -253,6 +347,16 @@ func stageProvisionBootFilesOnDisk(disk, role string, authorizedKeys []byte) err
 	if err := run("sync"); err != nil {
 		return err
 	}
-	fmt.Printf("Staged installation role and SSH keys on %s\n", efiPartition)
+	installLogf("Staged installation role and SSH keys on %s.", efiPartition)
 	return nil
+}
+
+func provisionScratchDir() string {
+	for _, directory := range []string{"/run", "/tmp"} {
+		info, err := os.Stat(directory)
+		if err == nil && info.IsDir() {
+			return directory
+		}
+	}
+	return ""
 }
