@@ -185,3 +185,34 @@ func listMountedBlockDevicesFromSystem() ([]string, error) {
 func efiPartitionPath(disk string) string {
 	return partitionDevice(disk, "1")
 }
+
+func selectProvisionInstallDisk() (string, error) {
+	listing, err := output("lsblk", "-J", "-b", "-d", "-o", "NAME,TYPE,TRAN,SIZE,SERIAL,RM,PATH")
+	if err != nil {
+		return "", err
+	}
+	var parsed struct {
+		BlockDevices []struct {
+			Name   string `json:"name"`
+			Type   string `json:"type"`
+			Tran   string `json:"tran"`
+			Size   int64  `json:"size"`
+			Serial string `json:"serial"`
+			RM     bool   `json:"rm"`
+			Path   string `json:"path"`
+		} `json:"blockdevices"`
+	}
+	if err := json.Unmarshal([]byte(listing), &parsed); err != nil {
+		return "", fmt.Errorf("parse lsblk output: %w", err)
+	}
+	for _, device := range parsed.BlockDevices {
+		path := device.Path
+		if path == "" {
+			path = "/dev/" + device.Name
+		}
+		if _, err := validateProvisionTargetDisk(path); err == nil {
+			return path, nil
+		}
+	}
+	return "", errors.New("no eligible internal target disk was found")
+}

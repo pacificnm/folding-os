@@ -40,5 +40,7 @@ echo "Extracting Buildroot"
 rm -rf "${BUILDROOT_DIR}"
 tar -xf "${BUILDROOT_FILE}" -C "${WORK_DIR}"
 
+"${PROJECT_ROOT}/board/foldingos/x86_64/fetch-ipxe.sh"
+
 echo "Buildroot ready:"
 echo "${BUILDROOT_DIR}"

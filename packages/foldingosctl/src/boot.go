@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -19,7 +20,10 @@ const (
 	bootStatusRetryAttempts = 90
 )
 
-var ipv4AddressPattern = regexp.MustCompile(`\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b`)
+var (
+	ipv4AddressPattern        = regexp.MustCompile(`\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b`)
+	networkctlStatusIfaceName = regexp.MustCompile(`^\S+\s+\d+:\s*(\S+)`)
+)
 
 func bootStatus() error {
 	prettyName, err := osReleaseValue("PRETTY_NAME")
@@ -139,15 +143,15 @@ func candidateNetworkInterfaces(listing string) ([]string, error) {
 	var routable []string
 	var fallback []string
 	for _, line := range lines {
-		fields := strings.Fields(line)
-		if len(fields) < 2 || fields[0] == "lo" {
+		name, isRoutable, skip := parseNetworkctlListLine(line)
+		if skip {
 			continue
 		}
-		if fields[1] == "routable" {
-			routable = append(routable, fields[0])
+		if isRoutable {
+			routable = append(routable, name)
 			continue
 		}
-		fallback = append(fallback, fields[0])
+		fallback = append(fallback, name)
 	}
 	if len(routable) > 0 {
 		return routable, nil
@@ -158,12 +162,47 @@ func candidateNetworkInterfaces(listing string) ([]string, error) {
 	return nil, errors.New("no wired network interface found")
 }
 
+func parseNetworkctlListLine(line string) (name string, routable bool, skip bool) {
+	fields := strings.Fields(strings.TrimSpace(line))
+	if len(fields) < 2 {
+		return "", false, true
+	}
+	if _, err := strconv.Atoi(fields[0]); err == nil && len(fields) >= 4 {
+		name = fields[1]
+		if name == "lo" {
+			return "", false, true
+		}
+		for _, field := range fields[2:] {
+			if field == "routable" {
+				return name, true, false
+			}
+		}
+		return name, false, false
+	}
+	name = fields[0]
+	if name == "lo" {
+		return "", false, true
+	}
+	if len(fields) > 1 && fields[1] == "routable" {
+		return name, true, false
+	}
+	return name, false, false
+}
+
 func selectNetworkInterfaceFromListing(listing string) (string, error) {
 	interfaces, err := candidateNetworkInterfaces(listing)
 	if err != nil {
 		return "", err
 	}
 	return interfaces[0], nil
+}
+
+func selectNetworkInterface() (string, error) {
+	listing, err := output("networkctl", "--no-legend", "--no-pager", "list")
+	if err != nil {
+		return "", err
+	}
+	return selectNetworkInterfaceFromListing(listing)
 }
 
 func parseIPv4Address(status string) (string, error) {
@@ -175,12 +214,11 @@ func parseIPv4Address(status string) (string, error) {
 			continue
 		}
 		for _, field := range strings.Fields(trimmed)[1:] {
-			candidate := strings.TrimSuffix(field, "(DHCP)")
-			candidate = strings.TrimSuffix(candidate, "(Router)")
-			if !ipv4AddressPattern.MatchString(candidate) || !isRoutableIPv4(candidate) {
+			candidate := normalizeIPv4AddressField(field)
+			if candidate == "" {
 				continue
 			}
-			if strings.Contains(field, "(DHCP)") {
+			if strings.Contains(strings.ToLower(field), "dhcp") {
 				dhcpAddress = candidate
 			}
 			if globalAddress == "" {
@@ -195,6 +233,60 @@ func parseIPv4Address(status string) (string, error) {
 		return globalAddress, nil
 	}
 	return "", errors.New("no routable IPv4 address available")
+}
+
+func normalizeIPv4AddressField(field string) string {
+	if field == "on" || field == "via" || strings.HasPrefix(field, "(") {
+		return ""
+	}
+	match := ipv4AddressPattern.FindString(field)
+	if match == "" || !isRoutableIPv4(match) {
+		return ""
+	}
+	return match
+}
+
+func resolveNetworkInterfaceName(iface string) (string, error) {
+	if _, err := strconv.Atoi(iface); err != nil {
+		return iface, nil
+	}
+	status, err := output("networkctl", "--no-legend", "--no-pager", "status", iface)
+	if err != nil {
+		return "", err
+	}
+	for _, line := range strings.Split(status, "\n") {
+		matches := networkctlStatusIfaceName.FindStringSubmatch(strings.TrimSpace(line))
+		if len(matches) == 2 {
+			return matches[1], nil
+		}
+	}
+	return "", fmt.Errorf("network interface name is unavailable for index %s", iface)
+}
+
+func ipv4AddressFromInterface(iface string) (string, error) {
+	resolved, err := resolveNetworkInterfaceName(iface)
+	if err != nil {
+		return "", err
+	}
+	ifaceObj, err := net.InterfaceByName(resolved)
+	if err != nil {
+		return "", err
+	}
+	addrs, err := ifaceObj.Addrs()
+	if err != nil {
+		return "", err
+	}
+	for _, addr := range addrs {
+		ipNet, ok := addr.(*net.IPNet)
+		if !ok || ipNet.IP.To4() == nil {
+			continue
+		}
+		address := ipNet.IP.String()
+		if isRoutableIPv4(address) {
+			return address, nil
+		}
+	}
+	return "", fmt.Errorf("no routable IPv4 address on %s", resolved)
 }
 
 func isRoutableIPv4(address string) bool {

@@ -49,6 +49,11 @@ BUILDROOT_ASSETS=(
   "../../../packages/foldingosctl/src/provision_stream_handlers.go"
   "../../../packages/foldingosctl/src/provision_install.go"
   "../../../packages/foldingosctl/src/provision_stream_test.go"
+  "../../../packages/foldingosctl/src/provision_boot.go"
+  "../../../packages/foldingosctl/src/provision_boot_handlers.go"
+  "../../../packages/foldingosctl/src/provision_boot_test.go"
+  "../../../board/foldingos/x86_64/mk-install-initramfs.sh"
+  "../../../board/foldingos/x86_64/install-initramfs/init"
 )
 
 echo "FoldingOS build"

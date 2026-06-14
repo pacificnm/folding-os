@@ -9,6 +9,7 @@ This index groups the project's documentation by purpose.
 - [Vision](vision.md) - intended user experience and long-term direction
 - [Architecture](architecture.md) - high-level system components and boundaries
 - [Operations](operations.md) - build, deploy, administer, diagnose, and recover
+- [foldingosctl command reference](foldingosctl.md) - on-appliance CLI for provisioning, config, storage, and Folding@home
 - [Roadmap](../ROADMAP.md) - planned implementation milestones
 - [AI context](ai-context.md) - condensed project context for AI assistants
 

@@ -75,22 +75,16 @@ func authorizeProvisionInstall(request provisionAuthorizeRequest) (provisionAuth
 	if targetDisk == "" {
 		return provisionAuthorizeResponse{}, errors.New("target_disk is required")
 	}
-	disk, err := validateProvisionTargetDisk(targetDisk)
-	if err != nil {
-		return provisionAuthorizeResponse{}, err
+	if !strings.HasPrefix(targetDisk, "/dev/") {
+		return provisionAuthorizeResponse{}, fmt.Errorf("target_disk must be a block device path: %q", targetDisk)
 	}
-	requestedSerial := strings.TrimSpace(request.TargetSerial)
-	if requestedSerial == "" {
+	targetSerial := strings.TrimSpace(request.TargetSerial)
+	if targetSerial == "" {
 		return provisionAuthorizeResponse{}, errors.New("target_serial is required")
 	}
-	if !strings.EqualFold(requestedSerial, disk.Serial) {
-		return provisionAuthorizeResponse{}, fmt.Errorf(
-			"target serial %q does not match disk %q serial %q",
-			requestedSerial,
-			targetDisk,
-			disk.Serial,
-		)
-	}
+	// Disk eligibility and serial discovery run on the client in the install
+	// initramfs. The supervisor cannot inspect block devices on the remote
+	// machine being provisioned.
 
 	version := strings.TrimSpace(request.ImageVersion)
 	entry, err := resolveProvisionImageVersion(version)
@@ -118,8 +112,8 @@ func authorizeProvisionInstall(request provisionAuthorizeRequest) (provisionAuth
 		SessionID:      sessionID,
 		CreatedAt:      time.Now().UTC().Format(time.RFC3339),
 		MACAddresses:   macAddresses,
-		TargetDisk:     disk.Path,
-		TargetSerial:   disk.Serial,
+		TargetDisk:     targetDisk,
+		TargetSerial:   targetSerial,
 		ImageVersion:   entry.FoldingOSVersion,
 		ImageSHA256:    entry.ImageSHA256,
 		ImageSizeBytes: entry.ImageSizeBytes,
@@ -139,8 +133,8 @@ func authorizeProvisionInstall(request provisionAuthorizeRequest) (provisionAuth
 		InstallationRole: agentInstallationRole,
 		AuthorizedKeys:   authorizedKeys,
 		RebootRequired:   true,
-		TargetDisk:       disk.Path,
-		TargetSerial:     disk.Serial,
+		TargetDisk:       targetDisk,
+		TargetSerial:     targetSerial,
 	}, nil
 }
 
