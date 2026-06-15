@@ -97,7 +97,9 @@ After boot the supervisor must:
 5. start the provisioning control plane
 6. import the current approved release image into the local registry
 
-The supervisor then polls the upstream release server for newer approved images.
+The supervisor then polls the official releases manifest on
+`releases.folding-os.com` for newer approved images. See
+[ADR-0017](adr/0017-official-release-publication-and-supervisor-upstream-polling.md).
 
 ---
 
@@ -126,6 +128,9 @@ Supervisor assigns role=agent
 ↓
 Supervisor streams verified image to internal disk over HTTP(S)
 ↓
+Supervisor resets inherited data-partition state and clears inherited GRUB
+one-shot boot state on target EFI partition
+↓
 Supervisor stages SSH public keys on target EFI partition
 ↓
 Machine reboots into installed appliance
@@ -141,7 +146,8 @@ transferred over HTTP or HTTPS.
 # Updates
 
 The supervisor maintains a registry of approved FoldingOS release images and
-polls upstream for new versions.
+polls `https://releases.folding-os.com/release/releases.json` for new versions.
+See [ADR-0017](adr/0017-official-release-publication-and-supervisor-upstream-polling.md).
 
 On boot, each agent asks the supervisor for its desired image version. When a
 newer approved version is assigned:

@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+# Replace a supervisor registry release with the local build output image.
+set -euo pipefail
+export LC_ALL=C
+
+usage() {
+  cat <<'EOF'
+Usage: ./scripts/refresh-supervisor-registry-lab <supervisor-host> <ssh-private-key> [version]
+
+Copies build/output/images/foldingos-x86_64-<version>.img onto the supervisor,
+updates /data/registry for that version, and verifies the entry.
+
+Default version: 0.1.0
+
+Example:
+  ./scripts/refresh-supervisor-registry-lab 192.168.88.251 /root/.ssh/id_ed25519
+EOF
+}
+
+if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
+  usage >&2
+  exit 2
+fi
+
+SUPERVISOR="$1"
+IDENTITY="$2"
+VERSION="${3:-0.1.0}"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SOURCE_IMAGE="${PROJECT_ROOT}/build/output/images/foldingos-x86_64-${VERSION}.img"
+SOURCE_SHA="${PROJECT_ROOT}/build/output/images/foldingos-x86_64-${VERSION}.img.sha256"
+
+if [ ! -f "${IDENTITY}" ]; then
+  echo "ERROR: SSH private key does not exist: ${IDENTITY}" >&2
+  exit 1
+fi
+if [ ! -f "${SOURCE_IMAGE}" ]; then
+  echo "ERROR: Missing build image: ${SOURCE_IMAGE}" >&2
+  exit 1
+fi
+
+SSH=(ssh
+  -F /dev/null
+  -i "${IDENTITY}"
+  -o BatchMode=yes
+  -o ConnectTimeout=15
+  -o LogLevel=ERROR
+  -o StrictHostKeyChecking=no
+  -o UserKnownHostsFile=/dev/null
+)
+
+SCP=(scp
+  -F /dev/null
+  -i "${IDENTITY}"
+  -o BatchMode=yes
+  -o ConnectTimeout=15
+  -o LogLevel=ERROR
+  -o StrictHostKeyChecking=no
+  -o UserKnownHostsFile=/dev/null
+)
+
+IMAGE_SHA256="$(
+  if [ -f "${SOURCE_SHA}" ]; then
+    awk '{print $1}' "${SOURCE_SHA}"
+  else
+    sha256sum "${SOURCE_IMAGE}" | awk '{print $1}'
+  fi
+)"
+
+echo "Refreshing supervisor registry version ${VERSION}"
+echo "Supervisor: ${SUPERVISOR}"
+echo "Source image: ${SOURCE_IMAGE}"
+echo "SHA-256: ${IMAGE_SHA256}"
+
+"${SCP[@]}" "${SOURCE_IMAGE}" "foldingos-admin@${SUPERVISOR}:/tmp/foldingos-registry-refresh.img"
+
+"${SSH[@]}" "foldingos-admin@${SUPERVISOR}" sh -s "${VERSION}" "${IMAGE_SHA256}" <<'EOF'
+set -eux
+VERSION="$1"
+IMAGE_SHA256="$2"
+TARGET="/data/registry/images/foldingos-x86_64-${VERSION}.img"
+sudo install -D -m 0644 /tmp/foldingos-registry-refresh.img "${TARGET}"
+sudo rm -f /tmp/foldingos-registry-refresh.img
+GIT_REVISION="$(tr -d '\n' </usr/share/foldingos/build-revision)"
+sudo tee "/data/registry/entries/${VERSION}.json" >/dev/null <<JSON
+{
+  "schema_version": 1,
+  "foldingos_version": "${VERSION}",
+  "git_revision": "${GIT_REVISION}",
+  "image_sha256": "${IMAGE_SHA256}",
+  "image_size_bytes": 4294967296,
+  "verification_method": "sha256",
+  "import_timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "rollout_state": "ready",
+  "local_image_path": "${TARGET}"
+}
+JSON
+sudo python3 - "${VERSION}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+version = sys.argv[1]
+index_path = Path("/data/registry/index.json")
+index = {"schema_version": 1, "versions": []}
+if index_path.exists():
+    index = json.loads(index_path.read_text())
+if version not in index.get("versions", []):
+    index.setdefault("versions", []).append(version)
+    index["versions"] = sorted(index["versions"])
+index_path.write_text(json.dumps(index, indent=2) + "\n")
+PY
+foldingosctl registry show "${VERSION}"
+foldingosctl registry list
+EOF
+
+echo "Supervisor registry ${VERSION} now matches the local build output."
+echo "Network-install agents again so they receive the refreshed image."

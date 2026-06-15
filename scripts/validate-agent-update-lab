@@ -1,0 +1,389 @@
+#!/usr/bin/env bash
+# Validate Milestone 3 agent staged update flow on a physical lab.
+# Run from the build host with SSH access to supervisor and agent nodes.
+set -euo pipefail
+export LC_ALL=C
+
+usage() {
+  cat <<'EOF'
+Usage: ./scripts/validate-agent-update-lab [options] <supervisor-host> <agent-host> <ssh-private-key> [lab-update-version]
+
+Runs baseline provisioning checks, registers a lab-only registry version from the
+local build output when needed, assigns it to the enrolled agent, and validates
+check-version staging plus apply-update reboot apply.
+
+Options:
+  --preflight   Baseline checks only; no assignment, staging, or reboot.
+
+Defaults for optional lab-update-version: 0.1.1-lab
+
+Example:
+  ./scripts/validate-agent-update-lab --preflight 192.168.88.251 192.168.88.248 /root/.ssh/id_ed25519
+  ./scripts/validate-agent-update-lab 192.168.88.251 192.168.88.248 /root/.ssh/id_ed25519
+EOF
+}
+
+PREFLIGHT=0
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --preflight)
+      PREFLIGHT=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+if [ "$#" -lt 3 ] || [ "$#" -gt 4 ]; then
+  usage >&2
+  exit 2
+fi
+
+SUPERVISOR="$1"
+AGENT="$2"
+IDENTITY="$3"
+LAB_VERSION="${4:-0.1.1-lab}"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SOURCE_IMAGE="${PROJECT_ROOT}/build/output/images/foldingos-x86_64-0.1.0.img"
+SOURCE_SHA="${PROJECT_ROOT}/build/output/images/foldingos-x86_64-0.1.0.img.sha256"
+LOG="${VALIDATE_AGENT_UPDATE_LOG:-/tmp/foldingos-agent-update-validation.log}"
+
+if [ ! -f "${IDENTITY}" ]; then
+  echo "ERROR: SSH private key does not exist: ${IDENTITY}" >&2
+  exit 1
+fi
+if [ ! -f "${SOURCE_IMAGE}" ]; then
+  echo "ERROR: Missing build image: ${SOURCE_IMAGE}" >&2
+  echo "Run ./scripts/build first." >&2
+  exit 1
+fi
+
+SSH=(ssh
+  -F /dev/null
+  -i "${IDENTITY}"
+  -o BatchMode=yes
+  -o ConnectTimeout=15
+  -o LogLevel=ERROR
+  -o StrictHostKeyChecking=no
+  -o UserKnownHostsFile=/dev/null
+)
+
+supervisor_ssh() {
+  "${SSH[@]}" "foldingos-admin@${SUPERVISOR}" "$@"
+}
+
+agent_ssh() {
+  "${SSH[@]}" "foldingos-admin@${AGENT}" "$@"
+}
+
+wait_for_ssh() {
+  local host="$1"
+  local attempts="${2:-60}"
+  local delay="${3:-5}"
+  local i
+  for ((i = 1; i <= attempts; i++)); do
+    if "${SSH[@]}" "foldingos-admin@${host}" true >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep "${delay}"
+  done
+  return 1
+}
+
+section() {
+  printf '\n== %s ==\n' "$1" | tee -a "${LOG}"
+}
+
+grub_efi_has_loadenv() {
+  local efi="$1"
+  strings "${efi}" | grep -m1 -E 'loadenv|load_env' >/dev/null 2>&1
+}
+
+verify_build_grub_efi() {
+  local bootx64="${PROJECT_ROOT}/build/output/images/efi-part/EFI/BOOT/bootx64.efi"
+  local bootx64_upper="${PROJECT_ROOT}/build/output/images/efi-part/EFI/BOOT/BOOTX64.EFI"
+
+  if [ -f "${bootx64}" ]; then
+    echo "ERROR: ${bootx64} was not merged into BOOTX64.EFI during post-image." | tee -a "${LOG}" >&2
+    echo "Re-run ./scripts/build after: cd build/output && make grub2-rebuild" | tee -a "${LOG}" >&2
+    exit 1
+  fi
+  if [ ! -f "${bootx64_upper}" ]; then
+    echo "ERROR: missing GRUB EFI at ${bootx64_upper}; run ./scripts/build first." | tee -a "${LOG}" >&2
+    exit 1
+  fi
+  if ! grub_efi_has_loadenv "${bootx64_upper}"; then
+    echo "ERROR: build GRUB EFI is missing the loadenv module (update apply will not work)." | tee -a "${LOG}" >&2
+    echo "Rebuild GRUB, then rebuild the image:" | tee -a "${LOG}" >&2
+    echo "  cd build/output && make grub2-rebuild" | tee -a "${LOG}" >&2
+    echo "  cd ../.. && ./scripts/build" | tee -a "${LOG}" >&2
+    exit 1
+  fi
+  echo "Build GRUB EFI includes loadenv." | tee -a "${LOG}"
+}
+
+: >"${LOG}"
+section "Lab agent update validation"
+echo "Supervisor: ${SUPERVISOR}" | tee -a "${LOG}"
+echo "Agent: ${AGENT}" | tee -a "${LOG}"
+echo "Lab update version: ${LAB_VERSION}" | tee -a "${LOG}"
+echo "Log: ${LOG}" | tee -a "${LOG}"
+
+section "SSH connectivity"
+supervisor_ssh true
+agent_ssh true
+
+section "Supervisor baseline"
+supervisor_ssh sh -s >>"${LOG}" 2>&1 <<'EOF'
+set -eux
+test "$(cat /data/config/installation-role)" = supervisor
+systemctl is-active foldingos-provision.service
+systemctl is-active foldingos-provision-boot.service
+foldingosctl registry list
+sudo foldingosctl provision list-enrollments
+EOF
+
+section "Agent baseline"
+if ! agent_ssh sh -s >>"${LOG}" 2>&1 <<'EOF'
+set -eux
+test "$(cat /data/config/installation-role)" = agent
+systemctl is-active foldingos-agent-register.service || true
+systemctl is-enabled foldingos-agent-version-check.service
+systemctl is-enabled foldingos-agent-apply-update.service
+EOF
+then
+  echo "ERROR: agent baseline failed; see ${LOG}" >&2
+  tail -15 "${LOG}" >&2
+  exit 1
+fi
+
+if [ "${PREFLIGHT}" -eq 1 ]; then
+  if ! agent_ssh sh -s >>"${LOG}" 2>&1 <<'EOF'
+set -eux
+sudo test ! -f /data/state/provision/staged-update.json
+sudo test ! -f /data/state/provision/staged-update.img
+EOF
+  then
+    echo "ERROR: agent already has a staged update from a prior run or polluted install image." >&2
+    echo "Do not patch the agent. PXE a fresh agent from the rebuilt supervisor image." >&2
+    exit 1
+  fi
+fi
+
+AGENT_NODE_ID="$(agent_ssh 'tr -d "[:space:]" </data/config/node-id')"
+if ! [[ "${AGENT_NODE_ID}" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]]; then
+  echo "ERROR: agent node-id is invalid: ${AGENT_NODE_ID}" | tee -a "${LOG}" >&2
+  exit 1
+fi
+echo "Agent node ID: ${AGENT_NODE_ID}" | tee -a "${LOG}"
+
+if supervisor_ssh sudo foldingosctl provision list-enrollments | grep -Fq "No enrolled agents"; then
+  echo "ERROR: Supervisor has no enrolled agents after agent first boot." | tee -a "${LOG}" >&2
+  echo "Check foldingos-agent-register.service on the agent image; registration must succeed automatically on boot." | tee -a "${LOG}" >&2
+  exit 1
+fi
+
+verify_build_grub_efi
+
+if ! agent_ssh sh -s >>"${LOG}" 2>&1 <<'EOF'
+set -eux
+test -f /usr/share/foldingos/boot/vmlinuz
+test -f /usr/share/foldingos/boot/install-initramfs.cpio.gz
+sudo grep -qE 'load_env|loadenv' /boot/efi/EFI/BOOT/grub.cfg
+sudo grep -q 'id foldingos-update' /boot/efi/EFI/BOOT/grub.cfg
+sudo strings /boot/efi/EFI/BOOT/BOOTX64.EFI | grep -m1 -E 'loadenv|load_env'
+EOF
+then
+  echo "ERROR: agent GRUB is missing loadenv (stale image; rebuild and PXE a fresh agent)." | tee -a "${LOG}" >&2
+  echo "See ${LOG} for details." | tee -a "${LOG}" >&2
+  exit 1
+fi
+
+if [ "${PREFLIGHT}" -eq 1 ]; then
+  section "Preflight complete"
+  echo "Baseline checks passed. Re-run without --preflight to exercise the update apply path." | tee -a "${LOG}"
+  exit 0
+fi
+
+section "Ensure lab registry version ${LAB_VERSION}"
+IMAGE_SHA256="$(
+  if [ -f "${SOURCE_SHA}" ]; then
+    awk '{print $1}' "${SOURCE_SHA}"
+  else
+    sha256sum "${SOURCE_IMAGE}" | awk '{print $1}'
+  fi
+)"
+echo "Source image SHA-256: ${IMAGE_SHA256}" | tee -a "${LOG}"
+
+if ! supervisor_ssh "test -f /data/registry/entries/${LAB_VERSION}.json"; then
+  echo "Registering ${LAB_VERSION} on supervisor from local build output..." | tee -a "${LOG}"
+  echo "Copying ${SOURCE_IMAGE} to supervisor (4 GiB; typically 5-15 minutes)..." | tee -a "${LOG}"
+  supervisor_ssh 'rm -f /tmp/foldingos-lab-update.img' >>"${LOG}" 2>&1 || true
+  (
+    while true; do
+      if supervisor_ssh 'test -f /tmp/foldingos-lab-update.img' 2>/dev/null; then
+        supervisor_ssh 'stat -c %s /tmp/foldingos-lab-update.img' 2>/dev/null \
+          | awk -v expected=4294967296 '{printf "\rCopy progress: %d / %d MiB (%d%%)", int($1/1048576), int(expected/1048576), int(100*$1/expected); fflush()}'
+      else
+        printf '\rCopy progress: starting...'
+      fi
+      sleep 10
+    done
+  ) &
+  progress_pid=$!
+  copy_ok=0
+  if cat "${SOURCE_IMAGE}" | supervisor_ssh "cat > /tmp/foldingos-lab-update.img"; then
+    copy_ok=1
+  fi
+  kill "${progress_pid}" 2>/dev/null || true
+  wait "${progress_pid}" 2>/dev/null || true
+  printf '\n'
+  if [ "${copy_ok}" -ne 1 ]; then
+    echo "ERROR: failed to copy lab update image to supervisor over SSH." | tee -a "${LOG}" >&2
+    echo "FoldingOS sshd does not expose the SFTP subsystem required by scp." | tee -a "${LOG}" >&2
+    exit 1
+  fi
+  echo "Image copy to supervisor complete." | tee -a "${LOG}"
+  supervisor_ssh sh -s "${LAB_VERSION}" "${IMAGE_SHA256}" >>"${LOG}" 2>&1 <<'EOF'
+set -eux
+LAB_VERSION="$1"
+IMAGE_SHA256="$2"
+TARGET="/data/registry/images/foldingos-x86_64-${LAB_VERSION}.img"
+sudo install -D -m 0644 /tmp/foldingos-lab-update.img "${TARGET}"
+sudo rm -f /tmp/foldingos-lab-update.img
+GIT_REVISION="$(tr -d '\n' </usr/share/foldingos/build-revision)"
+sudo tee "/data/registry/entries/${LAB_VERSION}.json" >/dev/null <<JSON
+{
+  "schema_version": 1,
+  "foldingos_version": "${LAB_VERSION}",
+  "git_revision": "${GIT_REVISION}",
+  "image_sha256": "${IMAGE_SHA256}",
+  "image_size_bytes": 4294967296,
+  "verification_method": "sha256",
+  "import_timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "rollout_state": "ready",
+  "local_image_path": "${TARGET}"
+}
+JSON
+sudo foldingosctl registry show "${LAB_VERSION}"
+EOF
+  CURRENT_INDEX="$(supervisor_ssh cat /data/registry/index.json 2>/dev/null || printf '%s\n' '{"schema_version":1,"versions":[]}')"
+  UPDATED_INDEX="$(printf '%s' "${CURRENT_INDEX}" | python3 - "${LAB_VERSION}" <<'PY'
+import json
+import sys
+
+version = sys.argv[1]
+index = json.loads(sys.stdin.read() or '{"schema_version":1,"versions":[]}')
+if version not in index.get("versions", []):
+    index.setdefault("versions", []).append(version)
+    index["versions"] = sorted(index["versions"])
+print(json.dumps(index, indent=2) + "\n")
+PY
+)"
+  printf '%s' "${UPDATED_INDEX}" | supervisor_ssh 'sudo tee /data/registry/index.json >/dev/null'
+else
+  echo "Registry already contains ${LAB_VERSION}." | tee -a "${LOG}"
+  supervisor_ssh sudo foldingosctl registry show "${LAB_VERSION}" >>"${LOG}" 2>&1
+fi
+
+section "Assign desired version to agent"
+supervisor_ssh sudo foldingosctl provision assign --version "${LAB_VERSION}" --node "${AGENT_NODE_ID}" \
+  | tee -a "${LOG}"
+
+section "Stage update on agent"
+agent_ssh sudo rm -f /data/state/provision/staged-update.img /data/state/provision/staged-update.json /data/state/provision/staged-update.partial \
+  >>"${LOG}" 2>&1 || true
+echo "Staging 4 GiB update image from supervisor (may take several minutes)..." | tee -a "${LOG}"
+STAGED_VERSION="$(
+  agent_ssh sudo foldingosctl provision check-version 2>/dev/null | tee -a "${LOG}" | tail -1
+)"
+if [ "${STAGED_VERSION}" != "${LAB_VERSION}" ]; then
+  echo "ERROR: check-version printed ${STAGED_VERSION}; expected ${LAB_VERSION}" | tee -a "${LOG}" >&2
+  agent_ssh sudo ls -l /data/state/provision/ >>"${LOG}" 2>&1 || true
+  tail -20 "${LOG}" >&2
+  exit 1
+fi
+STAGED_BYTES="$(
+  agent_ssh sudo ls -l /data/state/provision/staged-update.img 2>/dev/null | awk '{print $5}'
+)"
+if [ "${STAGED_BYTES}" != "4294967296" ]; then
+  echo "ERROR: staged-update.img is ${STAGED_BYTES} bytes; expected 4294967296." | tee -a "${LOG}" >&2
+  agent_ssh sudo ls -l /data/state/provision/ >>"${LOG}" 2>&1 || true
+  exit 1
+fi
+if ! agent_ssh sh -s >>"${LOG}" 2>&1 <<'EOF'
+set -eux
+sudo test -f /data/state/provision/staged-update.img
+sudo test -f /data/state/provision/staged-update.json
+sudo test -s /data/state/provision/staged-update.img
+sudo grep -q '"apply_state"[[:space:]]*:[[:space:]]*"staged"' /data/state/provision/staged-update.json
+EOF
+then
+  echo "ERROR: staged update files are missing on agent; see ${LOG}" >&2
+  exit 1
+fi
+
+section "Apply staged update (agent will reboot twice)"
+echo "apply-update reboots the agent; SSH disconnect is expected." | tee -a "${LOG}"
+set +e
+agent_ssh sudo foldingosctl provision apply-update 2>&1 | tee -a "${LOG}"
+apply_exit=$?
+set -e
+if [ "${apply_exit}" -ne 0 ]; then
+  echo "apply-update SSH session ended (exit ${apply_exit}); waiting for agent to return." | tee -a "${LOG}"
+fi
+
+wait_for_update_complete() {
+  local host="$1"
+  local attempts="${2:-90}"
+  local delay="${3:-5}"
+  local i
+  for ((i = 1; i <= attempts; i++)); do
+    if "${SSH[@]}" "foldingos-admin@${host}" true >/dev/null 2>&1; then
+      if "${SSH[@]}" "foldingos-admin@${host}" \
+        sudo test ! -f /data/state/provision/staged-update.json >/dev/null 2>&1; then
+        return 0
+      fi
+    fi
+    sleep "${delay}"
+  done
+  return 1
+}
+
+section "Wait for update initramfs apply and final reboot"
+if ! wait_for_update_complete "${AGENT}" 90 5; then
+  echo "ERROR: agent did not finish staged update apply (staged-update.json still present)." >&2
+  exit 1
+fi
+
+section "Post-update agent checks"
+agent_ssh sh -s >>"${LOG}" 2>&1 <<'EOF'
+set -eux
+test "$(cat /data/config/installation-role)" = agent
+sudo test ! -f /data/state/provision/staged-update.json
+sudo test ! -f /data/state/provision/staged-update.img
+sudo test ! -f /data/state/provision/pending-update-report.json
+sudo foldingosctl provision check-version | grep -Fx current
+findmnt /data
+test -d /data/config
+test -f /data/config/node-id
+test -f /data/config/provision/supervisor.url
+EOF
+
+section "Supervisor enrollment record"
+supervisor_ssh sh -s "${AGENT_NODE_ID}" "${LAB_VERSION}" >>"${LOG}" 2>&1 <<'EOF'
+set -eux
+NODE_ID="$1"
+LAB_VERSION="$2"
+sudo foldingosctl provision list-enrollments | grep "${NODE_ID}" | grep "current=${LAB_VERSION}" | grep 'desired=current'
+EOF
+
+section "Validation complete"
+echo "Agent update validation succeeded." | tee -a "${LOG}"
+echo "Review log: ${LOG}"

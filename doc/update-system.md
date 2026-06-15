@@ -85,13 +85,25 @@ The supervisor must not publish unverified images to agents.
 
 ## Upstream polling
 
-The supervisor periodically polls the upstream release server. When a new
-approved image is available it:
+The supervisor periodically polls the official FoldingOS releases manifest on
+Cloudflare HTTPS infrastructure. See
+[ADR-0017](adr/0017-official-release-publication-and-supervisor-upstream-polling.md).
 
-1. downloads image and metadata
-2. verifies digest and signature when present
+| Item | URL |
+| --- | --- |
+| Manifest | `https://releases.folding-os.com/release/releases.json` |
+| Disk images | `https://releases.folding-os.com/release/images/foldingos-x86_64-<version>.img` |
+| Supervisor config | `/data/config/provision/upstream-releases.url` |
+
+When a new approved image is available the supervisor:
+
+1. downloads image and metadata from the manifest entry
+2. verifies SHA-256 digest and declared size (Milestone 3)
 3. stores the image in the local registry
 4. marks it ready for operator-approved rollout
+
+Detached image signatures are planned; Milestone 3 relies on HTTPS origin trust
+and SHA-256 verification during import.
 
 ## Desired version assignment
 
@@ -131,6 +143,20 @@ Required behavior:
 - fail closed and keep the previous image on any error
 - report update outcome to the supervisor
 
+Staged update metadata at `/data/state/provision/staged-update.json` records an
+`apply_state` lifecycle: `staged` → `boot_scheduled` → `applying` → success
+(clear staged files) or `failed`. Normal-boot apply scheduling runs only while
+`apply_state` is `staged`. After a failed offline apply, the agent must not
+automatically schedule another update boot on subsequent normal boots.
+
+The update initramfs has no network. Offline apply records outcome in
+`/data/state/provision/pending-update-report.json`; the first normal-boot
+`check-version` with network delivers that report to the supervisor.
+
+See [Milestone 3 engineering specification](milestone/3-engineering-spec.md)
+(Update Workflow) and [foldingosctl.md](foldingosctl.md) (`provision
+apply-update`).
+
 A/B root slots, automatic rollback, and signed update bundles remain planned
 enhancements beyond Milestone 3.
 
@@ -153,7 +179,13 @@ If update staging or activation fails:
 - persistent configuration and Folding@home work remain intact where the update
   specification preserves them
 - the failure is logged and reported
-- the agent retries on a later boot or supervisor instruction
+- `apply_state` becomes `failed` after offline apply failure
+- the agent does not automatically retry offline apply on later normal boots
+- retry requires a new supervisor assignment or operator recovery action
+
+If update scheduling fails before the one-shot update boot (for example GRUB
+`next_entry` could not be set), the agent remains on the current image with
+`apply_state` still `staged` or `failed` as recorded in staged metadata.
 
 If network provisioning fails before first boot:
 

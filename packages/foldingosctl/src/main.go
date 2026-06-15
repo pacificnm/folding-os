@@ -30,6 +30,9 @@ var execCommand = exec.Command
 
 func main() {
 	if err := dispatch(os.Args[1:]); err != nil {
+		if errors.Is(err, errApplyUpdateNotSchedulable) {
+			os.Exit(1)
+		}
 		fmt.Fprintf(os.Stderr, "foldingosctl: %v\n", err)
 		os.Exit(1)
 	}
@@ -55,7 +58,13 @@ func dispatch(args []string) error {
 		return provisionEnroll()
 	}
 	if len(args) == 2 && args[0] == "provision" && args[1] == "check-version" {
-		return provisionCheckVersion()
+		return provisionCheckVersionAndStage()
+	}
+	if len(args) >= 2 && args[0] == "provision" && args[1] == "report-update-status" {
+		return provisionReportUpdateStatus(args[2:])
+	}
+	if len(args) >= 2 && args[0] == "provision" && args[1] == "apply-update" {
+		return provisionApplyUpdate(args[2:])
 	}
 	if len(args) == 2 && args[0] == "provision" && args[1] == "list-enrollments" {
 		return provisionListEnrollments()

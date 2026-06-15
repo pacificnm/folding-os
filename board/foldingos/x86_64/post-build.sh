@@ -85,6 +85,9 @@ ln -snf \
   /usr/lib/systemd/system/foldingos-agent-version-check.service \
   "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/foldingos-agent-version-check.service"
 ln -snf \
+  /usr/lib/systemd/system/foldingos-agent-apply-update.service \
+  "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/foldingos-agent-apply-update.service"
+ln -snf \
   /usr/lib/systemd/system/foldingos-boot-status.service \
   "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/foldingos-boot-status.service"
 ln -snf \
@@ -151,6 +154,12 @@ install -D -m 0644 "${IPXE_CACHE}" \
 if [ -n "${BINARIES_DIR:-}" ] && [ -f "${BINARIES_DIR}/bzImage" ]; then
   install -D -m 0644 "${BINARIES_DIR}/bzImage" \
     "${TARGET_DIR}/usr/share/foldingos/boot/vmlinuz"
+  install -D -m 0644 "${BINARIES_DIR}/bzImage" \
+    "${BINARIES_DIR}/foldingos-update-vmlinuz"
 fi
 
 "${BOARD_DIR}/mk-install-initramfs.sh" "${TARGET_DIR}"
+if [ -n "${BINARIES_DIR:-}" ] && [ -f "${TARGET_DIR}/usr/share/foldingos/boot/install-initramfs.cpio.gz" ]; then
+  install -D -m 0644 "${TARGET_DIR}/usr/share/foldingos/boot/install-initramfs.cpio.gz" \
+    "${BINARIES_DIR}/foldingos-update-initramfs.cpio.gz"
+fi

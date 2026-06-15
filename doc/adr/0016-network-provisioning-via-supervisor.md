@@ -2,9 +2,11 @@
 
 **Status:** Accepted
 
-**Version:** 1.0
+**Version:** 1.2
 
 **Date:** 2026-06-13
+
+**Revised:** 2026-06-15 (upstream origin cross-reference ADR-0017)
 
 **Authors:** FoldingOS Project Contributors
 
@@ -65,24 +67,36 @@ Blank machines do not require USB media or a local keyboard. The supervisor:
 
 1. recognizes the requesting node (MAC address, optional enrollment token)
 2. assigns the fixed `agent` role
-3. stages administrator SSH public keys on the target EFI System Partition
-4. streams the verified release image to the selected internal target disk
-5. verifies the installation
-6. directs the node to reboot into appliance mode
+3. streams the verified release image to the selected internal target disk
+4. resets inherited persistent state on the target data partition and clears
+   inherited GRUB one-shot boot state on the target EFI partition
+5. stages administrator SSH public keys on the target EFI System Partition
+6. verifies the installation
+7. directs the node to reboot into appliance mode
+
+When the release image was imported from the running supervisor disk
+(`registry import-bootstrap`), network install must not deliver inherited
+supervisor-local runtime state to the new agent. See [Milestone 3 engineering
+specification](milestone/3-engineering-spec.md) (Inherited state reset during
+network install).
 
 ## Image registry and updates
 
 The supervisor maintains a local registry of approved FoldingOS release images.
 
-The supervisor periodically polls an upstream release server for new signed or
-checksum-verified images. When a newer approved image is available, the
-supervisor downloads it, verifies it, and marks it ready for rollout.
+The supervisor periodically polls the official upstream release origin defined
+by [ADR-0017](0017-official-release-publication-and-supervisor-upstream-polling.md).
+When a newer verified image is available, the supervisor downloads it, verifies
+it, and marks it ready for rollout.
 
 Agent nodes check the supervisor on boot for their **desired image version**.
 When the supervisor assigns a newer version, the agent downloads the image
 through the supervisor (or a documented redirect to the upstream origin),
 verifies it, stages the update, and applies it on reboot using the update
-workflow defined in [update-system.md](../update-system.md).
+workflow defined in [update-system.md](../update-system.md). Failed offline apply
+must fail closed: the agent keeps the current bootable image, records
+`apply_state=failed`, and does not automatically schedule another update boot
+until a new supervisor assignment or operator recovery action.
 
 ## Direct flash remains supported
 
@@ -211,6 +225,7 @@ client.
 - [ADR-0014: Fixed Installation Roles](0014-fixed-installation-roles.md)
 - [ADR-0007: First-Boot Administrator and SSH-Key Provisioning](0007-first-boot-administrator-and-ssh-provisioning.md)
 - [ADR-0009: Folding@home Acquisition and Update Model](0009-fah-acquisition-and-update-model.md)
+- [ADR-0017: Official Release Publication And Supervisor Upstream Polling](0017-official-release-publication-and-supervisor-upstream-polling.md)
 - [Deployment and provisioning](../installer.md)
 - [Milestone 3 engineering specification](../milestone/3-engineering-spec.md)
 - [Update system](../update-system.md)

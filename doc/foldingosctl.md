@@ -73,6 +73,7 @@ Role-specific commands fail closed when the active role does not match.
 | `provision` | `install` | install initramfs | network-install boot path |
 | `provision` | `enroll` | agent | `systemd` on first boot |
 | `provision` | `check-version` | agent | `systemd` on boot |
+| `provision` | `apply-update` | agent / update initramfs | `systemd` on boot |
 | `registry` | `import-bootstrap` | supervisor | `systemd` on first boot |
 | `registry` | `poll` | supervisor | timer |
 | `registry` | `list` | supervisor | operator |
@@ -216,6 +217,8 @@ Endpoints include:
 | --- | --- |
 | `POST /v1/agents/register` | Agent enrollment |
 | `GET /v1/agents/desired-version` | Assigned image version lookup |
+| `POST /v1/agents/update/authorize` | Agent update stream authorization |
+| `POST /v1/agents/update/status` | Agent update status reporting |
 | `POST /v1/rollouts/assign` | Desired-version assignment |
 | `POST /v1/provision/authorize` | Install-session authorization |
 | `GET /v1/provision/images/{version}/stream` | Release image streaming |
@@ -277,6 +280,20 @@ foldingosctl provision assign --version 0.1.0 --node <node-uuid>
 Streams a supervisor-authorized release image onto a target disk over HTTP.
 Used by the network-install initramfs, not normal appliance operation.
 
+After the image is written, network install resets inherited persistent state
+from the copied release image, then stages agent-only provisioning files:
+
+- remove inherited runtime trees under `/data/config/`, `/data/registry/`,
+  `/data/provision/`, and `/data/state/` on the target data partition
+- clear `next_entry` from EFI `grubenv` when present
+- `/data/config/installation-role`
+- `/data/config/provision/supervisor.url`
+- `/data/config/provision/enrollment-token`
+- EFI provisioning files under `/boot/efi/foldingos/provision/`
+
+See [Milestone 3 engineering specification](milestone/3-engineering-spec.md)
+(Inherited state reset during network install).
+
 ```bash
 foldingosctl provision install --auto-disk \
   --supervisor-url http://192.168.4.17:8743 \
@@ -297,7 +314,9 @@ Registers the local agent with the supervisor configured in
 `/data/config/provision/supervisor.url` using the enrollment token at
 `/data/config/provision/enrollment-token`.
 
-No-op with an informational message when supervisor URL is not configured.
+No-op with an informational message when supervisor URL is not configured and
+no enrollment token is present. Fails closed when an enrollment token is
+present but the supervisor URL is missing.
 Idempotent when already enrolled with the same node identity.
 
 Invoked by `foldingos-agent-register.service`.
@@ -305,9 +324,74 @@ Invoked by `foldingos-agent-register.service`.
 ## `provision check-version` (agent)
 
 Queries the supervisor for the desired image version assigned to this node.
-Prints `current` or a version string to stdout.
+When a newer approved version is assigned, **downloads and verifies the full
+release image** (typically 4 GiB) from the supervisor into
+`/data/state/provision/staged-update.img` with metadata at
+`/data/state/provision/staged-update.json`. Progress lines are written while
+the download runs; a silent hang usually means a large download is still in
+progress.
+
+Staged metadata includes `apply_state=staged` and the assigned version. When
+`apply_state` is `boot_scheduled`, `applying`, or `failed`, `check-version` does
+not overwrite existing staged update files.
+
+**Stdout** (for scripts and `systemd`):
+
+| Output | Meaning |
+| --- | --- |
+| `current` | No assigned update, or already on the assigned version |
+| `<version>` | Assigned update is staged (or pending apply); not yet installed |
+
+When stdout prints a version string such as `0.1.1-lab`, the image has been
+**downloaded to `/data/state/provision/`** — it is not installed until
+`provision apply-update` runs. Status and progress messages go to the console
+and stdout during staging.
+
+Supervisor connectivity failures are non-fatal and print `current` so boot
+continues on the installed image.
 
 Requires prior enrollment. Invoked by `foldingos-agent-version-check.service`.
+
+## `provision apply-update` (agent)
+
+Activates a verified staged update. In normal appliance boot, runs while
+`staged-update.json` has `apply_state=staged` or retries while
+`apply_state=boot_scheduled`: sets `apply_state=boot_scheduled`, stages update
+boot assets under `/boot/efi/foldingos/update/`, sets GRUB `next_entry` to `1`
+(the `foldingos-update` menu entry), and reboots once.
+
+In update initramfs boot (`foldingos.update-apply=1`), sets
+`apply_state=applying`, copies the staged image EFI and root partitions onto the
+boot disk while preserving the persistent data partition, records outcome in
+`/data/state/provision/pending-update-report.json`, clears staged files on
+success, and reboots. The update initramfs has no network; `check-version` on
+the first normal boot with network delivers the pending report to the supervisor.
+
+On offline apply failure, sets `apply_state=failed`, records a pending `failed`
+report, and reboots into the normal boot path without scheduling another update
+boot automatically.
+
+## `provision report-update-status` (agent)
+
+Reports a missed update outcome directly to the supervisor when network is
+available. Operator recovery when an offline apply succeeded but the pending
+report file is missing.
+
+```bash
+foldingosctl provision report-update-status --status applied --version 0.1.1-lab
+```
+
+| Flag | Required | Description |
+| --- | --- | --- |
+| `--status <status>` | yes | `applied` or `failed` |
+| `--version <ver>` | yes | Assigned image version to report |
+
+No-op with an informational message when no staged update is pending or when
+`apply_state` is not `staged` (normal boot) or the update initramfs boot path is
+not active.
+
+Invoked by `foldingos-agent-apply-update.service` while `apply_state` is
+`staged` or `boot_scheduled`, and by the update initramfs for offline apply.
 
 ---
 
@@ -327,6 +411,15 @@ Invoked by `foldingos-registry-bootstrap.service`.
 Polls the upstream releases manifest configured at
 `/data/config/provision/upstream-releases.url` and stages newly approved
 images into the registry.
+
+Supervisor appliances use the official stable manifest by default:
+
+```text
+https://releases.folding-os.com/release/releases.json
+```
+
+Manifest schema, image URLs, and trust model are defined in
+[ADR-0017](adr/0017-official-release-publication-and-supervisor-upstream-polling.md).
 
 Invoked by `foldingos-registry-poll.timer`.
 
@@ -392,6 +485,8 @@ Long-running. Invoked by `folding-at-home.service`.
 | `/data/config/provision/boot.interface` | Optional pinned NIC for PXE service |
 | `/data/config/provision/dnsmasq.conf` | Generated proxy-DHCP/TFTP config |
 | `/data/provision/boot/tftp/` | Staged `ipxe.efi` and `autoexec.ipxe` |
+| `/data/state/provision/staged-update.img` | Verified agent update image staging file |
+| `/data/state/provision/staged-update.json` | Staged update metadata and verification state |
 | `/data/provision/enrollments/` | Agent enrollment records |
 | `/data/registry/` | Supervisor release image registry |
 | `/boot/efi/foldingos/provision/` | Staged first-boot role and SSH keys |

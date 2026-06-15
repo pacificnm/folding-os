@@ -1,6 +1,6 @@
 # FoldingOS Milestone 3 Network Fleet Provisioning Engineering Specification
 
-**Version:** 2.0
+**Version:** 2.3
 
 **Status:** Approved for Implementation
 
@@ -8,6 +8,12 @@
 
 **Supersedes:** Milestone 3 combined-image installer engineering specification
 v1.1 (2026-06-11)
+
+**Revision 2.3 (2026-06-15):** Upstream object prefix `/release/` on
+`releases.folding-os.com` per ADR-0017 v1.1.
+
+**Revision 2.2 (2026-06-15):** Official upstream release origin (`releases.folding-os.com`)
+per ADR-0017.
 
 ---
 
@@ -189,12 +195,41 @@ never transferred over TFTP.
    parameters.
 5. The supervisor streams the verified release image to the selected internal
    target disk over HTTP or HTTPS.
-6. The supervisor writes administrator SSH public keys to the target EFI System
-   Partition at `/foldingos/provision/authorized_keys`.
-7. The supervisor verifies the written image and instructs the node to reboot.
-8. The installed agent completes first-boot appliance initialization, registers
+6. The supervisor resets inherited persistent state on the target data
+   partition, then writes agent-only provisioning files under `/data/config/`.
+7. The supervisor writes administrator SSH public keys to the target EFI System
+   Partition at `/foldingos/provision/authorized_keys` and clears any inherited
+   GRUB one-shot boot state on the target EFI partition.
+8. The supervisor verifies the written image and instructs the node to reboot.
+9. The installed agent completes first-boot appliance initialization, registers
    with the supervisor, and begins normal operation including Folding@home
    acquisition.
+
+### Inherited state reset during network install
+
+`registry import-bootstrap` copies the running supervisor disk into the local
+registry ([foldingosctl.md](../foldingosctl.md)). That image may contain
+supervisor-local persistent state in partition 3 and stale GRUB environment
+state on the EFI partition. Network install must not deliver that inherited
+runtime state to a newly provisioned agent ([ADR-0014](../adr/0014-fixed-installation-roles.md)).
+
+After the release image is written to the target disk and before agent-only
+staging files are created, network install must:
+
+1. remove inherited runtime trees under `/data/config/`, `/data/registry/`,
+   `/data/provision/`, and `/data/state/` on the target data partition
+2. write fresh agent-only files under `/data/config/` and
+   `/data/config/provision/` as defined by `foldingosctl provision install`
+3. not inherit a persistent node identity; node identity is created on first
+   agent boot by existing identity services
+
+After the release image is written and before the target reboots, network
+install must clear `next_entry` from EFI `grubenv` when present so the agent's
+first boot uses the normal GRUB entry unless a later supervisor-assigned update
+schedules the update boot path.
+
+These steps are implemented by `foldingosctl provision install` during network
+install. They are not performed on running agents after installation.
 
 ## Target requirements
 
@@ -226,17 +261,30 @@ Each registry entry must record at minimum:
 - import timestamp
 - rollout state (`staged`, `ready`, `retired`)
 
-The supervisor polls the upstream release server on a fixed interval. When a
-new approved image is available:
+The supervisor polls the official upstream release origin on a fixed interval.
+See [ADR-0017](../adr/0017-official-release-publication-and-supervisor-upstream-polling.md).
 
-1. download the image and sidecar metadata
-2. verify checksum and signature when present
+Default manifest URL on supervisor appliances:
+
+```text
+https://releases.folding-os.com/release/releases.json
+```
+
+Configured at `/data/config/provision/upstream-releases.url`. When a new approved
+image is available:
+
+1. download the image and sidecar metadata from `releases.folding-os.com`
+2. verify SHA-256 digest and size
 3. mark the image `ready` for rollout
 4. expose the new version to operator approval before fleet-wide assignment
 
-The upstream server may be a project-controlled HTTPS endpoint, object storage,
-or GitHub Releases. The exact upstream contract is defined in the FoldOps or
-FoldingOS release publication workflow.
+Published disk images use:
+
+```text
+https://releases.folding-os.com/release/images/foldingos-x86_64-<version>.img
+```
+
+FoldOps Debian packages remain on `deb.folding-os.com` ([FoldOps install](https://www.folding-os.com/foldops)); operating-system images use the releases host above.
 
 ---
 
@@ -300,6 +348,38 @@ Required behavior:
 - fail closed and retain the previous bootable image on verification failure
 - report update status to the supervisor
 
+Staged update metadata at `/data/state/provision/staged-update.json` must
+record an `apply_state` lifecycle:
+
+| `apply_state` | Meaning |
+| --- | --- |
+| `staged` | Verified update image and metadata are present; ready to schedule the one-shot update boot |
+| `boot_scheduled` | GRUB `next_entry` is set for the update boot path; waiting for update initramfs boot |
+| `applying` | Update initramfs offline apply is running |
+| `failed` | Offline apply failed; the agent remains on the current bootable image |
+
+Required transitions:
+
+1. `check-version` creates staged files with `apply_state=staged`.
+2. Normal-boot `apply-update` runs while `apply_state` is `staged` or retries while
+   `boot_scheduled`, sets `boot_scheduled`, stages update boot assets, sets GRUB
+   `next_entry` to the update menu entry index `1` (`foldingos-update`), and reboots once.
+3. Update initramfs `apply-update --offline` sets `applying`, copies the staged
+   image EFI and root partitions onto the boot disk while preserving partition
+   3, records outcome in `/data/state/provision/pending-update-report.json`,
+   clears staged files on success, and reboots. The update initramfs has no
+   network stack; `check-version` on the first normal boot with network
+   delivers the pending report to the supervisor and removes the pending file.
+4. On offline apply failure, the agent sets `apply_state=failed`, reports
+   `failed` to the supervisor, and reboots into the normal boot path without
+   scheduling another update boot automatically.
+5. While `apply_state` is `boot_scheduled`, `applying`, or `failed`,
+   `check-version` must not overwrite staged update files. Retry requires a new
+   supervisor assignment or operator recovery action.
+
+`foldingos-agent-apply-update.service` must invoke normal-boot `apply-update`
+while `apply_state` is `staged` or `boot_scheduled`.
+
 A/B partition slots and automatic rollback remain future enhancements documented
 in [update-system.md](../update-system.md). Milestone 3 must not leave agents
 without a bootable fallback image after a failed update attempt.
@@ -320,6 +400,11 @@ Milestone 3 adds or extends:
 | `foldingos-provision-boot.service` | DHCP/TFTP/HTTP boot assistance |
 | `foldingos-agent-register.service` | Agent registration oneshot |
 | `foldingos-agent-version-check.service` | Agent desired-version check on boot |
+| `foldingos-agent-apply-update.service` | Agent staged update scheduling on boot while `apply_state` is `staged` or `boot_scheduled` |
+
+GRUB EFI must include the `loadenv` module so `grub.cfg` can read and clear
+`next_entry` from `grubenv` for one-shot update boots
+(`BR2_TARGET_GRUB2_BUILTIN_MODULES_EFI` in the Buildroot defconfig).
 
 Exact unit names, dependencies, and failure behavior must match the
 implementation merged with this specification.

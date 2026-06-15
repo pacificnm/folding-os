@@ -247,6 +247,11 @@ The long-term objective is a fully automated release pipeline capable of:
 
 official FoldingOS releases with minimal manual intervention.
 
+Stable releases publish to `releases.folding-os.com` per
+[ADR-0017](adr/0017-official-release-publication-and-supervisor-upstream-polling.md).
+FoldOps packages publish to `deb.folding-os.com` per
+[FoldOps installation](https://www.folding-os.com/foldops).
+
 ---
 
 # Summary

@@ -41,7 +41,14 @@ func provisionRole() error {
 		if activeErr == nil {
 			activeRole, err := parseInstallationRole(activeContent)
 			if err != nil {
-				return fmt.Errorf("persistent installation role is invalid: %w", err)
+				if err := atomicWrite(activeInstallationRole, []byte(role), 0644); err != nil {
+					return err
+				}
+				if err := os.Remove(provisionedInstallationRole); err != nil {
+					return err
+				}
+				fmt.Printf("Recovered installation role %q from provisioned staging.\n", role)
+				return nil
 			}
 			if activeRole != role {
 				return fmt.Errorf(

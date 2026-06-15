@@ -56,6 +56,10 @@ type enrollmentRecord struct {
 	Hostname            string   `json:"hostname"`
 	FAHActive           bool     `json:"fah_active,omitempty"`
 	DesiredImageVersion string   `json:"desired_image_version"`
+	LastUpdateStatus    string   `json:"last_update_status,omitempty"`
+	LastUpdateVersion   string   `json:"last_update_version,omitempty"`
+	LastUpdateMessage   string   `json:"last_update_message,omitempty"`
+	LastUpdateAt        string   `json:"last_update_at,omitempty"`
 }
 
 type enrollmentIndex struct {

@@ -22,6 +22,7 @@ FOUNDATION_UNITS = {
     "foldingos-provision-boot.service",
     "foldingos-agent-register.service",
     "foldingos-agent-version-check.service",
+    "foldingos-agent-apply-update.service",
     "foldingos-registry-bootstrap.service",
     "foldingos-registry-poll.service",
     "foldingos-registry-poll.timer",
@@ -63,6 +64,8 @@ REQUIRED_LINKS = {
         "/usr/lib/systemd/system/foldingos-agent-register.service",
     "etc/systemd/system/multi-user.target.wants/foldingos-agent-version-check.service":
         "/usr/lib/systemd/system/foldingos-agent-version-check.service",
+    "etc/systemd/system/multi-user.target.wants/foldingos-agent-apply-update.service":
+        "/usr/lib/systemd/system/foldingos-agent-apply-update.service",
     "etc/systemd/system/multi-user.target.wants/foldingos-boot-status.service":
         "/usr/lib/systemd/system/foldingos-boot-status.service",
     "etc/systemd/system/multi-user.target.wants/foldingos-fah-prepare.service":
@@ -118,6 +121,10 @@ UNIT_REQUIREMENTS = {
     "foldingos-identity.service": {
         ("Unit", "Requires"): {"foldingos-persistent-dirs.service"},
         ("Unit", "After"): {"foldingos-persistent-dirs.service"},
+        ("Unit", "Before"): {
+            "foldingos-config-validate.service",
+            "foldingos-agent-register.service",
+        },
     },
     "foldingos-config-validate.service": {
         ("Unit", "Requires"): {"foldingos-identity.service"},
@@ -206,9 +213,15 @@ UNIT_REQUIREMENTS = {
         ("Service", "Restart"): {"on-failure"},
     },
     "foldingos-agent-register.service": {
-        ("Unit", "Requires"): {"foldingos-installation-role.service"},
+        ("Unit", "Requires"): {
+            "foldingos-installation-role.service",
+            "foldingos-identity.service",
+            "foldingos-config-validate.service",
+        },
         ("Unit", "After"): {
             "foldingos-installation-role.service",
+            "foldingos-identity.service",
+            "foldingos-config-validate.service",
             "network-online.target",
         },
         ("Unit", "Before"): {"foldingos-agent-version-check.service"},
@@ -226,6 +239,16 @@ UNIT_REQUIREMENTS = {
         ("Unit", "Wants"): {"network-online.target"},
         ("Unit", "ConditionPathExists"): {"/data/config/installation-role"},
         ("Service", "ExecCondition"): {"/bin/sh -c 'grep -qx agent /data/config/installation-role'"},
+        ("Service", "Type"): {"oneshot"},
+    },
+    "foldingos-agent-apply-update.service": {
+        ("Unit", "Requires"): {"foldingos-agent-version-check.service"},
+        ("Unit", "After"): {"foldingos-agent-version-check.service"},
+        ("Unit", "ConditionPathExists"): {"/data/config/installation-role"},
+        ("Service", "ExecCondition"): {
+            "/bin/sh -c 'grep -qx agent /data/config/installation-role'",
+            "/usr/bin/foldingosctl provision apply-update --exec-condition",
+        },
         ("Service", "Type"): {"oneshot"},
     },
     "foldingos-boot-status.service": {
@@ -339,6 +362,11 @@ FAILURE_ISOLATION_FORBIDDEN_REQUIRES = {
         "systemd-time-wait-sync.service",
     },
     "foldingos-agent-version-check.service": {
+        "var-log-journal.mount",
+        "foldingos-journal-flush.service",
+        "systemd-time-wait-sync.service",
+    },
+    "foldingos-agent-apply-update.service": {
         "var-log-journal.mount",
         "foldingos-journal-flush.service",
         "systemd-time-wait-sync.service",
