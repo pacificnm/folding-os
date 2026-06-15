@@ -15,11 +15,12 @@ import (
 )
 
 var (
-	provisionInstallHTTPClient = &http.Client{}
-	writeProvisionImageToDisk  = writeProvisionImageToDiskDirect
-	stageProvisionBootFiles    = stageProvisionBootFilesOnDisk
-	relocateProvisionGPT       = relocateProvisionGPTOnDisk
-	installProgressInterval    = int64(128 * 1024 * 1024)
+	provisionInstallHTTPClient     = &http.Client{}
+	writeProvisionImageToDisk      = writeProvisionImageToDiskDirect
+	stageProvisionBootFiles        = stageProvisionBootFilesOnDisk
+	stageProvisionPersistentConfig = stageProvisionPersistentConfigOnDisk
+	relocateProvisionGPT             = relocateProvisionGPTOnDisk
+	installProgressInterval        = int64(128 * 1024 * 1024)
 )
 
 func installLogf(format string, args ...any) {
@@ -270,6 +271,14 @@ func provisionInstall(args []string) error {
 	if err := stageProvisionBootFiles(target.Path, authorization.InstallationRole, []byte(authorization.AuthorizedKeys)); err != nil {
 		return err
 	}
+	if err := stageProvisionPersistentConfig(
+		target.Path,
+		authorization.InstallationRole,
+		supervisorURL,
+		enrollmentToken,
+	); err != nil {
+		return err
+	}
 
 	installLogf("Provisioned %s with role %s.", target.Path, authorization.InstallationRole)
 	installLogf("Reboot the target into internal storage to complete installation.")
@@ -344,10 +353,95 @@ func stageProvisionBootFilesOnDisk(disk, role string, authorizedKeys []byte) err
 	if err := os.WriteFile(filepath.Join(provisionDir, "authorized_keys"), authorizedKeys, 0644); err != nil {
 		return err
 	}
+	if err := clearGrubNextEntry(filepath.Join(mountPoint, "EFI", "BOOT", "grubenv")); err != nil {
+		return err
+	}
 	if err := run("sync"); err != nil {
 		return err
 	}
 	installLogf("Staged installation role and SSH keys on %s.", efiPartition)
+	return nil
+}
+
+func stageProvisionPersistentConfigOnDisk(disk, role, supervisorURL, enrollmentToken string) error {
+	role = strings.TrimSpace(role)
+	if role == "" {
+		return errors.New("installation role is required")
+	}
+	if _, err := parseInstallationRole([]byte(role)); err != nil {
+		return fmt.Errorf("installation role is invalid: %w", err)
+	}
+	supervisorURL = strings.TrimRight(strings.TrimSpace(supervisorURL), "/")
+	if supervisorURL == "" {
+		return errors.New("supervisor URL is required for network install")
+	}
+	if _, err := joinSupervisorURL(supervisorURL, "/"); err != nil {
+		return fmt.Errorf("supervisor URL is invalid: %w", err)
+	}
+	enrollmentToken = strings.TrimSpace(enrollmentToken)
+	if enrollmentToken == "" {
+		return errors.New("enrollment token is required for network install")
+	}
+
+	dataPartition := partitionDevice(disk, dataPartitionNumber)
+	if mounted(dataPartition) {
+		return fmt.Errorf("data partition %s is mounted", dataPartition)
+	}
+
+	mountPoint, err := os.MkdirTemp(provisionScratchDir(), "foldingos-provision-data-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(mountPoint)
+
+	if err := run("mount", "-t", "ext4", "-o", "rw", dataPartition, mountPoint); err != nil {
+		return fmt.Errorf("mount data partition %s: %w", dataPartition, err)
+	}
+	defer func() {
+		_ = run("umount", mountPoint)
+	}()
+
+	if err := writeProvisionPersistentFiles(mountPoint, role, supervisorURL, enrollmentToken); err != nil {
+		return err
+	}
+	if err := run("sync"); err != nil {
+		return err
+	}
+	installLogf("Staged installation role and provisioning config on %s.", dataPartition)
+	return nil
+}
+
+func writeProvisionPersistentFiles(root, role, supervisorURL, enrollmentToken string) error {
+	role = strings.TrimSpace(role)
+	if role == "" {
+		return errors.New("installation role is required")
+	}
+	if _, err := parseInstallationRole([]byte(role)); err != nil {
+		return fmt.Errorf("installation role is invalid: %w", err)
+	}
+	if err := resetAgentDataPartitionState(root); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Join(root, "config", "provision"), 0755); err != nil {
+		return err
+	}
+	if err := atomicWrite(filepath.Join(root, "config", "installation-role"), []byte(role), 0644); err != nil {
+		return err
+	}
+	if err := atomicWrite(
+		filepath.Join(root, "config", "provision", "supervisor.url"),
+		[]byte(supervisorURL+"\n"),
+		0644,
+	); err != nil {
+		return err
+	}
+	if err := atomicWrite(
+		filepath.Join(root, "config", "provision", "enrollment-token"),
+		[]byte(enrollmentToken+"\n"),
+		0600,
+	); err != nil {
+		return err
+	}
 	return nil
 }
 

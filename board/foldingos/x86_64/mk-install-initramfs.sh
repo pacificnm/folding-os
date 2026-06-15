@@ -139,6 +139,7 @@ copy_with_deps "${TARGET_DIR}/usr/bin/foldingosctl" /usr/bin/foldingosctl
 copy_with_deps "${TARGET_DIR}/usr/bin/lsblk" /usr/bin/lsblk
 copy_with_deps "${TARGET_DIR}/usr/bin/findmnt" /usr/bin/findmnt
 copy_with_deps "${TARGET_DIR}/sbin/sgdisk" /sbin/sgdisk
+copy_with_deps "${TARGET_DIR}/usr/bin/losetup" /usr/bin/losetup
 copy_with_deps "${TARGET_DIR}/bin/mount" /bin/mount
 copy_with_deps "${TARGET_DIR}/bin/umount" /bin/umount
 copy_with_deps "${TARGET_DIR}/bin/sync" /bin/sync
@@ -146,10 +147,12 @@ copy_with_deps "${TARGET_DIR}/usr/bin/ssh-keygen" /usr/bin/ssh-keygen
 if [ -x "${TARGET_DIR}/sbin/partprobe" ]; then
   copy_with_deps "${TARGET_DIR}/sbin/partprobe" /sbin/partprobe
 fi
+ln -sf busybox "${INITRAMFS_ROOT}/bin/dd"
 ln -sf ../bin/busybox "${INITRAMFS_ROOT}/sbin/reboot"
 
 verify_initramfs_binary bin/busybox
 verify_initramfs_binary usr/bin/foldingosctl
+verify_initramfs_binary usr/bin/losetup
 
 mkdir -p "${INITRAMFS_ROOT}/etc" "${INITRAMFS_ROOT}/root"
 printf 'passwd: files\n' > "${INITRAMFS_ROOT}/etc/nsswitch.conf"

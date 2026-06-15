@@ -1,7 +1,7 @@
 [Unit]
 Description=Register FoldingOS agent with supervisor
-Requires=foldingos-installation-role.service
-After=foldingos-installation-role.service network-online.target
+Requires=foldingos-installation-role.service foldingos-identity.service foldingos-config-validate.service
+After=foldingos-installation-role.service foldingos-identity.service foldingos-config-validate.service network-online.target
 Wants=network-online.target
 Before=foldingos-agent-version-check.service
 ConditionPathExists=/data/config/installation-role

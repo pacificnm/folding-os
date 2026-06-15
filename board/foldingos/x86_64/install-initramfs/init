@@ -4,7 +4,7 @@ set -eu
 mount -t proc proc /proc
 mount -t sysfs sys /sys
 mount -t devtmpfs dev /dev
-mkdir -p /dev/pts /run /tmp
+mkdir -p /dev/pts /run /tmp /data
 mount -t devpts devpts /dev/pts
 mount -t tmpfs tmpfs /run
 mount -t tmpfs tmpfs /tmp
@@ -15,6 +15,7 @@ SUPERVISOR=""
 TOKEN=""
 DISK=""
 AUTO_DISK=0
+UPDATE_APPLY=0
 
 for param in $(cat /proc/cmdline); do
   case "${param}" in
@@ -30,8 +31,24 @@ for param in $(cat /proc/cmdline); do
     foldingos.auto-disk=*)
       AUTO_DISK=1
       ;;
+    foldingos.update-apply=1)
+      UPDATE_APPLY=1
+      ;;
   esac
 done
+
+if [ "${UPDATE_APPLY}" -eq 1 ]; then
+  echo "FoldingOS staged update apply starting." >/dev/console
+  if ! mount -t ext4 -o rw LABEL=FOLDINGOS_DATA /data; then
+    echo "FoldingOS staged update apply could not mount /data." >/dev/console
+    exit 1
+  fi
+  if ! /usr/bin/foldingosctl provision apply-update --offline >/dev/console 2>&1; then
+    echo "FoldingOS staged update apply failed." >/dev/console
+    exit 1
+  fi
+  exit 0
+fi
 
 if [ -z "${SUPERVISOR}" ] || [ -z "${TOKEN}" ]; then
   echo "FoldingOS network install is missing supervisor parameters." >/dev/console

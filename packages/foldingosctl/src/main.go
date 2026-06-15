@@ -55,7 +55,10 @@ func dispatch(args []string) error {
 		return provisionEnroll()
 	}
 	if len(args) == 2 && args[0] == "provision" && args[1] == "check-version" {
-		return provisionCheckVersion()
+		return provisionCheckVersionAndStage()
+	}
+	if len(args) >= 2 && args[0] == "provision" && args[1] == "apply-update" {
+		return provisionApplyUpdate(args[2:])
 	}
 	if len(args) == 2 && args[0] == "provision" && args[1] == "list-enrollments" {
 		return provisionListEnrollments()

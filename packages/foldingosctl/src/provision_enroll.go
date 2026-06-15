@@ -18,11 +18,18 @@ func provisionEnroll() error {
 		return err
 	}
 
+	if err := ensureIdentity(); err != nil {
+		return fmt.Errorf("ensure node identity before enrollment: %w", err)
+	}
+
 	supervisorURL, err := readSupervisorBaseURL()
 	if err != nil {
 		return err
 	}
 	if supervisorURL == "" {
+		if _, tokenErr := readEnrollmentToken(); tokenErr == nil {
+			return errors.New("supervisor URL is not configured for network-provisioned agent")
+		}
 		fmt.Println("Supervisor URL is not configured; agent enrollment skipped.")
 		return nil
 	}
@@ -102,63 +109,5 @@ func provisionEnroll() error {
 		return err
 	}
 	fmt.Printf("Agent %s enrolled with supervisor %s.\n", nodeID, supervisorURL)
-	return nil
-}
-
-func provisionCheckVersion() error {
-	if err := requireAgentRole(); err != nil {
-		return err
-	}
-
-	nodeID, err := agentEnrollmentNodeID()
-	if err != nil {
-		if os.IsNotExist(err) {
-			return errors.New("agent is not enrolled")
-		}
-		return err
-	}
-
-	supervisorURL, err := readSupervisorBaseURL()
-	if err != nil {
-		return err
-	}
-	if supervisorURL == "" {
-		return errors.New("supervisor URL is not configured")
-	}
-	token, err := readEnrollmentToken()
-	if err != nil {
-		return err
-	}
-
-	endpoint, err := joinSupervisorURL(supervisorURL, "/v1/agents/desired-version?node_id="+nodeID)
-	if err != nil {
-		return err
-	}
-	httpRequest, err := http.NewRequest(http.MethodGet, endpoint, nil)
-	if err != nil {
-		return err
-	}
-	httpRequest.Header.Set("X-FoldingOS-Enrollment-Token", token)
-	response, err := provisionHTTPClient.Do(httpRequest)
-	if err != nil {
-		return err
-	}
-	defer response.Body.Close()
-	responseBody, err := io.ReadAll(io.LimitReader(response.Body, 1<<20))
-	if err != nil {
-		return err
-	}
-	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf(
-			"desired-version query failed with status %s: %s",
-			response.Status,
-			strings.TrimSpace(string(responseBody)),
-		)
-	}
-	var result desiredVersionResponse
-	if err := json.Unmarshal(responseBody, &result); err != nil {
-		return err
-	}
-	fmt.Println(result.DesiredVersion)
 	return nil
 }

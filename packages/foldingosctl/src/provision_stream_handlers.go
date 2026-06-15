@@ -52,11 +52,31 @@ func handleProvisionImageStream(writer http.ResponseWriter, request *http.Reques
 		return
 	}
 	sessionID := strings.TrimSpace(request.Header.Get(installSessionHeader))
+	updateSessionID := strings.TrimSpace(request.Header.Get(updateSessionHeader))
 	enrollmentToken := strings.TrimSpace(request.Header.Get("X-FoldingOS-Enrollment-Token"))
-	if sessionID == "" {
-		http.Error(writer, "install session is required", http.StatusBadRequest)
+	if sessionID == "" && updateSessionID == "" {
+		http.Error(writer, "install or update session is required", http.StatusBadRequest)
 		return
 	}
+	if sessionID != "" && updateSessionID != "" {
+		http.Error(writer, "only one of install or update session may be provided", http.StatusBadRequest)
+		return
+	}
+	if updateSessionID != "" {
+		session, entry, err := validateUpdateStreamAccess(updateSessionID, version, enrollmentToken)
+		if err != nil {
+			status := http.StatusBadRequest
+			if strings.Contains(err.Error(), "enrollment token") || strings.Contains(err.Error(), "update session") {
+				status = http.StatusUnauthorized
+			}
+			http.Error(writer, err.Error(), status)
+			return
+		}
+		streamRegistryImage(writer, entry)
+		_ = session
+		return
+	}
+
 	session, entry, err := validateInstallStreamAccess(sessionID, version, enrollmentToken)
 	if err != nil {
 		status := http.StatusBadRequest
@@ -67,6 +87,11 @@ func handleProvisionImageStream(writer http.ResponseWriter, request *http.Reques
 		return
 	}
 
+	streamRegistryImage(writer, entry)
+	_ = session
+}
+
+func streamRegistryImage(writer http.ResponseWriter, entry registryEntry) {
 	file, err := os.Open(entry.LocalImagePath)
 	if err != nil {
 		http.Error(writer, "registry image is unavailable", http.StatusInternalServerError)
@@ -86,9 +111,6 @@ func handleProvisionImageStream(writer http.ResponseWriter, request *http.Reques
 	writer.Header().Set("Content-Type", "application/octet-stream")
 	writer.Header().Set("Content-Length", fmt.Sprintf("%d", entry.ImageSizeBytes))
 	writer.Header().Set("X-FoldingOS-Image-SHA256", entry.ImageSHA256)
-	writer.Header().Set("X-FoldingOS-Target-Disk", session.TargetDisk)
 	writer.WriteHeader(http.StatusOK)
-	if _, err := io.Copy(writer, file); err != nil {
-		return
-	}
+	_, _ = io.Copy(writer, file)
 }

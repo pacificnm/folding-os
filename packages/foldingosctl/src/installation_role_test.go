@@ -139,6 +139,53 @@ func TestProvisionRoleFailsWhenInvalid(t *testing.T) {
 	}
 }
 
+func TestProvisionRoleRecoversInvalidPersistentRoleFromEFI(t *testing.T) {
+	root := t.TempDir()
+	restore := setInstallationRolePaths(
+		filepath.Join(root, "efi", "installation-role"),
+		filepath.Join(root, "data", "installation-role"),
+	)
+	defer restore()
+
+	for _, path := range []string{
+		filepath.Join(root, "efi"),
+		filepath.Join(root, "data"),
+	} {
+		if err := os.MkdirAll(path, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(
+		filepath.Join(root, "efi", "installation-role"),
+		[]byte("agent"),
+		0644,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(root, "data", "installation-role"),
+		[]byte{0x46, 0x2a, 0x86, 0x57, 0x85, 0xf3, 0x1b, 0x15, 0x9c, 0xce},
+		0644,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := provisionRole(); err != nil {
+		t.Fatal(err)
+	}
+
+	active, err := os.ReadFile(filepath.Join(root, "data", "installation-role"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(active) != "agent" {
+		t.Fatalf("active role = %q", active)
+	}
+	if _, err := os.Stat(filepath.Join(root, "efi", "installation-role")); !os.IsNotExist(err) {
+		t.Fatal("provisioned role file was not removed")
+	}
+}
+
 func TestProvisionRoleRejectsConflictingProvisionedRole(t *testing.T) {
 	root := t.TempDir()
 	restore := setInstallationRolePaths(

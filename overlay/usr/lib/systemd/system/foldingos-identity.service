@@ -2,7 +2,7 @@
 Description=Ensure FoldingOS node identity
 Requires=foldingos-persistent-dirs.service
 After=foldingos-persistent-dirs.service
-Before=foldingos-config-validate.service
+Before=foldingos-config-validate.service foldingos-agent-register.service
 
 [Service]
 Type=oneshot

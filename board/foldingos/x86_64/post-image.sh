@@ -17,6 +17,21 @@ fi
 install -m 0644 "${BOARD_DIR}/grub.cfg" "${EFI_DIR}/EFI/BOOT/grub.cfg"
 install -m 0644 "${BOARD_DIR}/grub.cfg" "${EFI_DIR}/boot/grub/grub.cfg"
 
+mkdir -p "${EFI_DIR}/foldingos/update"
+if [ -f "${BINARIES_DIR}/foldingos-update-vmlinuz" ]; then
+  install -m 0644 "${BINARIES_DIR}/foldingos-update-vmlinuz" \
+    "${EFI_DIR}/foldingos/update/vmlinuz"
+fi
+if [ -f "${BINARIES_DIR}/foldingos-update-initramfs.cpio.gz" ]; then
+  install -m 0644 "${BINARIES_DIR}/foldingos-update-initramfs.cpio.gz" \
+    "${EFI_DIR}/foldingos/update/install-initramfs.cpio.gz"
+fi
+if command -v grub-editenv >/dev/null 2>&1; then
+  grub-editenv "${EFI_DIR}/EFI/BOOT/grubenv" create
+elif [ -x "${HOST_DIR}/bin/grub-editenv" ]; then
+  "${HOST_DIR}/bin/grub-editenv" "${EFI_DIR}/EFI/BOOT/grubenv" create
+fi
+
 find "${EFI_DIR}" -exec touch -h -d "@${SOURCE_DATE_EPOCH}" {} +
 
 rm -f "${DATA_IMAGE}"

@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -34,6 +35,8 @@ func provisionServe() error {
 	mux.HandleFunc("/v1/agents/register", handleAgentRegister)
 	mux.HandleFunc("/v1/agents/desired-version", handleDesiredVersion)
 	mux.HandleFunc("/v1/rollouts/assign", handleRolloutAssign)
+	mux.HandleFunc("/v1/agents/update/authorize", handleUpdateAuthorize)
+	mux.HandleFunc("/v1/agents/update/status", handleUpdateStatus)
 	mux.HandleFunc("/v1/provision/authorize", handleProvisionAuthorize)
 	mux.HandleFunc("/v1/provision/images/", handleProvisionImageStream)
 	mux.HandleFunc("/boot/ipxe/bootstrap.ipxe", handleIPXEBootstrap)
@@ -244,15 +247,11 @@ func sortStrings(values []string) {
 }
 
 func readNodeID() (string, error) {
-	content, err := os.ReadFile("/data/config/node-id")
+	content, err := os.ReadFile(filepath.Join(configDir, "node-id"))
 	if err != nil {
 		return "", err
 	}
-	nodeID := strings.TrimSpace(string(content))
-	if !uuidPattern.MatchString(nodeID) {
-		return "", errors.New("node identity is invalid")
-	}
-	return nodeID, nil
+	return parseNodeIDFile(content)
 }
 
 func readHostname() (string, error) {

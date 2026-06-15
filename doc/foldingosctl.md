@@ -73,6 +73,7 @@ Role-specific commands fail closed when the active role does not match.
 | `provision` | `install` | install initramfs | network-install boot path |
 | `provision` | `enroll` | agent | `systemd` on first boot |
 | `provision` | `check-version` | agent | `systemd` on boot |
+| `provision` | `apply-update` | agent / update initramfs | `systemd` on boot |
 | `registry` | `import-bootstrap` | supervisor | `systemd` on first boot |
 | `registry` | `poll` | supervisor | timer |
 | `registry` | `list` | supervisor | operator |
@@ -216,6 +217,8 @@ Endpoints include:
 | --- | --- |
 | `POST /v1/agents/register` | Agent enrollment |
 | `GET /v1/agents/desired-version` | Assigned image version lookup |
+| `POST /v1/agents/update/authorize` | Agent update stream authorization |
+| `POST /v1/agents/update/status` | Agent update status reporting |
 | `POST /v1/rollouts/assign` | Desired-version assignment |
 | `POST /v1/provision/authorize` | Install-session authorization |
 | `GET /v1/provision/images/{version}/stream` | Release image streaming |
@@ -277,6 +280,13 @@ foldingosctl provision assign --version 0.1.0 --node <node-uuid>
 Streams a supervisor-authorized release image onto a target disk over HTTP.
 Used by the network-install initramfs, not normal appliance operation.
 
+After the image is written, network install also stages:
+
+- `/data/config/installation-role`
+- `/data/config/provision/supervisor.url`
+- `/data/config/provision/enrollment-token`
+- EFI provisioning files under `/boot/efi/foldingos/provision/`
+
 ```bash
 foldingosctl provision install --auto-disk \
   --supervisor-url http://192.168.4.17:8743 \
@@ -297,7 +307,9 @@ Registers the local agent with the supervisor configured in
 `/data/config/provision/supervisor.url` using the enrollment token at
 `/data/config/provision/enrollment-token`.
 
-No-op with an informational message when supervisor URL is not configured.
+No-op with an informational message when supervisor URL is not configured and
+no enrollment token is present. Fails closed when an enrollment token is
+present but the supervisor URL is missing.
 Idempotent when already enrolled with the same node identity.
 
 Invoked by `foldingos-agent-register.service`.
@@ -305,9 +317,28 @@ Invoked by `foldingos-agent-register.service`.
 ## `provision check-version` (agent)
 
 Queries the supervisor for the desired image version assigned to this node.
-Prints `current` or a version string to stdout.
+When a newer approved version is assigned, downloads and verifies the release
+image into `/data/state/provision/staged-update.img` with metadata at
+`/data/state/provision/staged-update.json`.
+
+Prints `current` or the assigned version string to stdout. Supervisor
+connectivity failures are non-fatal and print `current` so boot continues on the
+installed image.
 
 Requires prior enrollment. Invoked by `foldingos-agent-version-check.service`.
+
+## `provision apply-update` (agent)
+
+Activates a verified staged update. In normal appliance boot, schedules a
+one-shot reboot into the update initramfs via GRUB. In update initramfs boot
+(`foldingos.update-apply=1`), copies the staged image EFI and root partitions
+onto the boot disk while preserving the persistent data partition, reports
+outcome to the supervisor, and reboots.
+
+No-op with an informational message when no staged update is pending.
+
+Invoked by `foldingos-agent-apply-update.service` after a successful
+`check-version` staging run, and by the update initramfs for offline apply.
 
 ---
 
@@ -392,6 +423,8 @@ Long-running. Invoked by `folding-at-home.service`.
 | `/data/config/provision/boot.interface` | Optional pinned NIC for PXE service |
 | `/data/config/provision/dnsmasq.conf` | Generated proxy-DHCP/TFTP config |
 | `/data/provision/boot/tftp/` | Staged `ipxe.efi` and `autoexec.ipxe` |
+| `/data/state/provision/staged-update.img` | Verified agent update image staging file |
+| `/data/state/provision/staged-update.json` | Staged update metadata and verification state |
 | `/data/provision/enrollments/` | Agent enrollment records |
 | `/data/registry/` | Supervisor release image registry |
 | `/boot/efi/foldingos/provision/` | Staged first-boot role and SSH keys |
