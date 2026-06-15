@@ -13,12 +13,18 @@ import (
 
 const (
 	embeddedFoldOpsManifestPath      = "/usr/share/foldingos/manifests/foldops.toml"
+	foldOpsVerifiedMarkerName        = ".foldingos-verified"
 	foldOpsApprovedArtifactOrigin    = "deb.folding-os.com"
 	foldOpsManifestSchemaVersion     = 1
 	foldOpsManifestArchitecture      = "x86_64"
 	foldOpsManifestArtifactFormat    = "deb"
 	foldOpsManifestMinimumVersion    = "0.1.0"
 	foldOpsVerificationPathPrefix    = "/data/apps/foldops/current/"
+)
+
+var (
+	foldOpsAppsRoot     = "/data/apps/foldops"
+	foldOpsDownloadsDir = "/data/apps/foldops/.downloads"
 )
 
 var foldOpsRequiredPackageRoles = map[string][]string{

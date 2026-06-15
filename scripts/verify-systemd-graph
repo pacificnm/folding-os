@@ -35,6 +35,11 @@ FAH_RUNTIME_UNITS = {
     "foldingos-fah-prepare.service",
     "folding-at-home.service",
 }
+FOLDOPS_RUNTIME_UNITS = {
+    "foldingos-foldops-acquire.service",
+    "foldingos-foldops-acquire.timer",
+}
+APPROVED_FOLDOPS_UNIT_NAMES = FOLDOPS_RUNTIME_UNITS
 REQUIRED_LINKS = {
     "etc/systemd/system/local-fs.target.wants/foldingos-data-expand.service":
         "/usr/lib/systemd/system/foldingos-data-expand.service",
@@ -86,6 +91,8 @@ REQUIRED_LINKS = {
         "/usr/lib/systemd/system/systemd-time-wait-sync.service",
     "etc/systemd/system/timers.target.wants/foldingos-fah-acquire.timer":
         "/usr/lib/systemd/system/foldingos-fah-acquire.timer",
+    "etc/systemd/system/timers.target.wants/foldingos-foldops-acquire.timer":
+        "/usr/lib/systemd/system/foldingos-foldops-acquire.timer",
     "etc/systemd/system/timers.target.wants/foldingos-registry-poll.timer":
         "/usr/lib/systemd/system/foldingos-registry-poll.timer",
 }
@@ -309,6 +316,24 @@ UNIT_REQUIREMENTS = {
         ("Timer", "AccuracySec"): {"1s"},
         ("Timer", "Persistent"): {"true"},
     },
+    "foldingos-foldops-acquire.service": {
+        ("Unit", "After"): {
+            "network-online.target",
+            "systemd-time-wait-sync.service",
+            "data.mount",
+            "foldingos-installation-role.service",
+        },
+        ("Unit", "Wants"): {"network-online.target"},
+        ("Unit", "ConditionPathExists"): {"/data/config/installation-role"},
+        ("Service", "Type"): {"oneshot"},
+    },
+    "foldingos-foldops-acquire.timer": {
+        ("Unit", "Requires"): {"foldingos-foldops-acquire.service"},
+        ("Timer", "OnBootSec"): {"1min"},
+        ("Timer", "OnUnitInactiveSec"): {"1min"},
+        ("Timer", "AccuracySec"): {"1s"},
+        ("Timer", "Persistent"): {"true"},
+    },
 }
 FAILURE_ISOLATION_FORBIDDEN_REQUIRES = {
     "foldingos-identity.service": {
@@ -384,6 +409,12 @@ FAILURE_ISOLATION_FORBIDDEN_REQUIRES = {
         "foldingos-journal-flush.service",
         "folding-at-home.service",
         "foldingos-fah-prepare.service",
+    },
+    "foldingos-foldops-acquire.service": {
+        "var-log-journal.mount",
+        "foldingos-journal-flush.service",
+        "foldingos-fah-prepare.service",
+        "folding-at-home.service",
     },
 }
 
@@ -469,13 +500,22 @@ def main():
             if f"usr/lib/systemd/system/{unit}" not in members:
                 fail(f"required FAH runtime unit is absent: {unit}")
 
-        forbidden = [
-            name
-            for name in members
-            if "foldops" in name.lower()
-        ]
+        for unit in FOLDOPS_RUNTIME_UNITS:
+            if f"usr/lib/systemd/system/{unit}" not in members:
+                fail(f"required FoldOps runtime unit is absent: {unit}")
+
+        forbidden = []
+        for name in members:
+            normalized = normalize(name)
+            if "/systemd/system/" not in normalized:
+                continue
+            unit_name = Path(normalized).name
+            if "foldops" not in unit_name.lower():
+                continue
+            if unit_name not in APPROVED_FOLDOPS_UNIT_NAMES:
+                forbidden.append(normalized)
         if forbidden:
-            fail(f"premature or undocumented runtime unit is present: {forbidden[0]}")
+            fail(f"premature or undocumented FoldOps runtime unit is present: {forbidden[0]}")
 
         project_enabled = {
             name
