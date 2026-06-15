@@ -99,6 +99,9 @@ func dispatch(args []string) error {
 	if len(args) == 2 && args[0] == "fah" && args[1] == "validate-manifest" {
 		return validateFAHManifestEmbedded()
 	}
+	if len(args) == 2 && args[0] == "foldops" && args[1] == "validate-manifest" {
+		return validateFoldOpsManifestEmbedded()
+	}
 	if len(args) == 2 && args[0] == "fah" && args[1] == "acquire" {
 		return fahAcquire()
 	}
@@ -124,7 +127,7 @@ func dispatch(args []string) error {
 		return activateConfig(args[2], args[3])
 	}
 
-	fmt.Fprintln(os.Stderr, "usage: foldingosctl <boot|config|fah|identity|provision|registry|storage> <command> [arguments]")
+	fmt.Fprintln(os.Stderr, "usage: foldingosctl <boot|config|fah|foldops|identity|provision|registry|storage> <command> [arguments]")
 	os.Exit(2)
 	return nil
 }

@@ -14,6 +14,7 @@ BUILDROOT_VERSION = "2026.02.2"
 LINUX_VERSION = "6.12.90"
 BASE_NAME = f"foldingos-x86_64-{FOLDINGOS_VERSION}"
 FAH_MANIFEST_RELATIVE = Path("overlay/usr/share/foldingos/manifests/fah.toml")
+FOLDOPS_MANIFEST_RELATIVE = Path("overlay/usr/share/foldingos/manifests/foldops.toml")
 SOURCE_PATHS = (
     "board",
     "configs",
@@ -137,8 +138,9 @@ def main():
     package_manifest = project_root / "build/host/debian-13-packages.txt"
     defconfig = project_root / "configs/foldingos_x86_64_defconfig"
     fah_manifest = project_root / FAH_MANIFEST_RELATIVE
+    foldops_manifest = project_root / FOLDOPS_MANIFEST_RELATIVE
 
-    for path in (image_path, buildroot_archive, package_manifest, defconfig, fah_manifest):
+    for path in (image_path, buildroot_archive, package_manifest, defconfig, fah_manifest, foldops_manifest):
         if not path.is_file():
             fail(f"missing required build input: {path}")
 
@@ -149,7 +151,15 @@ def main():
         ],
         cwd=project_root,
     )
+    run(
+        [
+            sys.executable,
+            str(project_root / "scripts/verify-foldops-manifest"),
+        ],
+        cwd=project_root,
+    )
     approved_fah_manifest_sha256 = sha256_file(fah_manifest)
+    approved_foldops_manifest_sha256 = sha256_file(foldops_manifest)
 
     git_revision = run(["git", "rev-parse", "HEAD"], cwd=project_root)
     source_timestamp = int(run(["git", "show", "-s", "--format=%ct", "HEAD"], cwd=project_root))
@@ -196,6 +206,7 @@ def main():
 
     metadata = {
         "approved_fah_manifest_sha256": approved_fah_manifest_sha256,
+        "approved_foldops_manifest_sha256": approved_foldops_manifest_sha256,
         "artifact_digests": {
             image_path.name: image_digest,
             checksum_path.name: sha256_file(checksum_path),
