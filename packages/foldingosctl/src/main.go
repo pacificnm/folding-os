@@ -102,6 +102,9 @@ func dispatch(args []string) error {
 	if len(args) == 2 && args[0] == "foldops" && args[1] == "validate-manifest" {
 		return validateFoldOpsManifestEmbedded()
 	}
+	if len(args) == 2 && args[0] == "foldops" && args[1] == "acquire" {
+		return foldOpsAcquire()
+	}
 	if len(args) == 2 && args[0] == "fah" && args[1] == "acquire" {
 		return fahAcquire()
 	}
