@@ -23,6 +23,7 @@ BUILDROOT_ASSETS=(
   "../../../packages/foldingosctl/src/identity.go"
   "../../../packages/foldingosctl/src/boot.go"
   "../../../packages/foldingosctl/src/fah.go"
+  "../../../packages/foldingosctl/src/foldops.go"
   "../../../packages/foldingosctl/src/fah_acquire.go"
   "../../../packages/foldingosctl/src/fah_acquire_state.go"
   "../../../packages/foldingosctl/src/fah_extract.go"
@@ -77,6 +78,7 @@ if [ ! -f "${DEFCONFIG}" ]; then
 fi
 
 "${PROJECT_ROOT}/scripts/verify-fah-manifest"
+"${PROJECT_ROOT}/scripts/verify-foldops-manifest"
 
 "${PROJECT_ROOT}/scripts/fetch-sources"
 

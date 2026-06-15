@@ -76,6 +76,7 @@ Additional static verification helpers:
 ./scripts/verify-config build/output/images/rootfs.tar
 ./scripts/verify-persistent-logging build/output/images/rootfs.tar
 ./scripts/verify-fah-manifest build/output/images/rootfs.tar
+./scripts/verify-foldops-manifest build/output/images/rootfs.tar
 ```
 
 Reproducibility verification requires two independent clean builds. See

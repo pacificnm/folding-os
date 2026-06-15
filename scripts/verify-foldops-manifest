@@ -1,0 +1,221 @@
+#!/usr/bin/env python3
+"""Verify the embedded approved FoldOps acquisition manifest and keyring."""
+
+import re
+import sys
+import tarfile
+import tomllib
+from pathlib import Path
+from urllib.parse import urlparse
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_MANIFEST = PROJECT_ROOT / "overlay/usr/share/foldingos/manifests/foldops.toml"
+DEFAULT_KEYRING = PROJECT_ROOT / "overlay/usr/share/keyrings/foldops.gpg"
+DEFAULT_ROOTFS = PROJECT_ROOT / "build/output/images/rootfs.tar"
+ROOTFS_MANIFEST = "usr/share/foldingos/manifests/foldops.toml"
+ROOTFS_KEYRING = "usr/share/keyrings/foldops.gpg"
+PLACEHOLDER = "REQUIRED_BEFORE_RELEASE"
+SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+APPROVED_ORIGIN = "deb.folding-os.com"
+REQUIRED_PACKAGES = {
+    "foldops-agent": {"agent", "supervisor"},
+    "foldops-supervisor": {"supervisor"},
+    "foldops-web": {"supervisor"},
+}
+
+
+class VerificationError(Exception):
+    """A manifest verification failure."""
+
+
+def fail(message):
+    raise VerificationError(message)
+
+
+def load_manifest_bytes(data):
+    try:
+        manifest = tomllib.loads(data.decode("utf-8"))
+    except tomllib.TOMLDecodeError as error:
+        fail(f"manifest is not valid TOML: {error}")
+    if PLACEHOLDER in data.decode("utf-8"):
+        fail(f"manifest contains unresolved placeholder: {PLACEHOLDER}")
+    return manifest
+
+
+def validate_roles(package_name, roles):
+    if not isinstance(roles, list) or not roles:
+        fail(f"package {package_name} roles must be a non-empty array")
+    normalized = set()
+    for role in roles:
+        if not isinstance(role, str) or role not in {"agent", "supervisor"}:
+            fail(f"package {package_name} roles must contain only agent or supervisor")
+        normalized.add(role)
+    expected = REQUIRED_PACKAGES.get(package_name)
+    if expected is None:
+        fail(f"unexpected package name in manifest: {package_name}")
+    if normalized != expected:
+        fail(
+            f"package {package_name} roles must be {sorted(expected)}; "
+            f"found {sorted(normalized)}"
+        )
+
+
+def validate_package(package):
+    if not isinstance(package, dict):
+        fail("each packages entry must be a table")
+
+    required_string_fields = (
+        "name",
+        "version",
+        "artifact_url",
+        "sha256",
+        "verification_path",
+    )
+    for field in required_string_fields:
+        value = package.get(field)
+        if not isinstance(value, str) or not value.strip():
+            fail(f"package field {field} must be a non-empty string")
+
+    name = package["name"]
+    artifact_size = package.get("artifact_size")
+    if not isinstance(artifact_size, int) or artifact_size <= 0:
+        fail(f"package {name} artifact_size must be a positive integer")
+
+    sha256 = package["sha256"]
+    if not SHA256_PATTERN.fullmatch(sha256):
+        fail(f"package {name} sha256 must be a 64-character lowercase hex digest")
+
+    artifact_url = package["artifact_url"]
+    parsed = urlparse(artifact_url)
+    if parsed.scheme != "https" or parsed.netloc != APPROVED_ORIGIN:
+        fail(
+            f"package {name} artifact_url must use HTTPS from the approved official "
+            f"origin: {APPROVED_ORIGIN}"
+        )
+    if parsed.path.endswith("/latest.deb") or parsed.path.endswith("latest.deb"):
+        fail(f"package {name} artifact_url must not reference an unpinned latest artifact")
+    if f"/{name}/" not in parsed.path and not parsed.path.endswith(f"{name}_"):
+        fail(f"package {name} artifact_url must reference the {name} pool artifact")
+
+    verification_path = package["verification_path"]
+    expected_prefix = f"/data/apps/foldops/current/{name}/"
+    if not verification_path.startswith(expected_prefix):
+        fail(
+            f"package {name} verification_path must remain under {expected_prefix}"
+        )
+
+    validate_roles(name, package.get("roles"))
+
+
+def validate_manifest(manifest):
+    required_string_fields = (
+        "manifest_release",
+        "architecture",
+        "artifact_format",
+        "minimum_foldingos_version",
+    )
+    for field in required_string_fields:
+        value = manifest.get(field)
+        if not isinstance(value, str) or not value.strip():
+            fail(f"manifest field {field} must be a non-empty string")
+
+    if manifest.get("schema_version") != 1:
+        fail("manifest schema_version must be 1")
+    if manifest.get("architecture") != "x86_64":
+        fail("manifest architecture must be x86_64")
+    if manifest.get("artifact_format") != "deb":
+        fail("manifest artifact_format must be deb")
+    if manifest.get("minimum_foldingos_version") != "0.1.0":
+        fail("manifest minimum_foldingos_version must be 0.1.0")
+
+    packages = manifest.get("packages")
+    if not isinstance(packages, list) or not packages:
+        fail("manifest packages must be a non-empty array")
+
+    seen_names = set()
+    for package in packages:
+        validate_package(package)
+        name = package["name"]
+        if name in seen_names:
+            fail(f"duplicate package name in manifest: {name}")
+        seen_names.add(name)
+
+    missing = set(REQUIRED_PACKAGES) - seen_names
+    if missing:
+        fail(f"manifest is missing required packages: {', '.join(sorted(missing))}")
+
+
+def validate_keyring_bytes(data, label):
+    if len(data) < 100:
+        fail(f"keyring is unexpectedly small: {label}")
+    if data.startswith(b"-----BEGIN PGP PUBLIC KEY BLOCK-----"):
+        fail(f"keyring must be dearmored binary format: {label}")
+
+
+def validate_keyring(path):
+    if not path.is_file():
+        fail(f"keyring does not exist: {path}")
+    validate_keyring_bytes(path.read_bytes(), path)
+
+
+def read_overlay_manifest(path):
+    if not path.is_file():
+        fail(f"manifest does not exist: {path}")
+    manifest = load_manifest_bytes(path.read_bytes())
+    validate_manifest(manifest)
+    return manifest
+
+
+def read_rootfs_member(rootfs_path, member_name):
+    if not rootfs_path.is_file():
+        fail(f"root filesystem archive does not exist: {rootfs_path}")
+    with tarfile.open(rootfs_path) as archive:
+        try:
+            member = archive.getmember(f"./{member_name}")
+        except KeyError:
+            fail(f"required file is absent from rootfs: {member_name}")
+        if not member.isfile():
+            fail(f"required file is not a regular file: {member_name}")
+        source = archive.extractfile(member)
+        if source is None:
+            fail(f"cannot read required file: {member_name}")
+        return source.read()
+
+
+def read_rootfs_manifest(rootfs_path):
+    manifest = load_manifest_bytes(read_rootfs_member(rootfs_path, ROOTFS_MANIFEST))
+    validate_manifest(manifest)
+    return manifest
+
+
+def read_rootfs_keyring(rootfs_path):
+    validate_keyring_bytes(
+        read_rootfs_member(rootfs_path, ROOTFS_KEYRING),
+        ROOTFS_KEYRING,
+    )
+
+
+def main():
+    if len(sys.argv) > 2:
+        print("Usage: ./scripts/verify-foldops-manifest [rootfs.tar]", file=sys.stderr)
+        return 2
+
+    if len(sys.argv) == 2:
+        rootfs_path = Path(sys.argv[1])
+        read_rootfs_manifest(rootfs_path)
+        read_rootfs_keyring(rootfs_path)
+    else:
+        read_overlay_manifest(DEFAULT_MANIFEST)
+        validate_keyring(DEFAULT_KEYRING)
+
+    print("FoldingOS approved FoldOps manifest verified.")
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except VerificationError as error:
+        print(f"ERROR: {error}", file=sys.stderr)
+        raise SystemExit(1) from error

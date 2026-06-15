@@ -305,7 +305,34 @@ official archive keyring. They do **not** embed FoldOps application binaries.
 | `/usr/share/keyrings/foldops.gpg` | official apt archive keyring (same as Debian install) |
 
 Builds must verify the manifest before image generation, analogous to
-`scripts/verify-fah-manifest`.
+`scripts/verify-fah-manifest` and `scripts/verify-foldops-manifest`.
+
+## Manifest schema
+
+`foldops.toml` uses schema version `1` with top-level fields:
+
+| Field | Purpose |
+| --- | --- |
+| `schema_version` | Manifest parser version (`1`) |
+| `manifest_release` | Activation directory name under `/data/apps/foldops/` |
+| `architecture` | Supported CPU architecture (`x86_64`) |
+| `artifact_format` | Download artifact type (`deb`) |
+| `minimum_foldingos_version` | Minimum compatible FoldingOS release |
+
+Each required package is a `[[packages]]` table:
+
+| Field | Purpose |
+| --- | --- |
+| `name` | Debian package name (`foldops-agent`, `foldops-supervisor`, `foldops-web`) |
+| `version` | Pinned upstream package version |
+| `roles` | Installation roles that acquire this package |
+| `artifact_url` | Exact HTTPS pool URL on `deb.folding-os.com` |
+| `artifact_size` | Expected `.deb` size in bytes |
+| `sha256` | Expected `.deb` SHA-256 digest |
+| `verification_path` | Post-activation path used to verify extract layout |
+
+Build-time verification rejects unpinned URLs, unknown packages, invalid role
+assignments, and paths outside `/data/apps/foldops/current/<package>/`.
 
 ## Role-specific packages
 
