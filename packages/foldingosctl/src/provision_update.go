@@ -397,12 +397,21 @@ func provisionCheckVersionAndStage() error {
 				return err
 			}
 		} else if isLockedStagedUpdateApplyState(staged.ApplyState) {
+			installLogf(
+				"Update %s pending apply (apply_state=%s); run provision apply-update.",
+				desired,
+				effectiveApplyState(staged.ApplyState),
+			)
 			fmt.Println(desired)
 			return nil
 		} else if staged.DesiredVersion == desired && staged.CurrentVersion == currentVersion {
 			if err := verifyStagedUpdateFile(staged); err == nil {
+				installLogf("Update %s already staged and verified; run provision apply-update.", desired)
 				fmt.Println(desired)
 				return nil
+			}
+			if err := clearStagedUpdate(); err != nil {
+				return err
 			}
 		} else if err := clearStagedUpdate(); err != nil {
 			return err
@@ -418,10 +427,24 @@ func provisionCheckVersionAndStage() error {
 		return err
 	}
 
+	installLogf(
+		"Supervisor assigned image version %s (current %s); staging update image.",
+		desired,
+		currentVersion,
+	)
+
 	if err := stageAgentUpdate(supervisorURL, nodeID, token, currentVersion, desired); err != nil {
 		_ = reportAgentUpdateStatus(supervisorURL, nodeID, token, desired, "failed", err.Error())
 		return err
 	}
+	staged, err := loadStagedUpdateMetadata()
+	if err != nil {
+		return err
+	}
+	if err := verifyStagedUpdateFile(staged); err != nil {
+		return err
+	}
+	installLogf("Staged update %s verified; run provision apply-update to activate.", desired)
 	fmt.Println(desired)
 	return nil
 }
@@ -460,6 +483,12 @@ func queryDesiredVersion(supervisorURL, nodeID, token string) (string, error) {
 }
 
 func stageAgentUpdate(supervisorURL, nodeID, token, currentVersion, desiredVersion string) error {
+	return withStagedUpdateLock(func() error {
+		return stageAgentUpdateLocked(supervisorURL, nodeID, token, currentVersion, desiredVersion)
+	})
+}
+
+func stageAgentUpdateLocked(supervisorURL, nodeID, token, currentVersion, desiredVersion string) error {
 	authorizeURL, err := joinSupervisorURL(supervisorURL, "/v1/agents/update/authorize")
 	if err != nil {
 		return err
@@ -539,11 +568,18 @@ func stageAgentUpdate(supervisorURL, nodeID, token, currentVersion, desiredVersi
 		)
 	}
 
+	installLogf(
+		"Downloading assigned release %s from supervisor (%s). This may take several minutes.",
+		desiredVersion,
+		formatInstallBytes(authorization.ImageSizeBytes),
+	)
+
 	digest, written, err := writeStagedUpdateImage(
 		streamResponse.Body,
 		authorization.ImageSizeBytes,
 	)
 	if err != nil {
+		_ = clearStagedUpdate()
 		return err
 	}
 	if written != authorization.ImageSizeBytes {
@@ -579,7 +615,12 @@ func writeStagedUpdateImage(source io.Reader, size int64) (string, int64, error)
 	defer file.Close()
 
 	hasher := sha256.New()
-	written, err := io.CopyN(file, io.TeeReader(source, hasher), size)
+	progress := &installProgressReader{
+		inner: source,
+		total: size,
+		label: "FoldingOS update stage",
+	}
+	written, err := io.CopyN(file, io.TeeReader(progress, hasher), size)
 	if err != nil {
 		return "", written, fmt.Errorf("write staged update image: %w", err)
 	}

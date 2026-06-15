@@ -324,17 +324,31 @@ Invoked by `foldingos-agent-register.service`.
 ## `provision check-version` (agent)
 
 Queries the supervisor for the desired image version assigned to this node.
-When a newer approved version is assigned, downloads and verifies the release
-image into `/data/state/provision/staged-update.img` with metadata at
-`/data/state/provision/staged-update.json`.
+When a newer approved version is assigned, **downloads and verifies the full
+release image** (typically 4 GiB) from the supervisor into
+`/data/state/provision/staged-update.img` with metadata at
+`/data/state/provision/staged-update.json`. Progress lines are written while
+the download runs; a silent hang usually means a large download is still in
+progress.
 
 Staged metadata includes `apply_state=staged` and the assigned version. When
 `apply_state` is `boot_scheduled`, `applying`, or `failed`, `check-version` does
 not overwrite existing staged update files.
 
-Prints `current` or the assigned version string to stdout. Supervisor
-connectivity failures are non-fatal and print `current` so boot continues on the
-installed image.
+**Stdout** (for scripts and `systemd`):
+
+| Output | Meaning |
+| --- | --- |
+| `current` | No assigned update, or already on the assigned version |
+| `<version>` | Assigned update is staged (or pending apply); not yet installed |
+
+When stdout prints a version string such as `0.1.1-lab`, the image has been
+**downloaded to `/data/state/provision/`** — it is not installed until
+`provision apply-update` runs. Status and progress messages go to the console
+and stdout during staging.
+
+Supervisor connectivity failures are non-fatal and print `current` so boot
+continues on the installed image.
 
 Requires prior enrollment. Invoked by `foldingos-agent-version-check.service`.
 
@@ -397,6 +411,15 @@ Invoked by `foldingos-registry-bootstrap.service`.
 Polls the upstream releases manifest configured at
 `/data/config/provision/upstream-releases.url` and stages newly approved
 images into the registry.
+
+Supervisor appliances use the official stable manifest by default:
+
+```text
+https://releases.folding-os.com/release/releases.json
+```
+
+Manifest schema, image URLs, and trust model are defined in
+[ADR-0017](adr/0017-official-release-publication-and-supervisor-upstream-polling.md).
 
 Invoked by `foldingos-registry-poll.timer`.
 

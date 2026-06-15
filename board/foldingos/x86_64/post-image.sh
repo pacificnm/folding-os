@@ -11,8 +11,28 @@ mkdir -p \
   "${EFI_DIR}/boot/grub" \
   "${EFI_DIR}/foldingos/provision"
 
-if [ -f "${EFI_DIR}/EFI/BOOT/bootx64.efi" ]; then
-  mv "${EFI_DIR}/EFI/BOOT/bootx64.efi" "${EFI_DIR}/EFI/BOOT/BOOTX64.EFI"
+GRUB_EFI_SRC="${EFI_DIR}/EFI/BOOT/bootx64.efi"
+GRUB_EFI_DST="${EFI_DIR}/EFI/BOOT/BOOTX64.EFI"
+
+grub_efi_has_loadenv() {
+  local efi="$1"
+  strings "${efi}" 2>/dev/null | grep -m1 -E 'loadenv|load_env' >/dev/null
+}
+
+if [ -f "${GRUB_EFI_SRC}" ]; then
+  mv -f "${GRUB_EFI_SRC}" "${GRUB_EFI_DST}"
+elif [ -f "${GRUB_EFI_DST}" ]; then
+  if ! grub_efi_has_loadenv "${GRUB_EFI_DST}"; then
+    echo "ERROR: ${GRUB_EFI_DST} is missing the loadenv module." >&2
+    echo "Rebuild GRUB: cd build/output && make grub2-rebuild" >&2
+    echo "Then re-run ./scripts/build" >&2
+    exit 1
+  fi
+else
+  echo "ERROR: missing GRUB EFI at ${GRUB_EFI_SRC} or ${GRUB_EFI_DST}." >&2
+  echo "Rebuild GRUB: cd build/output && make grub2-rebuild" >&2
+  echo "Then re-run ./scripts/build" >&2
+  exit 1
 fi
 install -m 0644 "${BOARD_DIR}/grub.cfg" "${EFI_DIR}/EFI/BOOT/grub.cfg"
 install -m 0644 "${BOARD_DIR}/grub.cfg" "${EFI_DIR}/boot/grub/grub.cfg"

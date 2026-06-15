@@ -54,6 +54,7 @@ design decisions years after they were originally made.
 - [ADR-0014: Fixed Installation Roles](0014-fixed-installation-roles.md)
 - [ADR-0015: Local Commissioning Display](0015-local-commissioning-display.md)
 - [ADR-0016: Network Provisioning Via Supervisor](0016-network-provisioning-via-supervisor.md)
+- [ADR-0017: Official Release Publication And Supervisor Upstream Polling](0017-official-release-publication-and-supervisor-upstream-polling.md)
 
 ---
 

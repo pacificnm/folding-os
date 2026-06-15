@@ -50,8 +50,19 @@ The supervisor:
 - runs FoldOps management services
 - hosts or coordinates network boot services for agent provisioning
 - maintains a registry of approved FoldingOS release images
-- polls upstream for new releases
+- polls `releases.folding-os.com` for new FoldingOS image releases
 - assigns desired image versions to enrolled agents
+
+FoldOps `.deb` packages and FoldingOS disk images use separate official HTTPS
+origins on Cloudflare:
+
+| Channel | Host | Consumer |
+| --- | --- | --- |
+| FoldOps packages | `deb.folding-os.com` | `apt` (`foldops-agent`, `foldops-supervisor`) |
+| FoldingOS images | `releases.folding-os.com` | supervisor `foldingosctl registry poll` |
+
+See [ADR-0017](adr/0017-official-release-publication-and-supervisor-upstream-polling.md)
+and [FoldOps installation](https://www.folding-os.com/foldops).
 
 Additional nodes are `agent` roles provisioned over the network by the
 supervisor. They do not require USB media or local-console installation.

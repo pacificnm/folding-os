@@ -85,13 +85,25 @@ The supervisor must not publish unverified images to agents.
 
 ## Upstream polling
 
-The supervisor periodically polls the upstream release server. When a new
-approved image is available it:
+The supervisor periodically polls the official FoldingOS releases manifest on
+Cloudflare HTTPS infrastructure. See
+[ADR-0017](adr/0017-official-release-publication-and-supervisor-upstream-polling.md).
 
-1. downloads image and metadata
-2. verifies digest and signature when present
+| Item | URL |
+| --- | --- |
+| Manifest | `https://releases.folding-os.com/release/releases.json` |
+| Disk images | `https://releases.folding-os.com/release/images/foldingos-x86_64-<version>.img` |
+| Supervisor config | `/data/config/provision/upstream-releases.url` |
+
+When a new approved image is available the supervisor:
+
+1. downloads image and metadata from the manifest entry
+2. verifies SHA-256 digest and declared size (Milestone 3)
 3. stores the image in the local registry
 4. marks it ready for operator-approved rollout
+
+Detached image signatures are planned; Milestone 3 relies on HTTPS origin trust
+and SHA-256 verification during import.
 
 ## Desired version assignment
 

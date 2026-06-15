@@ -2,11 +2,11 @@
 
 **Status:** Accepted
 
-**Version:** 1.1
+**Version:** 1.2
 
 **Date:** 2026-06-13
 
-**Revised:** 2026-06-14 (network install inherited-state reset)
+**Revised:** 2026-06-15 (upstream origin cross-reference ADR-0017)
 
 **Authors:** FoldingOS Project Contributors
 
@@ -84,9 +84,10 @@ network install).
 
 The supervisor maintains a local registry of approved FoldingOS release images.
 
-The supervisor periodically polls an upstream release server for new signed or
-checksum-verified images. When a newer approved image is available, the
-supervisor downloads it, verifies it, and marks it ready for rollout.
+The supervisor periodically polls the official upstream release origin defined
+by [ADR-0017](0017-official-release-publication-and-supervisor-upstream-polling.md).
+When a newer verified image is available, the supervisor downloads it, verifies
+it, and marks it ready for rollout.
 
 Agent nodes check the supervisor on boot for their **desired image version**.
 When the supervisor assigns a newer version, the agent downloads the image
@@ -224,6 +225,7 @@ client.
 - [ADR-0014: Fixed Installation Roles](0014-fixed-installation-roles.md)
 - [ADR-0007: First-Boot Administrator and SSH-Key Provisioning](0007-first-boot-administrator-and-ssh-provisioning.md)
 - [ADR-0009: Folding@home Acquisition and Update Model](0009-fah-acquisition-and-update-model.md)
+- [ADR-0017: Official Release Publication And Supervisor Upstream Polling](0017-official-release-publication-and-supervisor-upstream-polling.md)
 - [Deployment and provisioning](../installer.md)
 - [Milestone 3 engineering specification](../milestone/3-engineering-spec.md)
 - [Update system](../update-system.md)

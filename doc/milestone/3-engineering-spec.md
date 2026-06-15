@@ -1,6 +1,6 @@
 # FoldingOS Milestone 3 Network Fleet Provisioning Engineering Specification
 
-**Version:** 2.1
+**Version:** 2.3
 
 **Status:** Approved for Implementation
 
@@ -9,8 +9,11 @@
 **Supersedes:** Milestone 3 combined-image installer engineering specification
 v1.1 (2026-06-11)
 
-**Revision 2.1 (2026-06-14):** Document network install inherited-state reset and
-agent update `apply_state` lifecycle (fail-closed offline apply).
+**Revision 2.3 (2026-06-15):** Upstream object prefix `/release/` on
+`releases.folding-os.com` per ADR-0017 v1.1.
+
+**Revision 2.2 (2026-06-15):** Official upstream release origin (`releases.folding-os.com`)
+per ADR-0017.
 
 ---
 
@@ -258,17 +261,30 @@ Each registry entry must record at minimum:
 - import timestamp
 - rollout state (`staged`, `ready`, `retired`)
 
-The supervisor polls the upstream release server on a fixed interval. When a
-new approved image is available:
+The supervisor polls the official upstream release origin on a fixed interval.
+See [ADR-0017](../adr/0017-official-release-publication-and-supervisor-upstream-polling.md).
 
-1. download the image and sidecar metadata
-2. verify checksum and signature when present
+Default manifest URL on supervisor appliances:
+
+```text
+https://releases.folding-os.com/release/releases.json
+```
+
+Configured at `/data/config/provision/upstream-releases.url`. When a new approved
+image is available:
+
+1. download the image and sidecar metadata from `releases.folding-os.com`
+2. verify SHA-256 digest and size
 3. mark the image `ready` for rollout
 4. expose the new version to operator approval before fleet-wide assignment
 
-The upstream server may be a project-controlled HTTPS endpoint, object storage,
-or GitHub Releases. The exact upstream contract is defined in the FoldOps or
-FoldingOS release publication workflow.
+Published disk images use:
+
+```text
+https://releases.folding-os.com/release/images/foldingos-x86_64-<version>.img
+```
+
+FoldOps Debian packages remain on `deb.folding-os.com` ([FoldOps install](https://www.folding-os.com/foldops)); operating-system images use the releases host above.
 
 ---
 

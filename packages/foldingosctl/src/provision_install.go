@@ -50,6 +50,7 @@ type installProgressReader struct {
 	total      int64
 	written    int64
 	lastReport int64
+	label      string
 }
 
 func (reader *installProgressReader) Read(buffer []byte) (int, error) {
@@ -73,8 +74,13 @@ func (reader *installProgressReader) report(force bool) {
 	}
 	reader.lastReport = reader.written
 	percent := reader.written * 100 / reader.total
+	label := reader.label
+	if label == "" {
+		label = "FoldingOS install"
+	}
 	installLogf(
-		"FoldingOS install: wrote %s / %s (%d%%)",
+		"%s: wrote %s / %s (%d%%)",
+		label,
 		formatInstallBytes(reader.written),
 		formatInstallBytes(reader.total),
 		percent,
