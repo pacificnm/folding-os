@@ -149,7 +149,7 @@ publication contract.
 
 | Channel | Host | Consumer | Artifact |
 | --- | --- | --- | --- |
-| FoldOps packages | `deb.folding-os.com` | `apt` on Debian hosts / appliances | `.deb` packages |
+| FoldOps packages | `deb.folding-os.com` | `apt` on Debian; `foldingosctl foldops acquire` on FoldingOS | `.deb` packages |
 | FoldingOS images | `releases.folding-os.com` | supervisor `registry poll` | raw `.img` disk images |
 
 FoldOps packages and FoldingOS images are distributed through separate URLs and
@@ -264,6 +264,7 @@ Work proceeds in this order within the Milestone 3 / issue #61 stream:
 - [Release strategy](../release-strategy.md)
 - [Milestone 3 engineering specification](../milestone/3-engineering-spec.md)
 - [foldingosctl command reference](../foldingosctl.md)
+- [ADR-0018: FoldOps Package Acquisition And Update Model](0018-foldops-package-acquisition-and-update-model.md)
 - [FoldOps installation](https://www.folding-os.com/foldops)
 
 ---

@@ -106,9 +106,10 @@ precedence or silently choose one statement.
 - FoldingOS supports fixed `agent` and `supervisor` installation roles from
   the same release image. The supervisor is direct-flashed first; agents are
   provisioned over the network. Roles cannot be changed in place.
-- FoldOps package artifacts are pinned and verified at Buildroot build time.
-  FoldingOS does not use APT at runtime or install FoldOps packages from the
-  network during installation.
+- FoldOps packages are acquired at runtime from pinned manifests per
+  [ADR-0018](adr/0018-foldops-package-acquisition-and-update-model.md).
+  Ingest-token bootstrap and HTTPS use EFI staging per
+  [ADR-0019](adr/0019-foldops-supervisor-provisioning-and-tls.md).
 - FoldingOS images do not contain Folding@home client or FahCore binaries.
   Nodes download a pinned, verified client directly from official Folding@home
   infrastructure; FoldOps may coordinate approved manifests but does not proxy

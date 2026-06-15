@@ -2,7 +2,12 @@
 
 ## Status
 
-Draft
+Draft — **superseded for package integration** by
+[ADR-0018](../adr/0018-foldops-package-acquisition-and-update-model.md), which
+defines runtime acquisition of official `.deb` artifacts from
+`deb.folding-os.com` instead of Buildroot-embedded packages. Enrollment,
+heartbeat, and service requirements below remain directional input for later
+milestones.
 
 ## Overview
 
@@ -26,9 +31,14 @@ The FoldOps source tree is not merged into the FoldingOS repository.
 
 # FoldOps Agent Package
 
-A Buildroot package shall be created for the FoldOps Agent.
+~~A Buildroot package shall be created for the FoldOps Agent.~~
 
-Implementation shall:
+FoldOps packages are acquired at runtime on deployed appliances per
+[ADR-0018](../adr/0018-foldops-package-acquisition-and-update-model.md). The
+Buildroot integration approach below is retained only as historical design
+context.
+
+Implementation shall (via runtime acquisition):
 
 * use approved pinned sources
 * verify acquisition

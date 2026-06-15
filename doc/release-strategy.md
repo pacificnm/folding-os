@@ -250,7 +250,10 @@ official FoldingOS releases with minimal manual intervention.
 Stable releases publish to `releases.folding-os.com` per
 [ADR-0017](adr/0017-official-release-publication-and-supervisor-upstream-polling.md).
 FoldOps packages publish to `deb.folding-os.com` per
-[FoldOps installation](https://www.folding-os.com/foldops).
+[FoldOps installation](https://www.folding-os.com/foldops). FoldingOS appliances
+acquire pinned `.deb` artifacts at runtime per
+[ADR-0018](adr/0018-foldops-package-acquisition-and-update-model.md); they do
+not ship runtime APT.
 
 ---
 

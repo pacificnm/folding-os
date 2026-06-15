@@ -201,7 +201,10 @@ Communication should occur using authenticated and encrypted protocols.
 ## FoldOps Supervisor And Web
 
 A supervisor-role installation runs the FoldOps agent, supervisor, and web
-services from the same FoldingOS image used by agent-role installations.
+services after runtime acquisition from `deb.folding-os.com` per
+[ADR-0018](adr/0018-foldops-package-acquisition-and-update-model.md). Agent and
+supervisor roles use the same FoldingOS release image; FoldOps binaries are not
+embedded in the image.
 
 The web interface is enabled by default for the supervisor role but must not
 become remotely available until initial administrator and TLS provisioning

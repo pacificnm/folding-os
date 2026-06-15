@@ -55,6 +55,8 @@ design decisions years after they were originally made.
 - [ADR-0015: Local Commissioning Display](0015-local-commissioning-display.md)
 - [ADR-0016: Network Provisioning Via Supervisor](0016-network-provisioning-via-supervisor.md)
 - [ADR-0017: Official Release Publication And Supervisor Upstream Polling](0017-official-release-publication-and-supervisor-upstream-polling.md)
+- [ADR-0018: FoldOps Package Acquisition And Update Model](0018-foldops-package-acquisition-and-update-model.md)
+- [ADR-0019: FoldOps Supervisor Provisioning And TLS](0019-foldops-supervisor-provisioning-and-tls.md)
 
 ---
 

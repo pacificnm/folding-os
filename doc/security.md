@@ -72,10 +72,9 @@ target as defined by
 [ADR-0016](adr/0016-network-provisioning-via-supervisor.md).
 
 Supervisor-role installations enable the FoldOps web interface by default, but
-it must not become remotely available until initial administrator and TLS
-provisioning succeeds. The exact secure provisioning workflow must be approved
-before implementation, as required by
-[ADR-0014](adr/0014-fixed-installation-roles.md).
+it must not become remotely available until ingest-token and self-signed TLS
+provisioning succeeds per
+[ADR-0019](adr/0019-foldops-supervisor-provisioning-and-tls.md).
 
 ---
 
