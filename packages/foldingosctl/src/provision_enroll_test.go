@@ -9,6 +9,15 @@ import (
 	"testing"
 )
 
+func stubSetStaticHostname(t *testing.T) func() {
+	t.Helper()
+	previous := setStaticHostname
+	setStaticHostname = func(string) error { return nil }
+	return func() {
+		setStaticHostname = previous
+	}
+}
+
 func TestProvisionEnrollEnsuresNodeIdentity(t *testing.T) {
 	root := t.TempDir()
 	restoreProvision := setProvisionPaths(root)
@@ -20,6 +29,8 @@ func TestProvisionEnrollEnsuresNodeIdentity(t *testing.T) {
 	defer restoreRole()
 	restoreConfig := setConfigTestPaths(root)
 	defer restoreConfig()
+	restoreHostname := stubSetStaticHostname(t)
+	defer restoreHostname()
 
 	writeEnrollmentToken(t, root, "test-enrollment-token")
 	if err := os.WriteFile(filepath.Join(root, "config", "installation-role"), []byte("agent\n"), 0644); err != nil {
@@ -94,6 +105,8 @@ func TestProvisionEnrollRegistersWithSupervisor(t *testing.T) {
 	defer restoreRole()
 	restoreConfig := setConfigTestPaths(root)
 	defer restoreConfig()
+	restoreHostname := stubSetStaticHostname(t)
+	defer restoreHostname()
 
 	writeEnrollmentToken(t, root, "test-enrollment-token")
 	if err := os.WriteFile(filepath.Join(root, "config", "installation-role"), []byte("agent\n"), 0644); err != nil {
@@ -186,6 +199,13 @@ func setConfigTestPaths(root string) func() {
 		if err := os.MkdirAll(directory, 0755); err != nil {
 			panic(err)
 		}
+	}
+	if err := os.WriteFile(
+		filepath.Join(defaultsDir, "system.toml"),
+		[]byte("schema_version = 1\n\n[identity]\nhostname = \"folding-test\"\n"),
+		0644,
+	); err != nil {
+		panic(err)
 	}
 	return func() {
 		configDir = previous.configDir

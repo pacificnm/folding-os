@@ -27,11 +27,11 @@ func TestAuthorizeAgentUpdateSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	stageRegistryVersion(t, root, "0.2.0", []byte("b"))
 	record.DesiredImageVersion = "0.2.0"
 	if err := saveEnrollmentRecord(record); err != nil {
 		t.Fatal(err)
 	}
-	stageRegistryVersion(t, root, "0.2.0", []byte("b"))
 
 	response, err := authorizeAgentUpdate(updateAuthorizeRequest{
 		SchemaVersion:       1,
@@ -76,13 +76,14 @@ func TestValidateUpdateStreamAccess(t *testing.T) {
 	defer restore()
 	writeEnrollmentTokenForStreamTest(root, "test-enrollment-token")
 	stageRegistryVersion(t, root, "0.2.0", []byte("b"))
+	imagePayload := bytes.Repeat([]byte("b"), int(releaseImageSizeBytes))
 
 	session := updateSession{
 		SchemaVersion:  1,
 		SessionID:      "abc123",
 		NodeID:         testAgentNodeID,
 		ImageVersion:   "0.2.0",
-		ImageSHA256:    registryDigest([]byte("b")),
+		ImageSHA256:    registryDigest(imagePayload),
 		ImageSizeBytes: releaseImageSizeBytes,
 	}
 	if err := saveUpdateSession(session); err != nil {
@@ -106,6 +107,7 @@ func TestRecordAgentUpdateStatusAppliedUpdatesCurrentVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	stageRegistryVersion(t, root, "0.2.0", []byte("b"))
 	record.DesiredImageVersion = "0.2.0"
 	if err := saveEnrollmentRecord(record); err != nil {
 		t.Fatal(err)
@@ -434,21 +436,25 @@ func setAgentUpdatePaths(root string) func() {
 
 func stageRegistryVersion(t *testing.T, root, version string, payload []byte) {
 	t.Helper()
-	if int64(len(payload)) != releaseImageSizeBytes {
-		t.Fatalf("payload size = %d", len(payload))
+	data := payload
+	if int64(len(data)) != releaseImageSizeBytes {
+		if len(payload) != 1 {
+			t.Fatalf("payload size = %d", len(payload))
+		}
+		data = bytes.Repeat(payload, int(releaseImageSizeBytes))
 	}
 	imagePath := filepath.Join(root, "images", "foldingos-x86_64-"+version+".img")
 	if err := os.MkdirAll(filepath.Dir(imagePath), 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(imagePath, bytes.Repeat(payload, 1), 0644); err != nil {
+	if err := os.WriteFile(imagePath, data, 0644); err != nil {
 		t.Fatal(err)
 	}
 	entry := registryEntry{
 		SchemaVersion:      1,
 		FoldingOSVersion:   version,
 		GitRevision:        "abc",
-		ImageSHA256:        registryDigest(bytes.Repeat(payload, 1)),
+		ImageSHA256:        registryDigest(data),
 		ImageSizeBytes:     releaseImageSizeBytes,
 		VerificationMethod: "sha256",
 		ImportTimestamp:    "2026-06-13T20:00:00Z",

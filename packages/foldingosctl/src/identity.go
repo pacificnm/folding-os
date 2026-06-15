@@ -14,6 +14,10 @@ import (
 
 var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 
+var setStaticHostname = func(hostname string) error {
+	return run("hostnamectl", "set-hostname", "--static", hostname)
+}
+
 func ensureIdentity() error {
 	nodeIDPath := filepath.Join(configDir, "node-id")
 	nodeID, err := ensureNodeIDFile(nodeIDPath)
@@ -43,7 +47,7 @@ func ensureIdentity() error {
 	if !hostnamePattern.MatchString(hostname) {
 		return errors.New("effective hostname is invalid")
 	}
-	return run("hostnamectl", "set-hostname", "--static", hostname)
+	return setStaticHostname(hostname)
 }
 
 func ensureNodeIDFile(nodeIDPath string) (string, error) {
