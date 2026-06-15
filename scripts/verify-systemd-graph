@@ -247,7 +247,7 @@ UNIT_REQUIREMENTS = {
         ("Unit", "ConditionPathExists"): {"/data/config/installation-role"},
         ("Service", "ExecCondition"): {
             "/bin/sh -c 'grep -qx agent /data/config/installation-role'",
-            "/bin/sh -c 'test -f /data/state/provision/staged-update.json'",
+            "/usr/bin/foldingosctl provision apply-update --exec-condition",
         },
         ("Service", "Type"): {"oneshot"},
     },

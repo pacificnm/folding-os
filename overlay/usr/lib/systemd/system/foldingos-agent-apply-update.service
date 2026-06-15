@@ -7,7 +7,7 @@ ConditionPathExists=/data/config/installation-role
 [Service]
 Type=oneshot
 ExecCondition=/bin/sh -c 'grep -qx agent /data/config/installation-role'
-ExecCondition=/bin/sh -c 'test -f /data/state/provision/staged-update.json'
+ExecCondition=/usr/bin/foldingosctl provision apply-update --exec-condition
 ExecStart=/usr/bin/foldingosctl provision apply-update
 
 [Install]

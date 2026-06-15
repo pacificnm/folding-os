@@ -166,6 +166,8 @@ set -eux
 test -f /usr/share/foldingos/boot/vmlinuz
 test -f /usr/share/foldingos/boot/install-initramfs.cpio.gz
 sudo grep -q 'loadenv' /boot/efi/EFI/BOOT/grub.cfg
+sudo grep -q 'id foldingos-update' /boot/efi/EFI/BOOT/grub.cfg
+sudo strings /boot/efi/EFI/BOOT/BOOTX64.EFI | grep -Fq loadenv
 EOF
 
 if [ "${PREFLIGHT}" -eq 1 ]; then
@@ -253,6 +255,7 @@ set -eux
 sudo test -f /data/state/provision/staged-update.img
 sudo test -f /data/state/provision/staged-update.json
 sudo test -s /data/state/provision/staged-update.img
+sudo grep -q '"apply_state"[[:space:]]*:[[:space:]]*"staged"' /data/state/provision/staged-update.json
 EOF
 then
   echo "ERROR: staged update files are missing on agent; see ${LOG}" >&2
@@ -269,9 +272,26 @@ if [ "${apply_exit}" -ne 0 ]; then
   echo "apply-update SSH session ended (exit ${apply_exit}); waiting for agent to return." | tee -a "${LOG}"
 fi
 
+wait_for_update_complete() {
+  local host="$1"
+  local attempts="${2:-90}"
+  local delay="${3:-5}"
+  local i
+  for ((i = 1; i <= attempts; i++)); do
+    if "${SSH[@]}" "foldingos-admin@${host}" true >/dev/null 2>&1; then
+      if "${SSH[@]}" "foldingos-admin@${host}" \
+        sudo test ! -f /data/state/provision/staged-update.json >/dev/null 2>&1; then
+        return 0
+      fi
+    fi
+    sleep "${delay}"
+  done
+  return 1
+}
+
 section "Wait for update initramfs apply and final reboot"
-if ! wait_for_ssh "${AGENT}" 90 5; then
-  echo "ERROR: agent did not return over SSH after update apply." >&2
+if ! wait_for_update_complete "${AGENT}" 90 5; then
+  echo "ERROR: agent did not finish staged update apply (staged-update.json still present)." >&2
   exit 1
 fi
 
@@ -279,8 +299,9 @@ section "Post-update agent checks"
 agent_ssh sh -s >>"${LOG}" 2>&1 <<'EOF'
 set -eux
 test "$(cat /data/config/installation-role)" = agent
-test ! -f /data/state/provision/staged-update.json
-test ! -f /data/state/provision/staged-update.img
+sudo test ! -f /data/state/provision/staged-update.json
+sudo test ! -f /data/state/provision/staged-update.img
+sudo test ! -f /data/state/provision/pending-update-report.json
 sudo foldingosctl provision check-version | grep -Fx current
 findmnt /data
 test -d /data/config

@@ -32,7 +32,7 @@ func TestClearGrubNextEntry(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "grubenv")
 	initial, err := formatGrubEnvBlock(map[string]string{
-		"next_entry": "FoldingOS Update",
+		"next_entry": "1",
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -143,6 +144,106 @@ func TestVerifyStagedUpdateFile(t *testing.T) {
 	}
 }
 
+func TestApplyStagedUpdateOfflineRejectsStagedStateFailClosed(t *testing.T) {
+	root := t.TempDir()
+	restore := setUpdateTestPaths(root)
+	defer restore()
+
+	payload := bytes.Repeat([]byte("c"), int(releaseImageSizeBytes))
+	if err := os.WriteFile(stagedUpdateImagePath, payload, 0600); err != nil {
+		t.Fatal(err)
+	}
+	metadata := stagedUpdateMetadata{
+		SchemaVersion:  1,
+		NodeID:         testAgentNodeID,
+		DesiredVersion: "0.2.0",
+		BootDisk:       "/dev/vda",
+		ImageSHA256:    registryDigest(payload),
+		ImageSizeBytes: releaseImageSizeBytes,
+		ApplyState:     applyStateStaged,
+	}
+	if err := saveStagedUpdateMetadata(metadata); err != nil {
+		t.Fatal(err)
+	}
+
+	previousReboot := offlineApplyRebootFn
+	offlineApplyRebootFn = func() error { return nil }
+	defer func() { offlineApplyRebootFn = previousReboot }()
+
+	if err := applyStagedUpdateOffline(); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := loadStagedUpdateMetadata()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.ApplyState != applyStateFailed {
+		t.Fatalf("apply_state = %q", updated.ApplyState)
+	}
+}
+
+func TestFlushPendingUpdateReportDeliversApplied(t *testing.T) {
+	root := t.TempDir()
+	restore := setUpdateTestPaths(root)
+	defer restore()
+	writeEnrollmentTokenForStreamTest(root, "test-enrollment-token")
+	if _, err := registerAgent(sampleRegistrationRequest("test-enrollment-token")); err != nil {
+		t.Fatal(err)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(handleUpdateStatus))
+	defer server.Close()
+
+	supervisorURLPath := filepath.Join(root, "config", "provision", "supervisor.url")
+	if err := os.MkdirAll(filepath.Dir(supervisorURLPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(supervisorURLPath, []byte(server.URL+"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := savePendingUpdateReport(pendingUpdateReport{
+		SchemaVersion: 1,
+		NodeID:        testAgentNodeID,
+		ImageVersion:  "0.2.0",
+		Status:        "applied",
+		RecordedAt:    "2026-06-14T12:00:00Z",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := flushPendingUpdateReport(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(pendingUpdateReportPath); !os.IsNotExist(err) {
+		t.Fatalf("pending report should be removed, err = %v", err)
+	}
+	updated, err := loadEnrollmentRecord(testAgentNodeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.CurrentImageVersion != "0.2.0" || updated.DesiredImageVersion != "current" {
+		t.Fatalf("record = %+v", updated)
+	}
+}
+
+func TestRecordPendingUpdateOutcomeSucceedsWhenFlushFails(t *testing.T) {
+	root := t.TempDir()
+	restore := setUpdateTestPaths(root)
+	defer restore()
+	writeEnrollmentTokenForStreamTest(root, "test-enrollment-token")
+	if _, err := registerAgent(sampleRegistrationRequest("test-enrollment-token")); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := recordPendingUpdateOutcome(testAgentNodeID, "0.2.0", "applied", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(pendingUpdateReportPath); err != nil {
+		t.Fatalf("pending report should remain when flush has no supervisor URL, err = %v", err)
+	}
+}
+
 func TestHandleUpdateStatusEndpoint(t *testing.T) {
 	root := t.TempDir()
 	restore := setUpdateTestPaths(root)
@@ -176,6 +277,117 @@ func TestHandleUpdateStatusEndpoint(t *testing.T) {
 	}
 }
 
+func TestCheckApplyUpdateExecConditionRequiresStagedState(t *testing.T) {
+	root := t.TempDir()
+	restore := setUpdateTestPaths(root)
+	defer restore()
+
+	if err := checkApplyUpdateExecCondition(); err != errApplyUpdateNotSchedulable {
+		t.Fatalf("missing metadata err = %v", err)
+	}
+
+	metadata := stagedUpdateMetadata{
+		SchemaVersion: 1,
+		ApplyState:    applyStateStaged,
+	}
+	if err := saveStagedUpdateMetadata(metadata); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkApplyUpdateExecCondition(); err != nil {
+		t.Fatalf("staged metadata err = %v", err)
+	}
+
+	metadata.ApplyState = applyStateFailed
+	if err := saveStagedUpdateMetadata(metadata); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkApplyUpdateExecCondition(); err != errApplyUpdateNotSchedulable {
+		t.Fatalf("failed metadata err = %v", err)
+	}
+
+	metadata.ApplyState = applyStateBootScheduled
+	if err := saveStagedUpdateMetadata(metadata); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkApplyUpdateExecCondition(); err != nil {
+		t.Fatalf("boot_scheduled metadata err = %v", err)
+	}
+}
+
+func TestScheduleStagedUpdateApplyRequiresStagedState(t *testing.T) {
+	root := t.TempDir()
+	restore := setUpdateTestPaths(root)
+	defer restore()
+	restoreRole := setInstallationRolePaths(
+		filepath.Join(root, "efi", "installation-role"),
+		filepath.Join(root, "data", "installation-role"),
+	)
+	defer restoreRole()
+	if err := os.MkdirAll(filepath.Join(root, "data"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "data", "installation-role"), []byte("agent"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	payload := bytes.Repeat([]byte("c"), int(releaseImageSizeBytes))
+	if err := os.WriteFile(stagedUpdateImagePath, payload, 0600); err != nil {
+		t.Fatal(err)
+	}
+	metadata := stagedUpdateMetadata{
+		SchemaVersion:  1,
+		ImageSHA256:    registryDigest(payload),
+		ImageSizeBytes: releaseImageSizeBytes,
+		ApplyState:     applyStateFailed,
+	}
+	if err := saveStagedUpdateMetadata(metadata); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := scheduleStagedUpdateApply(); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := loadStagedUpdateMetadata()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.ApplyState != applyStateFailed {
+		t.Fatalf("apply_state = %q", updated.ApplyState)
+	}
+}
+
+func TestFinishOfflineApplyFailureSetsFailedState(t *testing.T) {
+	root := t.TempDir()
+	restore := setUpdateTestPaths(root)
+	defer restore()
+
+	metadata := stagedUpdateMetadata{
+		SchemaVersion:  1,
+		NodeID:         testAgentNodeID,
+		DesiredVersion: "0.2.0",
+		BootDisk:       "/dev/vda",
+		ApplyState:     applyStateBootScheduled,
+	}
+	if err := saveStagedUpdateMetadata(metadata); err != nil {
+		t.Fatal(err)
+	}
+
+	previousReboot := offlineApplyRebootFn
+	offlineApplyRebootFn = func() error { return nil }
+	defer func() { offlineApplyRebootFn = previousReboot }()
+
+	if err := finishOfflineApplyFailure(metadata, errors.New("copy failed")); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := loadStagedUpdateMetadata()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.ApplyState != applyStateFailed {
+		t.Fatalf("apply_state = %q", updated.ApplyState)
+	}
+}
+
 func setUpdateTestPaths(root string) func() {
 	previousImageSize := releaseImageSizeBytes
 	releaseImageSizeBytes = 4096
@@ -198,15 +410,17 @@ func setUpdateTestPaths(root string) func() {
 
 func setAgentUpdatePaths(root string) func() {
 	previous := struct {
-		imagePath, metaPath, partialPath string
+		imagePath, metaPath, partialPath, pendingPath string
 	}{
 		stagedUpdateImagePath,
 		stagedUpdateMetaPath,
 		stagedUpdatePartialPath,
+		pendingUpdateReportPath,
 	}
 	stagedUpdateImagePath = filepath.Join(root, "state", "provision", "staged-update.img")
 	stagedUpdateMetaPath = filepath.Join(root, "state", "provision", "staged-update.json")
 	stagedUpdatePartialPath = filepath.Join(root, "state", "provision", "staged-update.partial")
+	pendingUpdateReportPath = filepath.Join(root, "state", "provision", "pending-update-report.json")
 	if err := os.MkdirAll(filepath.Dir(stagedUpdateImagePath), 0755); err != nil {
 		panic(err)
 	}
@@ -214,6 +428,7 @@ func setAgentUpdatePaths(root string) func() {
 		stagedUpdateImagePath = previous.imagePath
 		stagedUpdateMetaPath = previous.metaPath
 		stagedUpdatePartialPath = previous.partialPath
+		pendingUpdateReportPath = previous.pendingPath
 	}
 }
 

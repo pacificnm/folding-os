@@ -19,21 +19,35 @@ const (
 	stagedUpdateImagePathDefault   = "/data/state/provision/staged-update.img"
 	stagedUpdateMetaPathDefault    = "/data/state/provision/staged-update.json"
 	stagedUpdatePartialPathDefault = "/data/state/provision/staged-update.partial"
-	updateGrubEntryName            = "FoldingOS Update"
+	pendingUpdateReportPathDefault = "/data/state/provision/pending-update-report.json"
+	updateGrubEntryName            = "1"
 	updateGrubEnvPath              = "/boot/efi/EFI/BOOT/grubenv"
 	updateBootAssetsDir            = "/boot/efi/foldingos/update"
 	sharedUpdateVmlinuzPath        = "/usr/share/foldingos/boot/vmlinuz"
 	sharedUpdateInitramfsPath      = "/usr/share/foldingos/boot/install-initramfs.cpio.gz"
 	updateSessionHeader            = "X-FoldingOS-Update-Session"
+
+	applyStateStaged        = "staged"
+	applyStateBootScheduled = "boot_scheduled"
+	applyStateApplying      = "applying"
+	applyStateFailed        = "failed"
 )
 
 var (
 	stagedUpdateImagePath      = stagedUpdateImagePathDefault
 	stagedUpdateMetaPath       = stagedUpdateMetaPathDefault
 	stagedUpdatePartialPath    = stagedUpdatePartialPathDefault
+	pendingUpdateReportPath    = pendingUpdateReportPathDefault
 	scheduleUpdateRebootFn    = scheduleUpdateReboot
 	applyStagedUpdateOfflineFn = applyStagedUpdateOffline
+	offlineApplyRebootFn      = offlineApplyReboot
 )
+
+func offlineApplyReboot() error {
+	return run("/bin/busybox", "reboot", "-f")
+}
+
+var errApplyUpdateNotSchedulable = errors.New("staged update is not schedulable")
 
 type stagedUpdateMetadata struct {
 	SchemaVersion   int    `json:"schema_version"`
@@ -43,7 +57,18 @@ type stagedUpdateMetadata struct {
 	ImageSHA256     string `json:"image_sha256"`
 	ImageSizeBytes  int64  `json:"image_size_bytes"`
 	BootDisk        string `json:"boot_disk"`
-	StagedAt        string `json:"staged_at"`
+	StagedAt               string `json:"staged_at"`
+	ApplyState             string `json:"apply_state"`
+	BootScheduleAttempts   int    `json:"boot_schedule_attempts,omitempty"`
+}
+
+type pendingUpdateReport struct {
+	SchemaVersion int    `json:"schema_version"`
+	NodeID        string `json:"node_id"`
+	ImageVersion  string `json:"image_version"`
+	Status        string `json:"status"`
+	Message       string `json:"message,omitempty"`
+	RecordedAt    string `json:"recorded_at"`
 }
 
 type updateAuthorizeRequest struct {
@@ -89,6 +114,32 @@ var validUpdateStatuses = map[string]struct{}{
 	"applying": {},
 	"applied":  {},
 	"failed":   {},
+}
+
+func effectiveApplyState(state string) string {
+	state = strings.TrimSpace(state)
+	if state == "" {
+		return applyStateStaged
+	}
+	return state
+}
+
+func isLockedStagedUpdateApplyState(state string) bool {
+	switch effectiveApplyState(state) {
+	case applyStateBootScheduled, applyStateApplying, applyStateFailed:
+		return true
+	default:
+		return false
+	}
+}
+
+func setStagedUpdateApplyState(state string) error {
+	metadata, err := loadStagedUpdateMetadata()
+	if err != nil {
+		return err
+	}
+	metadata.ApplyState = state
+	return saveStagedUpdateMetadata(metadata)
 }
 
 func updateSessionPath(sessionID string) string {
@@ -297,6 +348,7 @@ func provisionCheckVersionAndStage() error {
 	if err := requireAgentRole(); err != nil {
 		return err
 	}
+	_ = flushPendingUpdateReport()
 
 	nodeID, err := agentEnrollmentNodeID()
 	if err != nil {
@@ -340,15 +392,28 @@ func provisionCheckVersionAndStage() error {
 	}
 
 	if staged, err := loadStagedUpdateMetadata(); err == nil {
-		if staged.DesiredVersion == desired && staged.CurrentVersion == currentVersion {
+		if staged.NodeID != "" && staged.NodeID != nodeID {
+			if err := clearStagedUpdate(); err != nil {
+				return err
+			}
+		} else if isLockedStagedUpdateApplyState(staged.ApplyState) {
+			fmt.Println(desired)
+			return nil
+		} else if staged.DesiredVersion == desired && staged.CurrentVersion == currentVersion {
 			if err := verifyStagedUpdateFile(staged); err == nil {
 				fmt.Println(desired)
 				return nil
 			}
-		}
-		if err := clearStagedUpdate(); err != nil {
+		} else if err := clearStagedUpdate(); err != nil {
 			return err
 		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
+	if _, err := loadPendingUpdateReport(); err == nil {
+		fmt.Println(desired)
+		return nil
 	} else if !os.IsNotExist(err) {
 		return err
 	}
@@ -498,6 +563,7 @@ func stageAgentUpdate(supervisorURL, nodeID, token, currentVersion, desiredVersi
 		ImageSizeBytes: authorization.ImageSizeBytes,
 		BootDisk:       bootDisk,
 		StagedAt:       time.Now().UTC().Format(time.RFC3339),
+		ApplyState:     applyStateStaged,
 	}
 	if err := saveStagedUpdateMetadata(metadata); err != nil {
 		return err
@@ -591,18 +657,42 @@ func clearStagedUpdate() error {
 
 func provisionApplyUpdate(args []string) error {
 	offline := false
+	execCondition := false
 	for _, arg := range args {
 		switch arg {
 		case "--offline":
 			offline = true
+		case "--exec-condition":
+			execCondition = true
 		default:
 			return fmt.Errorf("unknown apply-update option %q", arg)
 		}
+	}
+	if execCondition {
+		if offline {
+			return errors.New("--exec-condition cannot be combined with --offline")
+		}
+		return checkApplyUpdateExecCondition()
 	}
 	if offline {
 		return applyStagedUpdateOfflineFn()
 	}
 	return scheduleStagedUpdateApply()
+}
+
+func checkApplyUpdateExecCondition() error {
+	metadata, err := loadStagedUpdateMetadata()
+	if err != nil {
+		if os.IsNotExist(err) {
+			return errApplyUpdateNotSchedulable
+		}
+		return err
+	}
+	if effectiveApplyState(metadata.ApplyState) != applyStateStaged &&
+		effectiveApplyState(metadata.ApplyState) != applyStateBootScheduled {
+		return errApplyUpdateNotSchedulable
+	}
+	return nil
 }
 
 func scheduleStagedUpdateApply() error {
@@ -617,21 +707,69 @@ func scheduleStagedUpdateApply() error {
 		}
 		return err
 	}
+	switch effectiveApplyState(metadata.ApplyState) {
+	case applyStateStaged:
+		return scheduleInitialUpdateApply(metadata)
+	case applyStateBootScheduled:
+		return retryBootScheduledUpdateApply(metadata)
+	default:
+		fmt.Println("No staged update is pending.")
+		return nil
+	}
+}
+
+func scheduleInitialUpdateApply(metadata stagedUpdateMetadata) error {
 	if err := verifyStagedUpdateFile(metadata); err != nil {
 		return err
 	}
-	if err := ensureUpdateBootAssets(); err != nil {
+	metadata.ApplyState = applyStateBootScheduled
+	metadata.BootScheduleAttempts = 1
+	if err := saveStagedUpdateMetadata(metadata); err != nil {
 		return err
 	}
-	supervisorURL, _ := readSupervisorBaseURL()
-	token, _ := readEnrollmentToken()
-	_ = reportAgentUpdateStatus(supervisorURL, metadata.NodeID, token, metadata.DesiredVersion, "applying", "")
-
+	if err := ensureUpdateBootAssets(); err != nil {
+		_ = setStagedUpdateApplyState(applyStateStaged)
+		return err
+	}
 	if err := scheduleUpdateRebootFn(); err != nil {
+		_ = setStagedUpdateApplyState(applyStateStaged)
 		return err
 	}
 	fmt.Println("Scheduled staged update apply on reboot.")
 	return nil
+}
+
+func retryBootScheduledUpdateApply(metadata stagedUpdateMetadata) error {
+	metadata.BootScheduleAttempts++
+	if metadata.BootScheduleAttempts > 3 {
+		return markUpdateScheduleFailed(
+			metadata,
+			errors.New("update boot scheduling exceeded retry limit"),
+		)
+	}
+	if err := saveStagedUpdateMetadata(metadata); err != nil {
+		return err
+	}
+	if err := verifyStagedUpdateFile(metadata); err != nil {
+		return markUpdateScheduleFailed(metadata, err)
+	}
+	if err := ensureUpdateBootAssets(); err != nil {
+		return err
+	}
+	if err := scheduleUpdateRebootFn(); err != nil {
+		return err
+	}
+	fmt.Println("Retrying scheduled update apply on reboot.")
+	return nil
+}
+
+func markUpdateScheduleFailed(metadata stagedUpdateMetadata, cause error) error {
+	metadata.ApplyState = applyStateFailed
+	if err := saveStagedUpdateMetadata(metadata); err != nil {
+		return err
+	}
+	_ = recordPendingUpdateOutcome(metadata.NodeID, metadata.DesiredVersion, "failed", cause.Error())
+	return cause
 }
 
 func scheduleUpdateReboot() error {
@@ -670,36 +808,47 @@ func applyStagedUpdateOffline() error {
 	if err != nil {
 		return err
 	}
-	if err := verifyStagedUpdateFile(metadata); err != nil {
-		return err
+	state := effectiveApplyState(metadata.ApplyState)
+	if state != applyStateBootScheduled && state != applyStateApplying {
+		return finishOfflineApplyFailure(
+			metadata,
+			fmt.Errorf("staged update apply_state %q is not ready for offline apply", state),
+		)
 	}
+	if err := verifyStagedUpdateFile(metadata); err != nil {
+		return finishOfflineApplyFailure(metadata, err)
+	}
+	if err := setStagedUpdateApplyState(applyStateApplying); err != nil {
+		return finishOfflineApplyFailure(metadata, err)
+	}
+
 	bootDisk := strings.TrimSpace(metadata.BootDisk)
 	if bootDisk == "" {
 		bootDisk, err = resolveHostBootDisk()
 		if err != nil {
-			return err
+			return finishOfflineApplyFailure(metadata, err)
 		}
 	}
 	if bootDisk == "" {
-		return errors.New("host boot disk is unavailable")
+		return finishOfflineApplyFailure(metadata, errors.New("host boot disk is unavailable"))
 	}
 
 	targetEFI := partitionDevice(bootDisk, "1")
 	targetRoot := partitionDevice(bootDisk, "2")
 
 	if err := copyStagedReleaseImageEFIPartition(stagedUpdateImagePath, targetEFI); err != nil {
-		return fmt.Errorf("copy EFI partition: %w", err)
+		return finishOfflineApplyFailure(metadata, fmt.Errorf("copy EFI partition: %w", err))
 	}
 	if err := copyStagedReleaseImageRootPartition(stagedUpdateImagePath, targetRoot); err != nil {
-		return fmt.Errorf("copy root partition: %w", err)
+		return finishOfflineApplyFailure(metadata, fmt.Errorf("copy root partition: %w", err))
 	}
 	if err := run("sync"); err != nil {
-		return err
+		return finishOfflineApplyFailure(metadata, err)
 	}
 
-	supervisorURL, _ := readSupervisorBaseURL()
-	token, _ := readEnrollmentToken()
-	_ = reportAgentUpdateStatus(supervisorURL, metadata.NodeID, token, metadata.DesiredVersion, "applied", "")
+	if err := recordPendingUpdateOutcome(metadata.NodeID, metadata.DesiredVersion, "applied", ""); err != nil {
+		return finishOfflineApplyFailure(metadata, fmt.Errorf("record pending applied outcome: %w", err))
+	}
 	if err := clearStagedUpdate(); err != nil {
 		return err
 	}
@@ -708,5 +857,177 @@ func applyStagedUpdateOffline() error {
 	if err := run("sync"); err != nil {
 		return err
 	}
-	return run("/bin/busybox", "reboot", "-f")
+	return offlineApplyRebootFn()
+}
+
+func finishOfflineApplyFailure(metadata stagedUpdateMetadata, cause error) error {
+	metadata.ApplyState = applyStateFailed
+	_ = saveStagedUpdateMetadata(metadata)
+
+	_ = recordPendingUpdateOutcome(metadata.NodeID, metadata.DesiredVersion, "failed", cause.Error())
+
+	bootDisk := strings.TrimSpace(metadata.BootDisk)
+	if bootDisk == "" {
+		bootDisk, _ = resolveHostBootDisk()
+	}
+	if bootDisk != "" {
+		_ = clearGrubNextEntryOnDisk(bootDisk)
+	}
+
+	fmt.Fprintf(os.Stderr, "Staged update apply failed: %v\n", cause)
+	if err := run("sync"); err != nil {
+		return err
+	}
+	return offlineApplyRebootFn()
+}
+
+func savePendingUpdateReport(report pendingUpdateReport) error {
+	content, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		return err
+	}
+	return atomicWrite(pendingUpdateReportPath, append(content, '\n'), 0600)
+}
+
+func loadPendingUpdateReport() (pendingUpdateReport, error) {
+	content, err := os.ReadFile(pendingUpdateReportPath)
+	if err != nil {
+		return pendingUpdateReport{}, err
+	}
+	var report pendingUpdateReport
+	if err := json.Unmarshal(content, &report); err != nil {
+		return pendingUpdateReport{}, fmt.Errorf("invalid pending update report: %w", err)
+	}
+	if report.SchemaVersion != 1 {
+		return pendingUpdateReport{}, fmt.Errorf("unsupported pending update report schema version %d", report.SchemaVersion)
+	}
+	return report, nil
+}
+
+func clearPendingUpdateReport() error {
+	if err := os.Remove(pendingUpdateReportPath); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
+func recordPendingUpdateOutcome(nodeID, version, status, message string) error {
+	report := pendingUpdateReport{
+		SchemaVersion: 1,
+		NodeID:        nodeID,
+		ImageVersion:  strings.TrimSpace(version),
+		Status:        strings.TrimSpace(status),
+		Message:       strings.TrimSpace(message),
+		RecordedAt:    time.Now().UTC().Format(time.RFC3339),
+	}
+	if err := savePendingUpdateReport(report); err != nil {
+		return err
+	}
+	_ = flushPendingUpdateReport()
+	return nil
+}
+
+func flushPendingUpdateReport() error {
+	report, err := loadPendingUpdateReport()
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	status := strings.TrimSpace(report.Status)
+	if _, ok := validUpdateStatuses[status]; !ok {
+		return fmt.Errorf("unsupported pending update status %q", status)
+	}
+	if status != "applied" && status != "failed" {
+		return fmt.Errorf("pending update status %q is not deliverable", status)
+	}
+
+	supervisorURL, err := readSupervisorBaseURL()
+	if err != nil {
+		return err
+	}
+	if supervisorURL == "" {
+		return nil
+	}
+	token, err := readEnrollmentToken()
+	if err != nil {
+		return err
+	}
+	nodeID := strings.TrimSpace(report.NodeID)
+	if nodeID == "" {
+		nodeID, err = agentEnrollmentNodeID()
+		if err != nil {
+			return err
+		}
+	}
+	if err := reportAgentUpdateStatus(
+		supervisorURL,
+		nodeID,
+		token,
+		report.ImageVersion,
+		status,
+		report.Message,
+	); err != nil {
+		return err
+	}
+	return clearPendingUpdateReport()
+}
+
+func provisionReportUpdateStatus(args []string) error {
+	if err := requireAgentRole(); err != nil {
+		return err
+	}
+	status := ""
+	version := ""
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--status":
+			if i+1 >= len(args) {
+				return errors.New("--status requires a value")
+			}
+			i++
+			status = args[i]
+		case "--version":
+			if i+1 >= len(args) {
+				return errors.New("--version requires a value")
+			}
+			i++
+			version = args[i]
+		default:
+			return fmt.Errorf("unknown report-update-status option %q", args[i])
+		}
+	}
+	status = strings.TrimSpace(status)
+	version = strings.TrimSpace(version)
+	if status == "" {
+		return errors.New("--status is required")
+	}
+	if version == "" {
+		return errors.New("--version is required")
+	}
+	if status != "applied" && status != "failed" {
+		return fmt.Errorf("unsupported report-update-status value %q", status)
+	}
+
+	nodeID, err := agentEnrollmentNodeID()
+	if err != nil {
+		return err
+	}
+	supervisorURL, err := readSupervisorBaseURL()
+	if err != nil {
+		return err
+	}
+	if supervisorURL == "" {
+		return errors.New("supervisor URL is not configured")
+	}
+	token, err := readEnrollmentToken()
+	if err != nil {
+		return err
+	}
+	if err := reportAgentUpdateStatus(supervisorURL, nodeID, token, version, status, ""); err != nil {
+		return err
+	}
+	fmt.Printf("Reported update status %q for version %s.\n", status, version)
+	return nil
 }

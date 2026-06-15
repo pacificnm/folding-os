@@ -44,3 +44,32 @@ func clearGrubNextEntry(grubEnvPath string) error {
 	}
 	return atomicWrite(grubEnvPath, updated, 0644)
 }
+
+func clearGrubNextEntryOnDisk(disk string) error {
+	if _, err := os.Stat(updateGrubEnvPath); err == nil {
+		return clearGrubNextEntry(updateGrubEnvPath)
+	}
+
+	efiPartition := efiPartitionPath(disk)
+	if mounted(efiPartition) {
+		return fmt.Errorf("EFI partition %s is mounted", efiPartition)
+	}
+
+	mountPoint, err := os.MkdirTemp(provisionScratchDir(), "foldingos-grubenv-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(mountPoint)
+
+	if err := run("mount", efiPartition, mountPoint); err != nil {
+		return fmt.Errorf("mount EFI partition %s: %w", efiPartition, err)
+	}
+	defer func() {
+		_ = run("umount", mountPoint)
+	}()
+
+	if err := clearGrubNextEntry(filepath.Join(mountPoint, "EFI", "BOOT", "grubenv")); err != nil {
+		return err
+	}
+	return run("sync")
+}

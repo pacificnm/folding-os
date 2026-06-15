@@ -17,7 +17,7 @@ func TestSetGrubEnvVarUpdatesNextEntry(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := setGrubEnvVar(path, "next_entry", "FoldingOS Update"); err != nil {
+	if err := setGrubEnvVar(path, "next_entry", "1"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -29,7 +29,7 @@ func TestSetGrubEnvVarUpdatesNextEntry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if vars["next_entry"] != "FoldingOS Update" {
+	if vars["next_entry"] != "1" {
 		t.Fatalf("next_entry = %q", vars["next_entry"])
 	}
 	if len(content) != grubEnvBlockSize {

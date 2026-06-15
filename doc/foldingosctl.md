@@ -280,12 +280,19 @@ foldingosctl provision assign --version 0.1.0 --node <node-uuid>
 Streams a supervisor-authorized release image onto a target disk over HTTP.
 Used by the network-install initramfs, not normal appliance operation.
 
-After the image is written, network install also stages:
+After the image is written, network install resets inherited persistent state
+from the copied release image, then stages agent-only provisioning files:
 
+- remove inherited runtime trees under `/data/config/`, `/data/registry/`,
+  `/data/provision/`, and `/data/state/` on the target data partition
+- clear `next_entry` from EFI `grubenv` when present
 - `/data/config/installation-role`
 - `/data/config/provision/supervisor.url`
 - `/data/config/provision/enrollment-token`
 - EFI provisioning files under `/boot/efi/foldingos/provision/`
+
+See [Milestone 3 engineering specification](milestone/3-engineering-spec.md)
+(Inherited state reset during network install).
 
 ```bash
 foldingosctl provision install --auto-disk \
@@ -321,6 +328,10 @@ When a newer approved version is assigned, downloads and verifies the release
 image into `/data/state/provision/staged-update.img` with metadata at
 `/data/state/provision/staged-update.json`.
 
+Staged metadata includes `apply_state=staged` and the assigned version. When
+`apply_state` is `boot_scheduled`, `applying`, or `failed`, `check-version` does
+not overwrite existing staged update files.
+
 Prints `current` or the assigned version string to stdout. Supervisor
 connectivity failures are non-fatal and print `current` so boot continues on the
 installed image.
@@ -329,16 +340,44 @@ Requires prior enrollment. Invoked by `foldingos-agent-version-check.service`.
 
 ## `provision apply-update` (agent)
 
-Activates a verified staged update. In normal appliance boot, schedules a
-one-shot reboot into the update initramfs via GRUB. In update initramfs boot
-(`foldingos.update-apply=1`), copies the staged image EFI and root partitions
-onto the boot disk while preserving the persistent data partition, reports
-outcome to the supervisor, and reboots.
+Activates a verified staged update. In normal appliance boot, runs while
+`staged-update.json` has `apply_state=staged` or retries while
+`apply_state=boot_scheduled`: sets `apply_state=boot_scheduled`, stages update
+boot assets under `/boot/efi/foldingos/update/`, sets GRUB `next_entry` to `1`
+(the `foldingos-update` menu entry), and reboots once.
 
-No-op with an informational message when no staged update is pending.
+In update initramfs boot (`foldingos.update-apply=1`), sets
+`apply_state=applying`, copies the staged image EFI and root partitions onto the
+boot disk while preserving the persistent data partition, records outcome in
+`/data/state/provision/pending-update-report.json`, clears staged files on
+success, and reboots. The update initramfs has no network; `check-version` on
+the first normal boot with network delivers the pending report to the supervisor.
 
-Invoked by `foldingos-agent-apply-update.service` after a successful
-`check-version` staging run, and by the update initramfs for offline apply.
+On offline apply failure, sets `apply_state=failed`, records a pending `failed`
+report, and reboots into the normal boot path without scheduling another update
+boot automatically.
+
+## `provision report-update-status` (agent)
+
+Reports a missed update outcome directly to the supervisor when network is
+available. Operator recovery when an offline apply succeeded but the pending
+report file is missing.
+
+```bash
+foldingosctl provision report-update-status --status applied --version 0.1.1-lab
+```
+
+| Flag | Required | Description |
+| --- | --- | --- |
+| `--status <status>` | yes | `applied` or `failed` |
+| `--version <ver>` | yes | Assigned image version to report |
+
+No-op with an informational message when no staged update is pending or when
+`apply_state` is not `staged` (normal boot) or the update initramfs boot path is
+not active.
+
+Invoked by `foldingos-agent-apply-update.service` while `apply_state` is
+`staged` or `boot_scheduled`, and by the update initramfs for offline apply.
 
 ---
 

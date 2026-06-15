@@ -40,11 +40,13 @@ done
 if [ "${UPDATE_APPLY}" -eq 1 ]; then
   echo "FoldingOS staged update apply starting." >/dev/console
   if ! mount -t ext4 -o rw LABEL=FOLDINGOS_DATA /data; then
-    echo "FoldingOS staged update apply could not mount /data." >/dev/console
-    exit 1
+    if ! mount -t ext4 -o rw PARTUUID=464f4c44-494e-474f-5344-415441000001 /data; then
+      echo "FoldingOS staged update apply could not mount /data." >/dev/console
+      exit 1
+    fi
   fi
   if ! /usr/bin/foldingosctl provision apply-update --offline >/dev/console 2>&1; then
-    echo "FoldingOS staged update apply failed." >/dev/console
+    echo "FoldingOS staged update apply failed without reboot." >/dev/console
     exit 1
   fi
   exit 0

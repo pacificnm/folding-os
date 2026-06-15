@@ -126,6 +126,9 @@ Supervisor assigns role=agent
 ↓
 Supervisor streams verified image to internal disk over HTTP(S)
 ↓
+Supervisor resets inherited data-partition state and clears inherited GRUB
+one-shot boot state on target EFI partition
+↓
 Supervisor stages SSH public keys on target EFI partition
 ↓
 Machine reboots into installed appliance
