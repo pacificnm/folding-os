@@ -51,6 +51,8 @@ See [doc/milestone/2-readiness-review.md](doc/milestone/2-readiness-review.md).
 - Register agents with the supervisor
 - Assign fixed `agent` and `supervisor` roles at provision time
 - Check desired image version on agent boot and stage updates
+- Acquire FoldOps packages from `deb.folding-os.com` at runtime (ADR-0018)
+- Provision initial supervisor administrator and TLS configuration
 - Validate network provisioning on approved SATA and NVMe targets
 
 See [ADR-0016](doc/adr/0016-network-provisioning-via-supervisor.md) and
@@ -61,15 +63,15 @@ The superseded combined-image USB installer is recorded in
 
 ## Milestone 4: FoldOps Integration
 
-- Define node registration workflow
+- Define node registration workflow (beyond M3 provisioning enrollment)
 - Define metrics reporting API
-- Integrate pinned and verified FoldOps package artifacts
-- Activate the fixed agent and supervisor service graphs
-- Provision initial supervisor administrator and TLS configuration
-- Add FoldingOS agent
-- Add FoldOps supervisor and web services
 - Support remote configuration from FoldOps
-- Report node health and FAH status
+- Report node health and FAH status to FoldOps management plane
+
+FoldOps package acquisition, role-specific service activation, and supervisor
+administrator/TLS provisioning are Milestone 3 scope per
+[ADR-0018](doc/adr/0018-foldops-package-acquisition-and-update-model.md) and
+[Milestone 3 engineering spec](doc/milestone/3-engineering-spec.md).
 
 ## Milestone 5: Update System
 

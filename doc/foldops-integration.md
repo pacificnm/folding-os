@@ -1,6 +1,6 @@
 # FoldOps Integration
 
-Version: 0.2
+Version: 0.3
 
 Status: Living Document
 
@@ -35,8 +35,9 @@ Management complexity belongs in FoldOps rather than on individual nodes.
 Nodes should remain simple appliances.
 
 FoldingOS uses the fixed installation roles defined by
-[ADR-0014](adr/0014-fixed-installation-roles.md) and provisions fleets through
-the supervisor model defined by
+[ADR-0014](adr/0014-fixed-installation-roles.md), acquires FoldOps packages per
+[ADR-0018](adr/0018-foldops-package-acquisition-and-update-model.md), and
+provisions fleets through the supervisor model defined by
 [ADR-0016](adr/0016-network-provisioning-via-supervisor.md).
 
 ---
@@ -58,11 +59,12 @@ origins on Cloudflare:
 
 | Channel | Host | Consumer |
 | --- | --- | --- |
-| FoldOps packages | `deb.folding-os.com` | `apt` (`foldops-agent`, `foldops-supervisor`) |
+| FoldOps packages | `deb.folding-os.com` | `apt` on Debian; `foldingosctl foldops acquire` on FoldingOS |
 | FoldingOS images | `releases.folding-os.com` | supervisor `foldingosctl registry poll` |
 
-See [ADR-0017](adr/0017-official-release-publication-and-supervisor-upstream-polling.md)
-and [FoldOps installation](https://www.folding-os.com/foldops).
+See [ADR-0017](adr/0017-official-release-publication-and-supervisor-upstream-polling.md),
+[ADR-0018](adr/0018-foldops-package-acquisition-and-update-model.md), and
+[FoldOps installation](https://www.folding-os.com/foldops).
 
 Additional nodes are `agent` roles provisioned over the network by the
 supervisor. They do not require USB media or local-console installation.
@@ -107,15 +109,55 @@ Whether the supervisor role also runs Folding@home remains unresolved.
 
 # Package Integration
 
-Approved FoldOps Debian package artifacts are pinned, verified, and integrated
-into the combined FoldingOS image at Buildroot build time.
+FoldOps packages are **not** embedded in the FoldingOS release image. The image
+contains a pinned acquisition manifest and the official archive keyring; see
+[ADR-0018](adr/0018-foldops-package-acquisition-and-update-model.md).
 
-FoldingOS does not use APT at runtime or contact the FoldOps package repository
-during installation. The image must not rely on an APT source configured with
-`trusted=yes`.
+## On FoldingOS appliances
 
-Exact package versions, verification metadata, extraction behavior, and
-service integration require an approved implementation specification.
+After role validation and network availability:
+
+1. `foldingosctl foldops acquire` reads
+   `/usr/share/foldingos/manifests/foldops.toml`
+2. downloads each required `.deb` from pinned URLs on `deb.folding-os.com`
+3. verifies size and SHA-256
+4. extracts and activates under `/data/apps/foldops/`
+5. enables role-appropriate FoldOps systemd units
+
+FoldingOS does **not** ship runtime APT.
+
+## On general Debian hosts
+
+Operators install the same packages with apt:
+
+```bash
+curl -fsSL https://deb.folding-os.com/foldops-archive-keyring.gpg \
+  | sudo gpg --dearmor -o /usr/share/keyrings/foldops.gpg
+
+echo 'deb [signed-by=/usr/share/keyrings/foldops.gpg] https://deb.folding-os.com stable main' \
+  | sudo tee /etc/apt/sources.list.d/foldops.list
+
+sudo apt update
+sudo apt install foldops-agent              # every FAH node
+sudo apt install foldops-supervisor         # supervisor node
+```
+
+Both paths consume identical official `.deb` artifacts.
+
+## Ingest token and TLS (supervisor bootstrap)
+
+Fleet-wide FoldOps authentication uses a shared ingest secret (`INGEST_TOKEN` /
+`AGENT_TOKEN`), not a separate web login. See
+[ADR-0019](adr/0019-foldops-supervisor-provisioning-and-tls.md).
+
+| Step | Supervisor | Agent |
+| --- | --- | --- |
+| EFI staging | Operator writes `/foldingos/provision/foldops-ingest-token` at flash time | Supervisor writes token to target EFI during network install |
+| CA trust | Generates `/data/foldops/tls/ca.pem` at provision | Receives `/data/config/foldops/supervisor-ca.pem` on data partition during network install |
+| Provision | `foldingosctl foldops provision` → TLS + env | `foldingosctl foldops provision` → `agent.env`; `SUPERVISOR_URL` derived from `supervisor.url` host + `:3443` |
+| Remote access | `foldingosctl foldops serve-https` on `:3443` | POST ingest to `https://<supervisor-host>:3443` |
+
+Generate token: `openssl rand -hex 32`
 
 ---
 
@@ -237,6 +279,11 @@ FoldOps may coordinate:
 
 Actual update behavior is defined in the
 [update system specification](update-system.md).
+
+**FoldOps package updates** and **FoldingOS image updates** use separate
+official channels ([ADR-0017](adr/0017-official-release-publication-and-supervisor-upstream-polling.md)).
+Milestone 3 changes FoldOps version pins by embedding an updated manifest in a
+new FoldingOS release.
 
 For Folding@home client updates, FoldOps distributes only approved version
 policy and manifest metadata. Nodes download pinned artifacts directly from

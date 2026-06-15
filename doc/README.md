@@ -22,6 +22,8 @@ This index groups the project's documentation by purpose.
 - [Deployment and provisioning](installer.md) - supervisor bootstrap and network fleet provisioning
 - [ADR-0016: Network provisioning via supervisor](adr/0016-network-provisioning-via-supervisor.md)
 - [ADR-0017: Official release publication and supervisor upstream polling](adr/0017-official-release-publication-and-supervisor-upstream-polling.md)
+- [ADR-0018: FoldOps package acquisition and update model](adr/0018-foldops-package-acquisition-and-update-model.md)
+- [ADR-0019: FoldOps supervisor provisioning and TLS](adr/0019-foldops-supervisor-provisioning-and-tls.md)
 - [ADR-0015: Local commissioning display](adr/0015-local-commissioning-display.md) - boot messages and ready status on `tty1`
 - [Networking](networking.md) - networking behavior and capabilities
 - [Storage layout](storage-layout.md) - logical storage and persistence model

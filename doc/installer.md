@@ -93,9 +93,10 @@ After boot the supervisor must:
 1. acquire DHCP, DNS, and time synchronization
 2. import the staged SSH administrator key
 3. persist `role=supervisor`
-4. complete FoldOps supervisor administrator and TLS provisioning
-5. start the provisioning control plane
-6. import the current approved release image into the local registry
+4. acquire and activate FoldOps packages (`foldingosctl foldops acquire`)
+5. complete FoldOps ingest-token and TLS provisioning (`foldingosctl foldops provision`)
+6. start the provisioning control plane
+7. import the current approved release image into the local registry
 
 The supervisor then polls the official releases manifest on
 `releases.folding-os.com` for newer approved images. See
@@ -173,8 +174,10 @@ installation:
 ```
 
 Direct-flash supervisor bootstrap and network-provisioned agents both use this
-path. First appliance boot imports keys into persistent configuration per
-[ADR-0007](adr/0007-first-boot-administrator-and-ssh-provisioning.md).
+path. First appliance boot imports SSH keys and the fleet FoldOps ingest token
+into persistent configuration per
+[ADR-0007](adr/0007-first-boot-administrator-and-ssh-provisioning.md) and
+[ADR-0019](adr/0019-foldops-supervisor-provisioning-and-tls.md).
 
 ---
 
@@ -216,7 +219,7 @@ Milestone 3 deployment does not provide:
 - USB installer mode with local-console target selection
 - custom partitioning
 - in-place role changes
-- runtime FoldOps package installation from the network
+- runtime APT or general-purpose package management on appliances
 - Folding@home client redistribution inside the OS image
 
 ---

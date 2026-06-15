@@ -226,6 +226,7 @@ client.
 - [ADR-0007: First-Boot Administrator and SSH-Key Provisioning](0007-first-boot-administrator-and-ssh-provisioning.md)
 - [ADR-0009: Folding@home Acquisition and Update Model](0009-fah-acquisition-and-update-model.md)
 - [ADR-0017: Official Release Publication And Supervisor Upstream Polling](0017-official-release-publication-and-supervisor-upstream-polling.md)
+- [ADR-0018: FoldOps Package Acquisition And Update Model](0018-foldops-package-acquisition-and-update-model.md)
 - [Deployment and provisioning](../installer.md)
 - [Milestone 3 engineering specification](../milestone/3-engineering-spec.md)
 - [Update system](../update-system.md)

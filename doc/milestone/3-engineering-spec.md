@@ -74,9 +74,10 @@ Milestone 3 does not add:
 - GPU management
 - Folding@home client redistribution
 
-FoldOps package integration, service graphs, and supervisor administrator/TLS
-provisioning remain governed by [ADR-0014](../adr/0014-fixed-installation-roles.md)
-and require approved FoldOps implementation specifications before release.
+FoldOps package acquisition, service graphs, and supervisor ingest-token/TLS
+provisioning are governed by [ADR-0014](../adr/0014-fixed-installation-roles.md),
+[ADR-0018](../adr/0018-foldops-package-acquisition-and-update-model.md), and
+[ADR-0019](../adr/0019-foldops-supervisor-provisioning-and-tls.md).
 
 ---
 
@@ -148,9 +149,10 @@ After first boot the supervisor must:
 
 1. complete normal appliance initialization
 2. persist `role=supervisor`
-3. complete FoldOps supervisor administrator and TLS provisioning
-4. start the provisioning control plane
-5. import or register the initial approved release image into the local registry
+3. acquire and activate required FoldOps packages (`foldingosctl foldops acquire`)
+4. complete FoldOps ingest-token and TLS provisioning (`foldingosctl foldops provision`)
+5. start the provisioning control plane
+6. import or register the initial approved release image into the local registry
 
 ## Persistent role storage
 
@@ -197,9 +199,11 @@ never transferred over TFTP.
    target disk over HTTP or HTTPS.
 6. The supervisor resets inherited persistent state on the target data
    partition, then writes agent-only provisioning files under `/data/config/`.
-7. The supervisor writes administrator SSH public keys to the target EFI System
-   Partition at `/foldingos/provision/authorized_keys` and clears any inherited
-   GRUB one-shot boot state on the target EFI partition.
+7. The supervisor writes administrator SSH public keys and the fleet ingest
+   token to the target EFI System Partition at
+   `/foldingos/provision/authorized_keys` and
+   `/foldingos/provision/foldops-ingest-token`, and clears any inherited GRUB
+   one-shot boot state on the target EFI partition.
 8. The supervisor verifies the written image and instructs the node to reboot.
 9. The installed agent completes first-boot appliance initialization, registers
    with the supervisor, and begins normal operation including Folding@home
@@ -284,7 +288,122 @@ Published disk images use:
 https://releases.folding-os.com/release/images/foldingos-x86_64-<version>.img
 ```
 
-FoldOps Debian packages remain on `deb.folding-os.com` ([FoldOps install](https://www.folding-os.com/foldops)); operating-system images use the releases host above.
+FoldOps Debian packages remain on `deb.folding-os.com` ([FoldOps install](https://www.folding-os.com/foldops)); operating-system images use the releases host above. FoldingOS nodes acquire FoldOps packages at runtime per [ADR-0018](../adr/0018-foldops-package-acquisition-and-update-model.md).
+
+---
+
+# FoldOps Package Acquisition
+
+FoldingOS release images embed a pinned FoldOps acquisition manifest and the
+official archive keyring. They do **not** embed FoldOps application binaries.
+
+## Manifest and trust
+
+| Path | Purpose |
+| --- | --- |
+| `/usr/share/foldingos/manifests/foldops.toml` | pinned package URLs, sizes, and SHA-256 digests |
+| `/usr/share/keyrings/foldops.gpg` | official apt archive keyring (same as Debian install) |
+
+Builds must verify the manifest before image generation, analogous to
+`scripts/verify-fah-manifest`.
+
+## Role-specific packages
+
+| Role | Packages |
+| --- | --- |
+| `agent` | `foldops-agent` |
+| `supervisor` | `foldops-agent`, `foldops-supervisor`, `foldops-web` |
+
+## Acquisition command
+
+`foldingosctl foldops acquire`:
+
+1. reads the embedded manifest
+2. downloads each required `.deb` from pinned HTTPS URLs on `deb.folding-os.com`
+3. verifies size and SHA-256
+4. extracts the Debian data archive only (no maintainer scripts)
+5. installs under `/data/apps/foldops/<manifest_release>/`
+6. atomically activates `/data/apps/foldops/current`
+7. writes a verified marker
+
+Staging and retry state live under `/data/state/foldops/`.
+
+## Boot ordering
+
+FoldOps acquisition runs after:
+
+- installation role is validated
+- networking and time synchronization are available
+
+FoldOps systemd units must not start until acquisition succeeds. On supervisor
+role, FoldOps web must not listen remotely until administrator and TLS
+provisioning also succeed.
+
+Scheduled acquisition uses `foldingos-foldops-acquire.timer`, analogous to
+Folding@home acquisition.
+
+## Parallel Debian install path
+
+General Debian hosts install the same artifacts with `apt` against
+`deb.folding-os.com`. See [FoldOps integration](../foldops-integration.md).
+
+---
+
+# FoldOps Ingest-Token And TLS Provisioning
+
+Defined by [ADR-0019](../adr/0019-foldops-supervisor-provisioning-and-tls.md).
+
+## EFI staging
+
+| File | Purpose |
+| --- | --- |
+| `/foldingos/provision/foldops-ingest-token` | Fleet-wide `INGEST_TOKEN` / `AGENT_TOKEN` (64 hex chars) |
+
+Supervisor direct flash: operator writes this file before first boot (via
+`make-bootable-usb --foldops-ingest-token` or manual ESP edit).
+
+Network-provisioned agents: supervisor copies the imported token from
+`/data/config/foldops/ingest-token` to the target EFI partition during network
+install, parallel to SSH keys.
+
+## Provision command
+
+`foldingosctl foldops provision`:
+
+1. reads and validates the EFI token file (supervisor and agent)
+2. persists `/data/config/foldops/ingest-token` (`0600`) on supervisor
+3. on supervisor: generates self-signed TLS under `/data/foldops/tls/`
+4. renders `/data/config/foldops/supervisor.env` and local `agent.env`
+5. on agent: renders `agent.env` with `AGENT_TOKEN` and
+   `SUPERVISOR_URL=https://<host>:3443`, where `<host>` is parsed from
+   `/data/config/provision/supervisor.url`
+6. writes `/data/state/foldops/provisioned.json`
+7. removes the EFI staging file after successful import
+
+Network install also writes `/data/config/foldops/supervisor-ca.pem` on the
+target data partition (public CA copied from the supervisor).
+
+## HTTPS front end
+
+| Listener | Address | Purpose |
+| --- | --- | --- |
+| `foldingosctl foldops serve-https` | `0.0.0.0:3443` | TLS terminator → loopback `:3000` |
+| `foldops-supervisor` | `127.0.0.1:3000` | Loopback HTTP only |
+
+Remote HTTPS must not listen until provision succeeds.
+
+## Boot ordering (supervisor)
+
+```text
+foldingos-installation-role.service
+  → foldingos-foldops-acquire.service
+  → foldingos-foldops-provision.service
+  → foldingos-foldops-provision.service
+  → foldingos-provision.service / registry import
+  → foldingos-foldops-serve-https.service + foldops-supervisor (loopback)
+```
+
+Agents run `foldops acquire` → `foldops provision` before `foldops-agent`.
 
 ---
 
@@ -438,9 +557,10 @@ Implementation should proceed in this order:
 4. Implement supervisor HTTP image streaming to a selected target
 5. Add iPXE/TFTP boot assistance and enrollment
 6. Implement agent staged update and reboot apply
-7. Add FoldOps supervisor administrator and TLS provisioning
-8. Add QEMU automated validation
-9. Complete physical network-provisioned SATA and NVMe validation
+7. Implement FoldOps package acquisition from `deb.folding-os.com`
+8. Add FoldOps ingest-token and TLS provisioning ([#62](https://github.com/pacificnm/folding-os/issues/62))
+9. Add QEMU automated validation
+10. Complete physical network-provisioned SATA and NVMe validation
 
 Each step must add its required automated tests before dependent steps proceed.
 
@@ -482,7 +602,7 @@ Milestone 3 does not implement:
 - USB-source network provisioning for internal disks
 - local-console installer mode
 - arbitrary package selection beyond fixed roles
-- FoldOps package download at runtime
+- runtime APT or general-purpose package management
 - GPU Folding@home support
 - operating-system updates without supervisor coordination
 
@@ -490,8 +610,10 @@ Milestone 3 does not implement:
 
 # Related Documents
 
+- [ADR-0018: FoldOps Package Acquisition And Update Model](../adr/0018-foldops-package-acquisition-and-update-model.md)
 - [ADR-0016: Network Provisioning Via Supervisor](../adr/0016-network-provisioning-via-supervisor.md)
 - [ADR-0014: Fixed Installation Roles](../adr/0014-fixed-installation-roles.md)
+- [ADR-0019: FoldOps Supervisor Provisioning And TLS](../adr/0019-foldops-supervisor-provisioning-and-tls.md)
 - [Deployment and provisioning](../installer.md)
 - [Update system](../update-system.md)
 - [FoldOps integration](../foldops-integration.md)

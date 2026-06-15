@@ -30,7 +30,7 @@ foldingosctl <group> <command> [arguments]
 If the command is not recognized, the program prints:
 
 ```text
-usage: foldingosctl <boot|config|fah|identity|provision|registry|storage> <command> [arguments]
+usage: foldingosctl <boot|config|fah|foldops|identity|provision|registry|storage> <command> [arguments]
 ```
 
 There is no built-in `--help` flag. This document is the authoritative
@@ -84,6 +84,10 @@ Role-specific commands fail closed when the active role does not match.
 | `fah` | `activate` | any | `fah acquire` |
 | `fah` | `prepare` | any | `systemd` before FAH service |
 | `fah` | `run` | any | `systemd` (long-running) |
+| `foldops` | `validate-manifest` | any | acceptance / diagnostics |
+| `foldops` | `acquire` | agent / supervisor | `systemd` after role + network |
+| `foldops` | `provision` | agent / supervisor | `systemd` after acquire |
+| `foldops` | `serve-https` | supervisor | `systemd` after provision |
 
 ---
 
@@ -472,6 +476,77 @@ Long-running. Invoked by `folding-at-home.service`.
 
 ---
 
+# FoldOps Commands
+
+FoldOps package lifecycle commands. The embedded approved manifest ships in the
+image. See [ADR-0018](adr/0018-foldops-package-acquisition-and-update-model.md).
+
+## `foldops validate-manifest`
+
+Validates the embedded FoldOps acquisition manifest at
+`/usr/share/foldingos/manifests/foldops.toml`.
+
+## `foldops acquire`
+
+Downloads pinned `.deb` artifacts from `deb.folding-os.com`, verifies size and
+SHA-256, extracts into `/data/apps/foldops/<manifest_release>/`, and activates
+`/data/apps/foldops/current`. Required packages depend on installation role:
+
+| Role | Packages |
+| --- | --- |
+| `agent` | `foldops-agent` |
+| `supervisor` | `foldops-agent`, `foldops-supervisor`, `foldops-web` |
+
+Invoked by `foldingos-foldops-acquire.service` after role validation and network
+availability. FoldOps systemd units must not start until acquisition succeeds.
+
+## `foldops provision`
+
+Imports the fleet ingest token from EFI, configures FoldOps environment files,
+and completes TLS bootstrap on supervisor role. See
+[ADR-0019](adr/0019-foldops-supervisor-provisioning-and-tls.md).
+
+**EFI input** (before first boot or written by supervisor during network install):
+
+```text
+/boot/efi/foldingos/provision/foldops-ingest-token
+```
+
+Single line: 64 hex characters (`openssl rand -hex 32`).
+
+**Supervisor role:**
+
+1. import token → `/data/config/foldops/ingest-token`
+2. generate self-signed TLS under `/data/foldops/tls/`
+3. write `/data/config/foldops/supervisor.env` (`HOST=127.0.0.1`, `PORT=3000`)
+4. write local `/data/config/foldops/agent.env`
+5. mark `/data/state/foldops/provisioned.json`
+6. remove EFI staging file
+
+**Agent role:**
+
+1. import token from EFI
+2. derive `SUPERVISOR_URL` from `/data/config/provision/supervisor.url`:
+   parse host, set `https://<host>:3443`
+3. write `/data/config/foldops/agent.env` with `AGENT_TOKEN` and
+   `SUPERVISOR_TLS_CA=/data/config/foldops/supervisor-ca.pem`
+4. mark provisioned (CA is already on disk from network install, or copied on
+   supervisor direct-flash paths)
+
+Until provision succeeds, the HTTPS dashboard must not listen on `0.0.0.0`.
+Invoked by `foldingos-foldops-provision.service` after `foldops acquire`.
+
+## `foldops serve-https`
+
+Supervisor-only TLS terminator. Listens on `0.0.0.0:3443`, terminates HTTPS
+using `/data/foldops/tls/cert.pem` and `key.pem`, and reverse-proxies to
+`http://127.0.0.1:3000` where `foldops-supervisor` runs.
+
+Long-running. Invoked by `foldingos-foldops-serve-https.service` only after
+`/data/state/foldops/provisioned.json` exists.
+
+---
+
 # Key Paths
 
 | Path | Purpose |
@@ -489,7 +564,19 @@ Long-running. Invoked by `folding-at-home.service`.
 | `/data/state/provision/staged-update.json` | Staged update metadata and verification state |
 | `/data/provision/enrollments/` | Agent enrollment records |
 | `/data/registry/` | Supervisor release image registry |
-| `/boot/efi/foldingos/provision/` | Staged first-boot role and SSH keys |
+| `/usr/share/foldingos/manifests/foldops.toml` | Embedded FoldOps acquisition manifest |
+| `/usr/share/keyrings/foldops.gpg` | Official FoldOps apt archive keyring |
+| `/data/apps/foldops/current` | Active verified FoldOps installation tree |
+| `/data/state/foldops/` | FoldOps download staging and acquire retry state |
+| `/data/config/foldops.toml` | FoldOps runtime configuration |
+| `/data/foldops/` | FoldOps persistent runtime state |
+| `/data/config/foldops/ingest-token` | Fleet ingest secret (supervisor) |
+| `/data/config/foldops/supervisor.env` | Supervisor FoldOps environment |
+| `/data/config/foldops/agent.env` | Agent FoldOps environment |
+| `/data/config/foldops/supervisor-ca.pem` | Agent trust anchor for supervisor HTTPS |
+| `/data/foldops/tls/` | Supervisor self-signed TLS material |
+| `/data/state/foldops/provisioned.json` | FoldOps provision completion marker |
+| `/boot/efi/foldingos/provision/foldops-ingest-token` | Staged fleet ingest token (EFI) |
 
 ---
 
