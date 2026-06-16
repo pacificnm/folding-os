@@ -57,6 +57,8 @@ design decisions years after they were originally made.
 - [ADR-0017: Official Release Publication And Supervisor Upstream Polling](0017-official-release-publication-and-supervisor-upstream-polling.md)
 - [ADR-0018: FoldOps Package Acquisition And Update Model](0018-foldops-package-acquisition-and-update-model.md)
 - [ADR-0019: FoldOps Supervisor Provisioning And TLS](0019-foldops-supervisor-provisioning-and-tls.md)
+- [ADR-0020: FoldOps Delegates Node Operations To foldingosctl](0020-foldops-delegates-node-operations-to-foldingosctl.md) (proposed)
+- [ADR-0021: Machine-Readable foldingosctl Automation Interface](0021-machine-readable-foldingosctl-automation-interface.md) (proposed)
 
 ---
 

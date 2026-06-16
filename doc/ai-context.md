@@ -90,6 +90,11 @@ precedence or silently choose one statement.
   complete; see [milestone/3-readiness-review.md](milestone/3-readiness-review.md),
   [ADR-0016](adr/0016-network-provisioning-via-supervisor.md), and
   [milestone/3-engineering-spec.md](milestone/3-engineering-spec.md).
+- Milestone 4 FoldOps integration is the active implementation target; FoldOps
+  delegates node-local operations to `foldingosctl` per
+  [ADR-0020](adr/0020-foldops-delegates-node-operations-to-foldingosctl.md),
+  [ADR-0021](adr/0021-machine-readable-foldingosctl-automation-interface.md), and
+  [milestone/4-engineering-spec.md](milestone/4-engineering-spec.md).
 - Operator build, deployment, recovery, and Folding@home runtime procedures are
   in [operations.md](operations.md).
 - Next planned platform: Raspberry Pi 5 using ARM64.
