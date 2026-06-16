@@ -131,6 +131,40 @@ func TestProvisionBootHTTPHandlersGateEnrollment(t *testing.T) {
 	}
 }
 
+func TestRenderDnsmasqConfigUsesIsolatedDHCPWhenEnabled(t *testing.T) {
+	root := t.TempDir()
+	restore := setProvisionBootPaths(root)
+	defer restore()
+	if err := os.MkdirAll(filepath.Join(root, "config", "provision"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(provisionBootIsolatedNetworkPath, []byte("\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "config", "provision", "boot.interface"), []byte("eth0\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	restoreHost := setProvisionBootHostResolver(func(string) (string, error) {
+		return "192.168.4.12", nil
+	})
+	defer restoreHost()
+	restoreSubnet := setProvisionBootSubnetResolver(func(string) (string, error) {
+		return "192.168.4.0", nil
+	})
+	defer restoreSubnet()
+
+	config, err := renderDnsmasqConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(config, "dhcp-range=192.168.4.10,192.168.4.200,255.255.255.0,12h") {
+		t.Fatalf("config missing isolated dhcp range:\n%s", config)
+	}
+	if strings.Contains(config, ",proxy,") {
+		t.Fatalf("isolated config must not use proxy DHCP:\n%s", config)
+	}
+}
+
 func TestRenderDnsmasqConfigUsesProxyDHCPAndTFTPBootstrap(t *testing.T) {
 	root := t.TempDir()
 	restore := setProvisionBootPaths(root)
@@ -292,6 +326,7 @@ func setProvisionBootPaths(root string) func() {
 	provisionBootAllowlistPath = filepath.Join(root, "config", "provision", "boot-allowlist")
 	provisionBootInterfacePath = filepath.Join(root, "config", "provision", "boot.interface")
 	provisionBootDnsmasqConfig = filepath.Join(root, "config", "provision", "dnsmasq.conf")
+	provisionBootIsolatedNetworkPath = filepath.Join(root, "config", "provision", "boot-isolated-network")
 	provisionBootAssetsDir = filepath.Join(root, "share", "boot")
 	if err := os.MkdirAll(filepath.Join(provisionBootAssetsDir, "ipxe"), 0755); err != nil {
 		panic(err)

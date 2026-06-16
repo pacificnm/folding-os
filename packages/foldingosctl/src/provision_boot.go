@@ -18,6 +18,7 @@ const (
 	provisionBootAllowlistPathDefault = "/data/config/provision/boot-allowlist"
 	provisionBootInterfacePathDefault = "/data/config/provision/boot.interface"
 	provisionBootDnsmasqConfigDefault   = "/data/config/provision/dnsmasq.conf"
+	provisionBootIsolatedNetworkPathDefault = "/data/config/provision/boot-isolated-network"
 	provisionBootAssetsDirDefault     = "/usr/share/foldingos/boot"
 	ipxeBootstrapFilename             = "ipxe.efi"
 	ipxeAutoexecFilename              = "autoexec.ipxe"
@@ -30,6 +31,7 @@ var (
 	provisionBootAllowlistPath = provisionBootAllowlistPathDefault
 	provisionBootInterfacePath = provisionBootInterfacePathDefault
 	provisionBootDnsmasqConfig = provisionBootDnsmasqConfigDefault
+	provisionBootIsolatedNetworkPath = provisionBootIsolatedNetworkPathDefault
 	provisionBootAssetsDir       = provisionBootAssetsDirDefault
 	startDnsmasqProcess        = startDnsmasqProcessDirect
 	resolveProvisionBootHost   = resolveProvisionBootHostFromNetwork
@@ -130,7 +132,7 @@ func renderDnsmasqConfigFromEnvironment(env provisionBootEnvironment) string {
 		"bind-dynamic",
 		"interface=" + env.iface,
 		"except-interface=lo",
-		"dhcp-range=" + env.subnet + ",proxy,255.255.255.0",
+		renderProvisionDhcpRangeLine(env.subnet),
 		"enable-tftp",
 		"tftp-root=" + provisionBootTFTPRoot,
 		"dhcp-match=set:ipxe,175",
@@ -147,6 +149,30 @@ func renderDnsmasqConfigFromEnvironment(env provisionBootEnvironment) string {
 		"log-queries",
 	}
 	return strings.Join(lines, "\n") + "\n"
+}
+
+func provisionBootIsolatedNetworkEnabled() bool {
+	_, err := os.Stat(provisionBootIsolatedNetworkPath)
+	return err == nil
+}
+
+func renderProvisionDhcpRangeLine(subnet string) string {
+	if !provisionBootIsolatedNetworkEnabled() {
+		return "dhcp-range=" + subnet + ",proxy,255.255.255.0"
+	}
+	network := net.ParseIP(subnet).To4()
+	if network == nil {
+		return "dhcp-range=" + subnet + ",proxy,255.255.255.0"
+	}
+	start := net.IP(append(net.IP(nil), network...))
+	end := net.IP(append(net.IP(nil), network...))
+	start[3] += 10
+	end[3] += 200
+	return fmt.Sprintf(
+		"dhcp-range=%s,%s,255.255.255.0,12h",
+		start.String(),
+		end.String(),
+	)
 }
 
 func readProvisionBootInterface() (string, error) {
