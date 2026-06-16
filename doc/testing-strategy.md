@@ -233,18 +233,40 @@ Releases that claim full FoldOps integration on FoldingOS appliances should
 validate:
 
 - `foldingosctl inspect … --format json` succeeds for the `foldops` user on
-  agent and supervisor roles
+  agent and supervisor roles, including `inspect foldops` and `inspect tools`
 - FoldOps agent ingest on FoldingOS is produced from `foldingosctl` delegation,
   not direct OS inspection
 - ingest payloads include FoldingOS `node_id` and `installation_role`
+- `inspect foldops` reports bootstrap, assigned, and active manifest releases
+- `inspect tools` reports assigned and active `foldingosctl` versions
 - FoldOps supervisor reads fleet state through local `foldingosctl provision` and
   `registry` JSON commands on the supervisor role
-- desired-version assignment initiated from FoldOps updates supervisor enrollment
-  state through `foldingosctl provision assign`
+- desired OS image, FoldOps manifest, and tools version assignment initiated from
+  FoldOps updates supervisor enrollment state through `foldingosctl provision assign`
 - approved remote configuration workflow uses `foldingosctl config activate`
 - FoldOps agent or supervisor failure does not stop Folding@home runtime
 
-See [milestone/4-engineering-spec.md](milestone/4-engineering-spec.md).
+See [milestone/4-engineering-spec.md](milestone/4-engineering-spec.md) and
+[ADR-0023](adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md).
+
+---
+
+# FoldOps And Tools Runtime Update Validation
+
+Releases that claim Milestone 4 appliance transport must validate:
+
+- `foldingosctl foldops acquire` installs verified `layout-tar-zst` bundles from
+  `packages.folding-os.com` without runtime `apt` or `dpkg`
+- supervisor-assigned manifest at `/data/config/foldops/assigned-manifest.toml`
+  takes precedence over the embedded bootstrap manifest
+- routine FoldOps manifest changes apply without OS image reflash
+- `foldingosctl tools acquire` updates `/usr/bin/foldingosctl` from
+  `packages.folding-os.com/foldingos-tools/` with SHA-256 verification
+- assigned tools version changes apply without OS image reflash
+- hash, size, architecture, and manifest-schema mismatches fail closed
+- last known-good FoldOps and tools versions remain active after failed acquire
+
+See [milestone/4-appliance-artifact-and-monorepo-plan.md](milestone/4-appliance-artifact-and-monorepo-plan.md).
 
 ---
 

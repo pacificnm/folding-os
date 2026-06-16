@@ -129,6 +129,27 @@ Returns:
   present
 - last reported update status when present
 
+### `inspect foldops`
+
+Returns:
+
+- `bootstrap_manifest_release` from `/usr/share/foldingos/manifests/foldops.toml`
+- `assigned_manifest_release` from `/data/config/foldops/assigned-manifest.toml`
+  when present
+- `active_manifest_release` under `/data/apps/foldops/current`
+- per-package verification paths and last acquire status from
+  `/data/state/foldops/`
+
+### `inspect tools`
+
+Returns:
+
+- `active_tools_version` from `/data/state/tools/` when present
+- `assigned_tools_version` from `/data/config/tools/assigned-version.json` when
+  present
+- `foldingosctl_path` and on-disk binary metadata for `/usr/bin/foldingosctl`
+- last `tools acquire` status when present
+
 ## Existing commands with JSON output
 
 | Command | Role | Milestone 4 JSON |
@@ -162,6 +183,8 @@ foldingosctl inspect node --format json
 foldingosctl inspect system --format json
 foldingosctl inspect fah --format json
 foldingosctl inspect update --format json
+foldingosctl inspect foldops --format json
+foldingosctl inspect tools --format json
 ```
 
 The agent assembles the ingest payload from these documents plus FoldOps-local
@@ -295,8 +318,9 @@ unless implementation discovers a polling gap; prefer extending existing timers.
    - unit tests and fixture-based golden JSON
    - `foldops` user authorization for inspect
 
-2. **FAH and update inspection**
-   - `inspect fah`, `inspect update`, `inspect commissioning`
+2. **FAH, update, and runtime inspection**
+   - `inspect fah`, `inspect update`, `inspect commissioning`, `inspect foldops`,
+     `inspect tools`
    - map fields to FoldOps ingest schema in `packages/foldops/`
 
 3. **FoldOps agent delegation**
@@ -331,7 +355,8 @@ Each step requires automated tests before dependent steps proceed.
 
 A Milestone 4 acceptance suite must validate at minimum:
 
-- `foldingosctl inspect … --format json` succeeds on agent and supervisor images
+- `foldingosctl inspect … --format json` succeeds on agent and supervisor images,
+  including `inspect foldops` and `inspect tools`
 - `foldops-agent` ingest uses delegation on FoldingOS (mock or live supervisor)
 - ingest payload contains stable `node_id`
 - supervisor dashboard/API reads enrollments via `provision list-enrollments --format json`

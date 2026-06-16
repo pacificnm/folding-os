@@ -28,9 +28,9 @@ This index groups the project's documentation by purpose.
 - [Networking](networking.md) - networking behavior and capabilities
 - [Storage layout](storage-layout.md) - logical storage and persistence model
 - [Security model](security.md) - runtime security architecture
-- [FoldOps integration](foldops-integration.md) - fleet-management relationship
-  with the separate [pacificnm/foldops](https://github.com/pacificnm/foldops)
-  repository
+- [FoldOps integration](foldops-integration.md) - fleet-management relationship;
+  Rust source in `packages/foldops/` per
+  [ADR-0022](adr/0022-foldops-rust-source-in-foldingos-monorepo.md)
 
 ## Implementation Specifications
 

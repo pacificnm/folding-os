@@ -163,22 +163,22 @@ document reflects ADR-0022/0023.
 
 | Document | What must align | Status |
 | --- | --- | --- |
-| [ADR-0018](../adr/0018-foldops-package-acquisition-and-update-model.md) | Amended-by header; deb = secondary; assigned manifest + layout bundles per 0023 | Header updated |
-| [ADR-0014](../adr/0014-fixed-installation-roles.md) | FoldOps still runtime on `/data`; no role change | Review |
-| [ADR-0017](../adr/0017-official-release-publication-and-supervisor-upstream-polling.md) | Add `packages.folding-os.com` channels | Review |
-| [ADR-0019](../adr/0019-foldops-supervisor-provisioning-and-tls.md) | Assignment API for FoldOps/tools versions | Review |
-| [ADR-0020](../adr/0020-foldops-delegates-node-operations-to-foldingosctl.md) | Rust monorepo; no Node/apt on appliances | Updated |
-| [ADR-0021](../adr/0021-machine-readable-foldingosctl-automation-interface.md) | `inspect` includes assigned vs active tools/FoldOps versions | Review |
-| [foldops-integration.md](../foldops-integration.md) | Monorepo source; layout bundles; no separate-repo authority | Updated |
-| [ai-context.md](../ai-context.md) | Source monorepo; runtime separate | Updated |
-| [3-engineering-spec.md](3-engineering-spec.md) | Note bootstrap floor vs assigned pins (historical M3) | Review |
-| [4-implementation-spec.md](4-implementation-spec.md) | Scope includes transport + monorepo | Updated |
-| [4-engineering-spec.md](4-engineering-spec.md) | Phases A–E work breakdown | Updated |
-| [ROADMAP.md](../../ROADMAP.md) | M4 bullets for monorepo and runtime updates | Updated |
-| [testing-strategy.md](../testing-strategy.md) | Acquire v2 and tools acquire tests | Review |
-| [operations.md](../operations.md) | Operator commands for assignment and acquire | Review |
-| [installer/operations.md](../installer/operations.md) | Publication URLs | Review |
-| [packages/foldops/README.md](../../packages/foldops/README.md) | Placeholder until import | Created |
+| [ADR-0018](../adr/0018-foldops-package-acquisition-and-update-model.md) | Amended-by header; deb = secondary; assigned manifest + layout bundles per 0023 | Aligned |
+| [ADR-0014](../adr/0014-fixed-installation-roles.md) | FoldOps still runtime on `/data`; layout bundles; no role change | Aligned |
+| [ADR-0017](../adr/0017-official-release-publication-and-supervisor-upstream-polling.md) | Add `packages.folding-os.com` channels | Aligned (header) |
+| [ADR-0019](../adr/0019-foldops-supervisor-provisioning-and-tls.md) | Assignment API for FoldOps/tools versions | Aligned (header) |
+| [ADR-0020](../adr/0020-foldops-delegates-node-operations-to-foldingosctl.md) | Rust monorepo; no Node/apt on appliances | Aligned |
+| [ADR-0021](../adr/0021-machine-readable-foldingosctl-automation-interface.md) | `inspect foldops` / `inspect tools` for assigned vs active versions | Aligned |
+| [foldops-integration.md](../foldops-integration.md) | Monorepo source; layout bundles; no separate-repo authority | Aligned |
+| [ai-context.md](../ai-context.md) | Source monorepo; runtime separate | Aligned |
+| [3-engineering-spec.md](3-engineering-spec.md) | M3 deb baseline + M4 extensions table | Aligned |
+| [4-implementation-spec.md](4-implementation-spec.md) | Scope includes transport + monorepo | Aligned |
+| [4-engineering-spec.md](4-engineering-spec.md) | Phases A–E work breakdown; inspect foldops/tools | Aligned |
+| [ROADMAP.md](../../ROADMAP.md) | M4 bullets for monorepo and runtime updates | Aligned |
+| [testing-strategy.md](../testing-strategy.md) | Acquire v2 and tools acquire tests | Aligned |
+| [operations.md](../operations.md) | Operator commands for assignment and acquire | Aligned |
+| [installer.md](../installer.md) | Publication URLs and fleet update channels | Aligned |
+| [packages/foldops/README.md](../../packages/foldops/README.md) | Placeholder until import | Aligned |
 
 ---
 

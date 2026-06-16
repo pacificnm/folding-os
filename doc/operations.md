@@ -435,14 +435,22 @@ service and does not install unpinned or unverified artifacts.
 # FoldOps Runtime
 
 FoldOps packages are not embedded in release images. After deployment, the node
-downloads pinned `.deb` artifacts from `deb.folding-os.com`, verifies them,
-extracts them under `/data/apps/foldops/`, and starts role-appropriate services
-only after ingest-token and TLS provisioning succeed.
+downloads pinned verified artifacts, extracts them under `/data/apps/foldops/`,
+and starts role-appropriate services only after ingest-token and TLS
+provisioning succeed.
+
+On Milestone 3 appliances, acquisition uses embedded bootstrap manifest schema
+v1 and `.deb` extract from `deb.folding-os.com`. Milestone 4 targets
+`layout-tar-zst` bundles from `packages.folding-os.com/foldops/` with optional
+supervisor-assigned manifest at `/data/config/foldops/assigned-manifest.toml`.
+Assigned manifests override the bootstrap floor without OS reimage.
 
 References:
 
 - [ADR-0018](adr/0018-foldops-package-acquisition-and-update-model.md)
 - [ADR-0019](adr/0019-foldops-supervisor-provisioning-and-tls.md)
+- [ADR-0023](adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md)
+- [milestone/4-appliance-artifact-and-monorepo-plan.md](milestone/4-appliance-artifact-and-monorepo-plan.md)
 - [foldingosctl.md](foldingosctl.md)
 
 ## Supervisor USB staging
@@ -465,7 +473,8 @@ After installation role validation, networking, and time synchronization:
 
 1. `foldingos-foldops-acquire.timer` triggers `foldingos-foldops-acquire.service`
 2. `foldingosctl foldops acquire` downloads, verifies, and activates pinned
-   FoldOps packages under `/data/apps/foldops/current`
+   FoldOps packages under `/data/apps/foldops/current` (from assigned manifest
+   when present, otherwise bootstrap manifest)
 3. `foldingos-foldops-provision.service` runs `foldingosctl foldops provision`
    to import the ingest token, render env files, generate supervisor TLS, and
    write `/data/state/foldops/provisioned.json`
@@ -481,6 +490,8 @@ FoldOps failure must not block boot or Folding@home.
 
 ```bash
 foldingosctl foldops validate-manifest
+foldingosctl inspect foldops --format json
+foldingosctl inspect tools --format json
 systemctl status foldingos-foldops-acquire.timer foldingos-foldops-acquire.service
 systemctl status foldingos-foldops-provision.service
 systemctl status foldingos-foldops-serve-https.service foldingos-foldops-supervisor.service
@@ -490,6 +501,26 @@ sudo test -f /data/state/foldops/provisioned.json
 sudo test -f /data/config/foldops/ingest-token
 curl -k https://127.0.0.1:3443/
 ```
+
+## foldingosctl tools updates (Milestone 4)
+
+Routine `foldingosctl` fixes must not require OS image reflash. When supervisor
+assignment is enabled:
+
+1. supervisor writes `/data/config/tools/assigned-version.json`
+2. `foldingosctl tools acquire` downloads the pinned binary from
+   `packages.folding-os.com/foldingos-tools/`
+3. verifies SHA-256 and atomically replaces `/usr/bin/foldingosctl`
+4. records active version under `/data/state/tools/`
+
+Manual acquire:
+
+```bash
+sudo foldingosctl tools acquire
+foldingosctl inspect tools --format json
+```
+
+See [ADR-0023](adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md).
 
 ---
 
