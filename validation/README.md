@@ -7,9 +7,17 @@ This directory stores committed physical validation records for release gates.
 - Template: [appliance-physical.template.json](appliance-physical.template.json)
 - Completed record: `appliance-physical-<version>.json`
 
-Create the versioned record only after the procedure in
-[doc/physical-validation.md](../doc/physical-validation.md) passes on physical
-hardware.
+## Network fleet provisioning
+
+- QEMU template: [network-provision-qemu.template.json](network-provision-qemu.template.json)
+- QEMU completed record: `network-provision-qemu-<version>.json`
+- Physical template: [network-provision-physical.template.json](network-provision-physical.template.json)
+- Physical completed record: `network-provision-physical-<version>.json`
+
+Create versioned records only after the procedures in
+[doc/physical-validation.md](../doc/physical-validation.md) (foundation) and
+[doc/milestone/3-readiness-review.md](../doc/milestone/3-readiness-review.md)
+(network provisioning) pass.
 
 Prepare boot media with:
 

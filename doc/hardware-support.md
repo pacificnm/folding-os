@@ -246,7 +246,8 @@ committed under `validation/`.
 
 | Manufacturer | Model | Firmware | Storage transport | Validation record | Notes |
 | --- | --- | --- | --- | --- | --- |
-| Dell | OptiPlex Micro | Dell UEFI | USB | [appliance-physical-0.1.0.json](../validation/appliance-physical-0.1.0.json) | Validated over wired Ethernet; local commissioning display approved by ADR-0015 |
+| Dell | OptiPlex Micro | Dell UEFI | USB | [appliance-physical-0.1.0.json](../validation/appliance-physical-0.1.0.json) | Milestone 1 foundation; validated over wired Ethernet; local commissioning display approved by ADR-0015 |
+| Dell | OptiPlex Micro | Dell UEFI | NVMe (supervisor direct flash), NVMe and SATA (network agents) | [network-provision-physical-0.1.0.json](../validation/network-provision-physical-0.1.0.json) | Milestone 3 network fleet provisioning; dual-disk SATA agent used `allow-boot --disk /dev/sda` |
 
 ---
 

@@ -42,6 +42,8 @@ This index groups the project's documentation by purpose.
   completion status and validation evidence
 - [Milestone 2 readiness review](milestone/2-readiness-review.md) - Folding@home
   runtime completion status and validation evidence
+- [Milestone 3 readiness review](milestone/3-readiness-review.md) - network fleet
+  provisioning completion status and validation evidence
 - [Deployment and provisioning](installer.md) - supervisor bootstrap and network
   fleet provisioning
 - [Milestone 3 engineering specification](milestone/3-engineering-spec.md) -
