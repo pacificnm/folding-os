@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
+
+var provisionInstallDiskPathPattern = regexp.MustCompile(`^/dev/(sd[a-z]+|vd[a-z]+|nvme[0-9]+n[0-9]+)$`)
 
 type provisionTargetDisk struct {
 	Path        string
@@ -22,6 +25,7 @@ var (
 	inspectProvisionTargetDisk = inspectProvisionTargetDiskFromSystem
 	resolveHostBootDisk        = resolveHostBootDiskFromSystem
 	listMountedBlockDevices    = listMountedBlockDevicesFromSystem
+	provisionTargetSysfsRoot   = "/sys"
 )
 
 func validateProvisionTargetDisk(path string) (provisionTargetDisk, error) {
@@ -84,9 +88,28 @@ func isEligibleProvisionTransport(disk provisionTargetDisk) bool {
 		return true
 	case strings.Contains(name, "nvme"):
 		return true
+	case strings.HasPrefix(name, "sd") && len(name) >= 3:
+		// Internal SCSI/SATA disks may report an empty TRAN in the install initramfs.
+		return transport == "" || transport == "sata" || transport == "ata"
+	case strings.HasPrefix(name, "vd") && len(name) >= 3:
+		return transport == "" || transport == "sata" || transport == "ata"
 	default:
 		return false
 	}
+}
+
+func parseProvisionInstallDiskPath(path string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", errors.New("install disk path is empty")
+	}
+	if !provisionInstallDiskPathPattern.MatchString(path) {
+		return "", fmt.Errorf(
+			"install disk must be a whole-disk device path such as /dev/sda or /dev/nvme0n1: %q",
+			path,
+		)
+	}
+	return path, nil
 }
 
 func inspectProvisionTargetDiskFromSystem(path string) (provisionTargetDisk, error) {
@@ -134,16 +157,51 @@ func inspectProvisionTargetDiskFromSystem(path string) (provisionTargetDisk, err
 		if devicePath != path {
 			continue
 		}
+		serial := strings.TrimSpace(device.Serial)
+		if serial == "" {
+			serial = readProvisionTargetDiskSerialFromSysfs(devicePath)
+		}
 		return provisionTargetDisk{
 			Path:       devicePath,
 			SizeBytes:  device.Size,
-			Serial:     strings.TrimSpace(device.Serial),
+			Serial:     serial,
 			Transport:  strings.TrimSpace(device.Tran),
 			Removable:  device.RM,
 			DeviceType: strings.TrimSpace(device.Type),
 		}, nil
 	}
 	return provisionTargetDisk{}, fmt.Errorf("target disk %q was not found", path)
+}
+
+func readProvisionTargetDiskSerialFromSysfs(devicePath string) string {
+	name := strings.TrimSpace(filepath.Base(devicePath))
+	if name == "" {
+		return ""
+	}
+	candidates := []string{
+		filepath.Join(provisionTargetSysfsRoot, "block", name, "device", "serial"),
+	}
+	if strings.HasPrefix(name, "nvme") {
+		controller := name
+		if idx := strings.LastIndex(name, "n"); idx > len("nvme") {
+			controller = name[:idx]
+		}
+		candidates = append(
+			candidates,
+			filepath.Join(provisionTargetSysfsRoot, "class", "nvme", controller, "serial"),
+		)
+	}
+	for _, candidate := range candidates {
+		content, err := os.ReadFile(candidate)
+		if err != nil {
+			continue
+		}
+		serial := strings.TrimSpace(string(content))
+		if serial != "" {
+			return serial
+		}
+	}
+	return ""
 }
 
 func resolveHostBootDiskFromSystem() (string, error) {

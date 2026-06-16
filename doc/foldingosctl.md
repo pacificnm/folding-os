@@ -267,7 +267,7 @@ Selects the wired interface automatically from `networkctl`, or uses
 
 Long-running. Invoked by `foldingos-provision-boot.service`.
 
-## `provision allow-boot <mac>` (supervisor)
+## `provision allow-boot [--disk <device>] <mac>` (supervisor)
 
 Adds a client MAC address to the network-boot allowlist at
 `/data/config/provision/boot-allowlist`.
@@ -275,11 +275,18 @@ Adds a client MAC address to the network-boot allowlist at
 Accepts colon- or hyphen-separated MAC forms. Normalizes to lowercase
 `aa:bb:cc:dd:ee:ff`. Idempotent when the MAC is already listed.
 
+Optional `--disk` pins the network install target for that MAC. The value is
+stored in `/data/config/provision/boot-install-disk-allowlist` and passed to
+the install initramfs as `foldingos.install-disk=` in the iPXE kernel command
+line. Use this when a machine has multiple internal disks and automatic target
+selection would pick the wrong one.
+
 Required before a blank machine can fetch the install iPXE script unless a
 valid enrollment token is supplied in the iPXE URL.
 
 ```bash
 sudo foldingosctl provision allow-boot 00:be:43:e7:59:5e
+sudo foldingosctl provision allow-boot --disk /dev/sda 00:be:43:e7:59:5e
 ```
 
 ## `provision list-enrollments` (supervisor)

@@ -75,8 +75,8 @@ func dispatch(args []string) error {
 	if len(args) == 2 && args[0] == "provision" && args[1] == "boot" {
 		return provisionBoot()
 	}
-	if len(args) == 3 && args[0] == "provision" && args[1] == "allow-boot" {
-		return provisionAllowBoot(args[2])
+	if len(args) >= 3 && args[0] == "provision" && args[1] == "allow-boot" {
+		return provisionAllowBootCommand(args[2:])
 	}
 	if len(args) >= 2 && args[0] == "provision" && args[1] == "install" {
 		return provisionInstall(args[2:])
