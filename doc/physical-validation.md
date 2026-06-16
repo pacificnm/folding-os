@@ -136,9 +136,14 @@ Run as root on the machine that will write the USB stick or other boot media:
 ```bash
 sudo ./scripts/make-bootable-usb \
   --ssh-public-key /path/to/admin-key.pub \
+  --role supervisor \
+  --foldops-ingest-token /path/to/foldops-ingest-token \
   /dev/sdX \
   build/output/images/foldingos-x86_64-0.1.0.img
 ```
+
+For supervisor bootstrap validation, stage both SSH keys and the FoldOps ingest
+token. Agent-only USB tests may omit `--role` and `--foldops-ingest-token`.
 
 Replace `/dev/sdX` with the whole-disk device node for the boot media. Do not
 target a partition such as `/dev/sdX1`.

@@ -82,6 +82,18 @@ provisioning succeeds per
 
 By default, only explicitly required services should be accessible.
 
+Milestone 3 supervisor appliances expose:
+
+| Service | Port | When |
+| --- | --- | --- |
+| FoldingOS provisioning API | `8743` (default) | After supervisor bootstrap |
+| FoldOps HTTPS front end | `3443` | After `foldops provision` succeeds |
+| SSH | `22` | After administrator key import |
+
+The FoldOps dashboard listens on `0.0.0.0:3443` only after ingest-token import
+and self-signed TLS generation succeed. The FoldOps supervisor process itself
+binds to loopback `:3000` only.
+
 Future versions should support:
 
 - configurable firewall policies

@@ -14,6 +14,7 @@ func TestWriteProvisionPersistentFiles(t *testing.T) {
 		"agent",
 		"http://192.168.4.17:8743",
 		"test-enrollment-token",
+		[]byte("test-ca\n"),
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -41,6 +42,14 @@ func TestWriteProvisionPersistentFiles(t *testing.T) {
 	if strings.TrimSpace(string(token)) != "test-enrollment-token" {
 		t.Fatalf("enrollment token = %q", token)
 	}
+
+	supervisorCA, err := os.ReadFile(filepath.Join(root, "config", "foldops", "supervisor-ca.pem"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(string(supervisorCA)) != "test-ca" {
+		t.Fatalf("supervisor CA = %q", supervisorCA)
+	}
 }
 
 func TestWriteProvisionPersistentFilesResetsInheritedDataState(t *testing.T) {
@@ -60,6 +69,7 @@ func TestWriteProvisionPersistentFilesResetsInheritedDataState(t *testing.T) {
 		"agent",
 		"http://192.168.4.17:8743",
 		"test-enrollment-token",
+		[]byte("test-ca\n"),
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +88,25 @@ func TestWriteProvisionPersistentFilesResetsInheritedDataState(t *testing.T) {
 
 func TestWriteProvisionPersistentFilesRejectsInvalidRole(t *testing.T) {
 	root := t.TempDir()
-	if err := writeProvisionPersistentFiles(root, "invalid", "http://192.168.4.17:8743", "token"); err == nil {
+	if err := writeProvisionPersistentFiles(root, "invalid", "http://192.168.4.17:8743", "token", []byte("test-ca\n")); err == nil {
 		t.Fatal("invalid installation role was accepted")
+	}
+}
+
+func TestStageFoldOpsIngestTokenOnEFI(t *testing.T) {
+	provisionDir := filepath.Join(t.TempDir(), "provision")
+	if err := os.MkdirAll(provisionDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	token := "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+	if err := stageFoldOpsIngestTokenOnEFI(provisionDir, token); err != nil {
+		t.Fatal(err)
+	}
+	content, err := os.ReadFile(filepath.Join(provisionDir, "foldops-ingest-token"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(string(content)) != token {
+		t.Fatalf("token = %q", content)
 	}
 }

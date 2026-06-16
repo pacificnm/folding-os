@@ -98,9 +98,15 @@ larger than the release image:
 ```bash
 sudo ./scripts/make-bootable-usb \
   --ssh-public-key /path/to/admin-key.pub \
+  --role supervisor \
+  --foldops-ingest-token /path/to/foldops-ingest-token \
   /dev/sdX \
   build/output/images/foldingos-x86_64-0.1.0.img
 ```
+
+Generate the ingest token with `openssl rand -hex 32`. The token file must
+contain a single line of 64 lowercase hex characters. See
+[ADR-0019](adr/0019-foldops-supervisor-provisioning-and-tls.md).
 
 Replace `/dev/sdX` with the whole-disk device node. Do not target a partition
 such as `/dev/sdX1`.
@@ -326,6 +332,67 @@ service and does not install unpinned or unverified artifacts.
 
 ---
 
+# FoldOps Runtime
+
+FoldOps packages are not embedded in release images. After deployment, the node
+downloads pinned `.deb` artifacts from `deb.folding-os.com`, verifies them,
+extracts them under `/data/apps/foldops/`, and starts role-appropriate services
+only after ingest-token and TLS provisioning succeed.
+
+References:
+
+- [ADR-0018](adr/0018-foldops-package-acquisition-and-update-model.md)
+- [ADR-0019](adr/0019-foldops-supervisor-provisioning-and-tls.md)
+- [foldingosctl.md](foldingosctl.md)
+
+## Supervisor USB staging
+
+Supervisor direct flash requires both administrator SSH keys and the fleet
+ingest token on the EFI System Partition before first boot:
+
+```bash
+sudo ./scripts/make-bootable-usb \
+  --ssh-public-key /path/to/admin-key.pub \
+  --role supervisor \
+  --foldops-ingest-token /path/to/foldops-ingest-token \
+  /dev/sdX \
+  build/output/images/foldingos-x86_64-0.1.0.img
+```
+
+## Boot and service sequence
+
+After installation role validation, networking, and time synchronization:
+
+1. `foldingos-foldops-acquire.timer` triggers `foldingos-foldops-acquire.service`
+2. `foldingosctl foldops acquire` downloads, verifies, and activates pinned
+   FoldOps packages under `/data/apps/foldops/current`
+3. `foldingos-foldops-provision.service` runs `foldingosctl foldops provision`
+   to import the ingest token, render env files, generate supervisor TLS, and
+   write `/data/state/foldops/provisioned.json`
+4. On supervisor role: `foldingos-foldops-serve-https.service` and
+   `foldingos-foldops-supervisor.service` start the HTTPS front end on
+   `:3443` and loopback supervisor on `:3000`
+5. `foldingos-foldops-agent.service` starts `foldops-agent` after provision
+   and after `folding-at-home.service` when Folding@home is active
+
+FoldOps failure must not block boot or Folding@home.
+
+## Useful inspection commands
+
+```bash
+foldingosctl foldops validate-manifest
+systemctl status foldingos-foldops-acquire.timer foldingos-foldops-acquire.service
+systemctl status foldingos-foldops-provision.service
+systemctl status foldingos-foldops-serve-https.service foldingos-foldops-supervisor.service
+systemctl status foldingos-foldops-agent.service
+readlink /data/apps/foldops/current
+sudo test -f /data/state/foldops/provisioned.json
+sudo test -f /data/config/foldops/ingest-token
+curl -k https://127.0.0.1:3443/
+```
+
+---
+
 # Diagnostics
 
 ## Service and boot state
@@ -474,7 +541,9 @@ partition across reflashes is not guaranteed in v0.1.0.
 
 - No local GUI or installer UI in v0.1.0
 - No package manager on the target image
-- No FoldOps services in v0.1.0
+- Agent FoldOps HTTPS trust requires upstream `SUPERVISOR_TLS_CA` support
+  ([foldops#2](https://github.com/pacificnm/foldops/issues/2)); FoldingOS
+  stages the CA and terminates TLS on the supervisor
 - No Folding@home client embedded in the release image
 - CPU-only Folding@home in v0.1.0; GPU support is out of scope
 - First client acquisition requires upstream HTTPS reachability

@@ -1,0 +1,16 @@
+[Unit]
+Description=FoldOps supervisor HTTPS front end
+After=foldingos-foldops-provision.service network-online.target
+Wants=network-online.target
+ConditionPathExists=/data/config/installation-role
+ConditionPathExists=/data/state/foldops/provisioned.json
+ExecCondition=/bin/sh -c 'grep -qx supervisor /data/config/installation-role'
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/foldingosctl foldops serve-https
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

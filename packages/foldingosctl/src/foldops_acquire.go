@@ -45,7 +45,7 @@ func foldOpsAcquire() error {
 			manifest.ManifestRelease,
 			role,
 		)
-		return nil
+		return startFoldOpsProvisionService()
 	}
 
 	state, err := loadFoldOpsAcquireState()
@@ -81,7 +81,7 @@ func foldOpsAcquire() error {
 	if err := clearFoldOpsAcquireState(); err != nil {
 		return err
 	}
-	return nil
+	return startFoldOpsProvisionService()
 }
 
 func defaultFoldOpsHTTPClient() *http.Client {

@@ -1,0 +1,20 @@
+[Unit]
+Description=FoldOps supervisor API and dashboard (loopback HTTP)
+After=foldingos-foldops-provision.service network-online.target
+Wants=network-online.target
+ConditionPathExists=/data/config/installation-role
+ConditionPathExists=/data/state/foldops/provisioned.json
+ExecCondition=/bin/sh -c 'grep -qx supervisor /data/config/installation-role'
+
+[Service]
+Type=simple
+User=foldops
+Group=foldops
+WorkingDirectory=/data/foldops
+EnvironmentFile=/data/config/foldops/supervisor.env
+ExecStart=/data/apps/foldops/current/foldops-supervisor/usr/bin/foldops-supervisor
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

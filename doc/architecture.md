@@ -208,7 +208,10 @@ embedded in the image.
 
 The web interface is enabled by default for the supervisor role but must not
 become remotely available until initial administrator and TLS provisioning
-succeeds.
+succeeds. Milestone 3 exposes the dashboard through
+`foldingosctl foldops serve-https` on `:3443`, which terminates TLS and
+reverse-proxies to loopback `foldops-supervisor` on `:3000` per
+[ADR-0019](adr/0019-foldops-supervisor-provisioning-and-tls.md).
 
 Whether supervisor-role installations also run the Folding@home workload
 remains unresolved.

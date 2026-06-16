@@ -77,6 +77,16 @@ Configuration Validation
     │
     ▼
 
+FoldOps Acquisition
+
+    │
+    ▼
+
+FoldOps Provisioning
+
+    │
+    ▼
+
 Folding@home Acquisition
 
     │
@@ -266,21 +276,50 @@ Configuration validation and recovery are defined by
 
 ---
 
-# Stage 11 - Folding@home Acquisition
+# Stage 11 - FoldOps Acquisition
+
+If verified FoldOps packages are not yet active for the installation role,
+FoldingOS downloads pinned `.deb` artifacts from `deb.folding-os.com`, verifies
+size and SHA-256, and activates them under `/data/apps/foldops/current`.
+
+FoldOps acquisition is not required for Folding@home acquisition. Failure must
+not cause unverified FoldOps artifacts to be installed or executed.
+
+Acquisition behavior is defined by
+[ADR-0018](adr/0018-foldops-package-acquisition-and-update-model.md).
+
+---
+
+# Stage 12 - FoldOps Provisioning
+
+After verified FoldOps packages are active, FoldingOS imports the fleet ingest
+token, renders FoldOps environment files, generates supervisor self-signed TLS
+when required, and writes `/data/state/foldops/provisioned.json`.
+
+On supervisor role, the HTTPS front end must not listen on `0.0.0.0` until this
+stage succeeds. On all roles, `foldops-supervisor` and `foldops-agent` must not
+start with incomplete env.
+
+Provisioning behavior is defined by
+[ADR-0019](adr/0019-foldops-supervisor-provisioning-and-tls.md).
+
+---
+
+# Stage 13 - Folding@home Acquisition
 
 If no verified Folding@home client is installed, FoldingOS downloads the exact
 pinned artifact from the approved official upstream origin and verifies it
 before installation.
 
-FoldOps is not required for acquisition. Failure must not cause an unverified
-artifact to be installed or executed.
+Folding@home acquisition does not require FoldOps. Failure must not cause an
+unverified artifact to be installed or executed.
 
 Acquisition behavior is defined by
 [ADR-0009](adr/0009-fah-acquisition-and-update-model.md).
 
 ---
 
-# Stage 12 - Folding@home
+# Stage 14 - Folding@home
 
 The Folding@home client starts.
 
@@ -305,7 +344,7 @@ A node is considered operational when:
 - the commissioning ready message has been written when local display support
   is available
 - Folding@home is executing normally
-- health monitoring is active
+- FoldOps monitoring is active when provisioned
 - required services are healthy
 
 At this point the system should require no user interaction.

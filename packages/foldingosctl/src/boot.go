@@ -9,14 +9,14 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 )
 
 const (
-	adminSSHUser           = "foldingos-admin"
-	osReleasePath          = "/usr/lib/os-release"
-	consoleDeviceTTY1      = "/dev/tty1"
-	consoleDevice          = "/dev/console"
+	adminSSHUser            = "foldingos-admin"
+	osReleasePath           = "/usr/lib/os-release"
+	consoleDeviceTTY1       = "/dev/tty1"
+	consoleDevice           = "/dev/console"
+	consoleClearScreen      = "\033[2J\033[3J\033[H"
 	bootStatusRetryAttempts = 90
 )
 
@@ -26,47 +26,7 @@ var (
 )
 
 func bootStatus() error {
-	prettyName, err := osReleaseValue("PRETTY_NAME")
-	if err != nil {
-		return err
-	}
-	if prettyName == "" {
-		prettyName, err = osReleaseValue("VERSION")
-		if err != nil {
-			return err
-		}
-	}
-	if prettyName == "" {
-		prettyName = "FoldingOS"
-	}
-
-	var displayErr error
-	var message string
-	for attempt := 0; attempt < bootStatusRetryAttempts; attempt++ {
-		message, displayErr = readyDisplayMessage(prettyName)
-		if displayErr == nil {
-			break
-		}
-		time.Sleep(time.Second)
-	}
-	if displayErr != nil {
-		message = failureDisplayMessage(prettyName, displayErr)
-		fmt.Fprintln(os.Stderr, displayErr.Error())
-	}
-
-	if err := writeConsole(message); err != nil {
-		return err
-	}
-	fmt.Println("Wrote FoldingOS commissioning display status.")
-	return nil
-}
-
-func readyDisplayMessage(prettyName string) (string, error) {
-	address, err := routableIPv4Address()
-	if err != nil {
-		return "", err
-	}
-	return formatReadyDisplay(prettyName, address), nil
+	return writeCommissioningDisplay(true)
 }
 
 func formatReadyDisplay(prettyName, address string) string {
@@ -315,4 +275,8 @@ func writeConsole(message string) error {
 		}
 	}
 	return firstErr
+}
+
+func clearConsole() error {
+	return writeConsole(consoleClearScreen)
 }

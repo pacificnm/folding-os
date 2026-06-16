@@ -87,6 +87,20 @@ func TestAuthorizeProvisionInstallSuccess(t *testing.T) {
 	if !strings.Contains(response.AuthorizedKeys, "ssh-ed25519") {
 		t.Fatalf("authorized keys missing: %q", response.AuthorizedKeys)
 	}
+	if response.FoldOpsIngestToken == "" || response.FoldOpsSupervisorCAPEM != "test-ca\n" {
+		t.Fatalf("foldops staging fields missing: %+v", response)
+	}
+}
+
+func TestAuthorizeProvisionInstallRequiresFoldOpsProvision(t *testing.T) {
+	root := t.TempDir()
+	restore := setProvisionAuthorizePaths(root, false)
+	defer restore()
+
+	_, err := authorizeProvisionInstall(sampleAuthorizeRequest())
+	if err == nil || !strings.Contains(err.Error(), "FoldOps provisioning must complete") {
+		t.Fatalf("err = %v", err)
+	}
 }
 
 func TestProvisionImageStreamRequiresAuthorizedSession(t *testing.T) {
@@ -215,6 +229,10 @@ func sampleAuthorizeRequest() provisionAuthorizeRequest {
 }
 
 func setProvisionStreamPaths(root string) func() {
+	return setProvisionAuthorizePaths(root, true)
+}
+
+func setProvisionAuthorizePaths(root string, withFoldOpsMaterials bool) func() {
 	previousImageSize := releaseImageSizeBytes
 	releaseImageSizeBytes = 4096
 	restoreProvision := setProvisionPaths(root)
@@ -229,6 +247,12 @@ func setProvisionStreamPaths(root string) func() {
 		panic(err)
 	}
 	writeEnrollmentTokenForStreamTest(root, "test-enrollment-token")
+	var restoreFoldOps func()
+	if withFoldOpsMaterials {
+		restoreFoldOps = setupFoldOpsInstallMaterialsForStreamTest(root)
+	} else {
+		restoreFoldOps = func() {}
+	}
 	imagePath := filepath.Join(root, "images", "foldingos-x86_64-0.1.0.img")
 	if err := os.MkdirAll(filepath.Dir(imagePath), 0755); err != nil {
 		panic(err)
@@ -260,6 +284,7 @@ func setProvisionStreamPaths(root string) func() {
 	})
 	return func() {
 		releaseImageSizeBytes = previousImageSize
+		restoreFoldOps()
 		restoreKeys()
 		restoreMounted()
 		restoreBootDisk()
@@ -275,6 +300,30 @@ func writeEnrollmentTokenForStreamTest(root, token string) {
 	}
 	if err := os.WriteFile(filepath.Join(root, "config", "provision", "enrollment-token"), []byte(token+"\n"), 0600); err != nil {
 		panic(err)
+	}
+}
+
+func setupFoldOpsInstallMaterialsForStreamTest(root string) func() {
+	token := "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+	previousTokenPath := foldOpsIngestTokenPath
+	previousTLSDir := foldOpsTLSDir
+	foldOpsIngestTokenPath = filepath.Join(root, "config", "foldops", "ingest-token")
+	foldOpsTLSDir = filepath.Join(root, "foldops", "tls")
+	if err := os.MkdirAll(filepath.Dir(foldOpsIngestTokenPath), 0755); err != nil {
+		panic(err)
+	}
+	if err := os.WriteFile(foldOpsIngestTokenPath, []byte(token+"\n"), 0600); err != nil {
+		panic(err)
+	}
+	if err := os.MkdirAll(foldOpsTLSDir, 0750); err != nil {
+		panic(err)
+	}
+	if err := os.WriteFile(filepath.Join(foldOpsTLSDir, "ca.pem"), []byte("test-ca\n"), 0644); err != nil {
+		panic(err)
+	}
+	return func() {
+		foldOpsIngestTokenPath = previousTokenPath
+		foldOpsTLSDir = previousTLSDir
 	}
 }
 
