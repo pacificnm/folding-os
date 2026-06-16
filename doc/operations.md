@@ -69,6 +69,16 @@ Foundation acceptance on the QEMU/OVMF reference platform:
 ./scripts/test-qemu
 ```
 
+Network fleet provisioning acceptance (supervisor-led PXE install, enrollment,
+and staged update) on the QEMU/OVMF reference platform:
+
+```bash
+./scripts/test-provision-qemu
+```
+
+Requires KVM when available; pure TCG network installs may take hours.
+See [issue #63](https://github.com/pacificnm/folding-os/issues/63).
+
 Additional static verification helpers:
 
 ```bash

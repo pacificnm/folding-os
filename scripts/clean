@@ -43,6 +43,7 @@ CLEAN_PATHS=(
   "${PROJECT_ROOT}/build/output"
   "${PROJECT_ROOT}/build/work"
   "${PROJECT_ROOT}/build/test-qemu"
+  "${PROJECT_ROOT}/build/test-provision-qemu"
 )
 
 echo "FoldingOS clean"

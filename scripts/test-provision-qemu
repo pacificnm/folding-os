@@ -1,0 +1,642 @@
+#!/usr/bin/env bash
+# QEMU/OVMF acceptance suite for supervisor-led network provisioning (issue #63).
+set -euo pipefail
+export LC_ALL=C
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+IMAGES_DIR="${PROJECT_ROOT}/build/output/images"
+HOST_DIR="${PROJECT_ROOT}/build/output/host"
+TEST_DIR="${PROJECT_ROOT}/build/test-provision-qemu"
+RELEASE_IMAGE="${1:-${IMAGES_DIR}/foldingos-x86_64-0.1.0.img}"
+LAB_UPDATE_VERSION="${LAB_UPDATE_VERSION:-0.1.1-lab-qemu}"
+
+SUPERVISOR_IMAGE="${TEST_DIR}/supervisor.img"
+AGENT_DISK="${TEST_DIR}/agent-target.img"
+AGENT_DECOY_DISK="${TEST_DIR}/agent-decoy.img"
+AGENT_SMALL_DISK="${TEST_DIR}/agent-small.img"
+SUPERVISOR_SERIAL="${TEST_DIR}/supervisor-serial.log"
+SUPERVISOR_VARS="${TEST_DIR}/supervisor-OVMF_VARS_4M.fd"
+SUPERVISOR_PID_FILE="${TEST_DIR}/supervisor.pid"
+SSH_KEY="${TEST_DIR}/foldingos-provision-test-key"
+FOLDOPS_TOKEN_FILE="${TEST_DIR}/foldops-ingest-token"
+
+SSH_PORT_SUP=2222
+SSH_PORT_AGENT=2223
+PROVISION_SOCKET_PORT=17500
+PROVISION_LAB_ADDRESS="192.168.100.1/24"
+PROVISION_LAB_IFACE="enp0s3"
+AGENT_LAB_MAC="52:54:00:12:34:56"
+AGENT_SSH_MAC="52:54:00:00:00:99"
+EFI_PARTITION_OFFSET=1048576
+EXPECTED_IMAGE_SIZE=4294967296
+LARGER_AGENT_SIZE=6442450944
+BOOT_TIMEOUT=900
+INSTALL_TIMEOUT=7200
+SSH_READY_TIMEOUT=300
+
+SUPERVISOR_QEMU_PID=""
+AGENT_QEMU_PID=""
+QEMU_ACCEL="tcg"
+
+usage() {
+  cat <<'EOF'
+Usage: ./scripts/test-provision-qemu [release-image]
+
+Runs the Milestone 3 QEMU network provisioning acceptance suite:
+  - supervisor registry bootstrap
+  - blank agent network install through supervisor PXE/HTTP path
+  - disk safety and enrollment gating
+  - agent registration, data expansion, and staged update apply
+
+Requires a completed ./scripts/build, OVMF 4M firmware, and mtools.
+KVM (/dev/kvm) is used when available; pure TCG installs may take hours.
+
+Environment:
+  LAB_UPDATE_VERSION   Registry lab version for update test (default: 0.1.1-lab-qemu)
+EOF
+}
+
+if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+  usage
+  exit 0
+fi
+
+section() {
+  printf '\n== %s ==\n' "$1"
+}
+
+find_tool() {
+  local name="$1"
+  local candidate
+  for candidate in \
+    "${HOST_DIR}/bin/${name}" \
+    "${HOST_DIR}/sbin/${name}" \
+    "/usr/sbin/${name}" \
+    "/sbin/${name}"
+  do
+    if [ -x "${candidate}" ]; then
+      printf '%s\n' "${candidate}"
+      return
+    fi
+  done
+  command -v "${name}" 2>/dev/null || {
+    echo "ERROR: Required test tool is unavailable: ${name}" >&2
+    exit 1
+  }
+}
+
+find_ovmf_file() {
+  local name="$1"
+  local candidate
+  for candidate in \
+    "/usr/share/OVMF/${name}" \
+    "/usr/share/ovmf/${name}" \
+    "/usr/share/edk2/ovmf/${name}"
+  do
+    if [ -f "${candidate}" ]; then
+      printf '%s\n' "${candidate}"
+      return
+    fi
+  done
+  echo "ERROR: Required OVMF firmware file is unavailable: ${name}" >&2
+  exit 1
+}
+
+assert_contains() {
+  local content="$1"
+  local expected="$2"
+  local description="$3"
+  if ! grep -Fq "${expected}" <<<"${content}"; then
+    echo "ERROR: ${description}" >&2
+    echo "Expected to find: ${expected}" >&2
+    exit 1
+  fi
+}
+
+stop_qemu() {
+  local pid="$1"
+  local pid_file="$2"
+  if [ -n "${pid_file}" ] && [ -f "${pid_file}" ]; then
+    kill -TERM "$(cat "${pid_file}")" 2>/dev/null || true
+  fi
+  if [ -n "${pid}" ]; then
+    kill -TERM "${pid}" 2>/dev/null || true
+  fi
+}
+
+cleanup() {
+  stop_qemu "${AGENT_QEMU_PID}" "${TEST_DIR}/agent-boot.pid"
+  stop_qemu "${SUPERVISOR_QEMU_PID}" "${SUPERVISOR_PID_FILE}"
+}
+trap cleanup EXIT
+trap 'cleanup; exit 130' INT TERM
+
+disk_fingerprint() {
+  local image="$1"
+  dd if="${image}" bs=1M count=16 status=none 2>/dev/null | sha256sum | awk '{print $1}'
+}
+
+ssh_supervisor() {
+  "${SSH_BASE[@]}" -p "${SSH_PORT_SUP}" "foldingos-admin@127.0.0.1" "$@"
+}
+
+ssh_agent() {
+  "${SSH_BASE[@]}" -p "${SSH_PORT_AGENT}" "foldingos-admin@127.0.0.1" "$@"
+}
+
+wait_for_ssh() {
+  local port="$1"
+  local timeout="$2"
+  local seconds=0
+  while [ "${seconds}" -lt "${timeout}" ]; do
+    if "${SSH_BASE[@]}" -p "${port}" -o ConnectTimeout=2 "foldingos-admin@127.0.0.1" true >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+    seconds=$((seconds + 2))
+  done
+  return 1
+}
+
+wait_for_serial() {
+  local serial_log="$1"
+  local pattern="$2"
+  local timeout="$3"
+  local seconds=0
+  while [ "${seconds}" -lt "${timeout}" ]; do
+    if [ -f "${serial_log}" ] && grep -Eq "${pattern}" "${serial_log}"; then
+      return 0
+    fi
+    sleep 2
+    seconds=$((seconds + 2))
+  done
+  return 1
+}
+
+prepare_supervisor_image() {
+  cp --reflink=auto --sparse=always "${RELEASE_IMAGE}" "${SUPERVISOR_IMAGE}"
+  "${MCOPY}" -o -i "${SUPERVISOR_IMAGE}@@${EFI_PARTITION_OFFSET}" \
+    "${SSH_KEY}.pub" ::/foldingos/provision/authorized_keys
+  printf 'supervisor\n' | "${MCOPY}" -o -i "${SUPERVISOR_IMAGE}@@${EFI_PARTITION_OFFSET}" - \
+    ::/foldingos/provision/installation-role
+  "${MCOPY}" -o -i "${SUPERVISOR_IMAGE}@@${EFI_PARTITION_OFFSET}" \
+    "${FOLDOPS_TOKEN_FILE}" ::/foldingos/provision/foldops-ingest-token
+}
+
+start_supervisor_qemu() {
+  cp "${OVMF_VARS}" "${SUPERVISOR_VARS}"
+  rm -f "${SUPERVISOR_SERIAL}" "${SUPERVISOR_PID_FILE}"
+
+  section "Starting supervisor QEMU"
+  "${QEMU}" \
+    -machine q35,accel="${QEMU_ACCEL}" \
+    -cpu max \
+    -smp 2 \
+    -m 2048 \
+    -drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
+    -drive "if=pflash,format=raw,file=${SUPERVISOR_VARS}" \
+    -drive "if=virtio,format=raw,file=${SUPERVISOR_IMAGE}" \
+    -netdev "user,id=netuser,hostfwd=tcp:127.0.0.1:${SSH_PORT_SUP}-:22,hostfwd=tcp:127.0.0.1:8743-:8743" \
+    -device "virtio-net-pci,netdev=netuser" \
+    -netdev "socket,id=netlab,listen=:${PROVISION_SOCKET_PORT}" \
+    -device "virtio-net-pci,netdev=netlab,mac=52:54:00:00:00:02" \
+    -display none \
+    -monitor none \
+    -serial "file:${SUPERVISOR_SERIAL}" \
+    -pidfile "${SUPERVISOR_PID_FILE}" \
+    -no-reboot &
+  SUPERVISOR_QEMU_PID=$!
+
+  if ! wait_for_serial "${SUPERVISOR_SERIAL}" \
+    'Reached target .*Multi-User|Reached target Multi-User System' "${BOOT_TIMEOUT}"
+  then
+    echo "ERROR: Supervisor did not reach multi-user." >&2
+    tail -50 "${SUPERVISOR_SERIAL}" >&2 || true
+    exit 1
+  fi
+  if ! wait_for_ssh "${SSH_PORT_SUP}" "${SSH_READY_TIMEOUT}"; then
+    echo "ERROR: Supervisor SSH did not become available." >&2
+    exit 1
+  fi
+}
+
+wait_for_supervisor_provisioning() {
+  section "Waiting for supervisor FoldOps and registry bootstrap"
+  local attempts=0
+  while [ "${attempts}" -lt 120 ]; do
+    if ssh_supervisor sh -s >/dev/null 2>&1 <<'EOF'
+set -e
+test "$(cat /data/config/installation-role)" = supervisor
+test -f /data/state/foldops/provisioned.json
+test -f /data/registry/entries/0.1.0.json
+systemctl is-active --quiet foldingos-provision.service
+systemctl is-active --quiet foldingos-provision-boot.service
+EOF
+    then
+      return 0
+    fi
+    sleep 5
+    attempts=$((attempts + 1))
+  done
+  echo "ERROR: Supervisor provisioning services did not become ready." >&2
+  ssh_supervisor systemctl --failed --no-pager >&2 || true
+  exit 1
+}
+
+configure_supervisor_lab_network() {
+  section "Configuring isolated QEMU provisioning network"
+  ssh_supervisor sudo sh -s "${PROVISION_LAB_IFACE}" "${PROVISION_LAB_ADDRESS}" <<'EOF'
+set -eux
+IFACE="$1"
+ADDRESS="$2"
+mkdir -p /etc/systemd/network
+cat >"/etc/systemd/network/10-provision-lab.network" <<NET
+[Match]
+Name=${IFACE}
+
+[Network]
+Address=${ADDRESS}
+NET
+networkctl reload
+networkctl reconfigure "${IFACE}"
+mkdir -p /data/config/provision
+printf '%s\n' "${IFACE}" > /data/config/provision/boot.interface
+: > /data/config/provision/boot-isolated-network
+systemctl restart foldingos-provision-boot.service
+EOF
+}
+
+supervisor_provision_url() {
+  ssh_supervisor "tr -d '[:space:]' </data/config/provision/enrollment-token"
+}
+
+test_rejects_unenrolled_client() {
+  section "Rejecting unenrolled network-boot client"
+  local token
+  token="$(supervisor_provision_url)"
+  local status
+  status="$(
+    curl -s -o /dev/null -w '%{http_code}' \
+      "http://127.0.0.1:8743/boot/ipxe/script.ipxe?mac=52:54:00:99:99:99&token=${token}" \
+      2>/dev/null || true
+  )"
+  if [ "${status}" = "200" ]; then
+    echo "ERROR: Unenrolled MAC was accepted for network boot." >&2
+    exit 1
+  fi
+  if [ "${status}" != "403" ] && [ "${status}" != "401" ]; then
+    echo "ERROR: Unexpected HTTP status for unenrolled client: ${status}" >&2
+    exit 1
+  fi
+  echo "Unenrolled client rejected with HTTP ${status}."
+}
+
+allow_agent_network_boot() {
+  section "Allowing agent MAC for network boot"
+  ssh_supervisor sudo foldingosctl provision allow-boot "${AGENT_LAB_MAC}"
+}
+
+test_registry_import() {
+  section "Verifying supervisor registry import"
+  ssh_supervisor sh -s <<'EOF'
+set -eux
+foldingosctl registry show 0.1.0
+test -f /data/registry/images/foldingos-x86_64-0.1.0.img
+EOF
+}
+
+run_agent_qemu() {
+  local description="$1"
+  local target_disk="$2"
+  local decoy_disk="${3:-}"
+  local serial_log="$4"
+  local timeout="$5"
+  local success_pattern="$6"
+  local failure_pattern="${7:-}"
+
+  section "${description}"
+  rm -f "${serial_log}"
+  local agent_vars="${serial_log%.log}-OVMF_VARS_4M.fd"
+  cp "${OVMF_VARS}" "${agent_vars}"
+
+  local -a drive_args=(
+    -drive "if=virtio,format=raw,file=${target_disk}"
+  )
+  if [ -n "${decoy_disk}" ]; then
+    drive_args+=( -drive "if=virtio,format=raw,file=${decoy_disk}" )
+  fi
+
+  set +e
+  timeout --signal=TERM --kill-after=30s "${timeout}s" \
+    "${QEMU}" \
+    -machine q35,accel="${QEMU_ACCEL}" \
+    -cpu max \
+    -smp 2 \
+    -m 2048 \
+    -drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
+    -drive "if=pflash,format=raw,file=${agent_vars}" \
+    "${drive_args[@]}" \
+    -netdev "user,id=netuser,hostfwd=tcp:127.0.0.1:${SSH_PORT_AGENT}-:22" \
+    -device "virtio-net-pci,netdev=netuser,mac=${AGENT_SSH_MAC}" \
+    -netdev "socket,id=netlab,connect=127.0.0.1:${PROVISION_SOCKET_PORT}" \
+    -device "virtio-net-pci,netdev=netlab,mac=${AGENT_LAB_MAC}" \
+    -boot order=nc \
+    -display none \
+    -monitor none \
+    -serial "file:${serial_log}" \
+    -no-reboot &
+  AGENT_QEMU_PID=$!
+  set -e
+
+  if [ -n "${failure_pattern}" ] &&
+    wait_for_serial "${serial_log}" "${failure_pattern}" "${timeout}"
+  then
+    stop_qemu "${AGENT_QEMU_PID}" ""
+    AGENT_QEMU_PID=""
+    return 0
+  fi
+  if [ -n "${success_pattern}" ] &&
+    wait_for_serial "${serial_log}" "${success_pattern}" "${timeout}"
+  then
+    stop_qemu "${AGENT_QEMU_PID}" ""
+    AGENT_QEMU_PID=""
+    return 0
+  fi
+
+  stop_qemu "${AGENT_QEMU_PID}" ""
+  AGENT_QEMU_PID=""
+  echo "ERROR: Agent scenario did not reach expected serial state." >&2
+  tail -80 "${serial_log}" >&2 || true
+  exit 1
+}
+
+test_rejects_undersized_target() {
+  truncate -s $((2 * 1024 * 1024 * 1024)) "${AGENT_SMALL_DISK}"
+  run_agent_qemu \
+    "Rejecting undersized install target" \
+    "${AGENT_SMALL_DISK}" \
+    "" \
+    "${TEST_DIR}/agent-small-serial.log" \
+    "${BOOT_TIMEOUT}" \
+    "" \
+    'too small|FoldingOS network install failed'
+}
+
+test_rejects_corrupt_registry_image() {
+  section "Rejecting corrupt registry image verification"
+  ssh_supervisor sudo cp /data/registry/entries/0.1.0.json /tmp/registry-0.1.0.json.bak
+  ssh_supervisor sudo python3 - <<'PY'
+import json
+from pathlib import Path
+path = Path("/data/registry/entries/0.1.0.json")
+entry = json.loads(path.read_text())
+entry["image_sha256"] = "0" * 64
+path.write_text(json.dumps(entry, indent=2) + "\n")
+PY
+  truncate -s "${EXPECTED_IMAGE_SIZE}" "${TEST_DIR}/agent-corrupt-test.img"
+  if ! run_agent_qemu \
+    "Aborting install when registry image fails verification" \
+    "${TEST_DIR}/agent-corrupt-test.img" \
+    "" \
+    "${TEST_DIR}/agent-corrupt-serial.log" \
+    "${INSTALL_TIMEOUT}" \
+    "" \
+    'failed SHA-256 verification|FoldingOS network install failed'
+  then
+    ssh_supervisor sudo mv /tmp/registry-0.1.0.json.bak /data/registry/entries/0.1.0.json
+    exit 1
+  fi
+  ssh_supervisor sudo mv /tmp/registry-0.1.0.json.bak /data/registry/entries/0.1.0.json
+}
+
+test_network_install_agent() {
+  truncate -s "${EXPECTED_IMAGE_SIZE}" "${AGENT_DISK}"
+  truncate -s "${EXPECTED_IMAGE_SIZE}" "${AGENT_DECOY_DISK}"
+  local decoy_before
+  decoy_before="$(disk_fingerprint "${AGENT_DECOY_DISK}")"
+
+  run_agent_qemu \
+    "Network-installing agent through supervisor path" \
+    "${AGENT_DISK}" \
+    "${AGENT_DECOY_DISK}" \
+    "${TEST_DIR}/agent-install-serial.log" \
+    "${INSTALL_TIMEOUT}" \
+    'FoldingOS 0.1.0 ready' \
+    ""
+
+  local decoy_after
+  decoy_after="$(disk_fingerprint "${AGENT_DECOY_DISK}")"
+  if [ "${decoy_before}" != "${decoy_after}" ]; then
+    echo "ERROR: Decoy disk was modified during network install." >&2
+    exit 1
+  fi
+  echo "Decoy disk fingerprint unchanged."
+}
+
+boot_installed_agent() {
+  section "Booting installed agent image for post-install checks"
+  local serial_log="${TEST_DIR}/agent-boot-serial.log"
+  local agent_vars="${serial_log%.log}-OVMF_VARS_4M.fd"
+  cp "${OVMF_VARS}" "${agent_vars}"
+  rm -f "${serial_log}"
+
+  "${QEMU}" \
+    -machine q35,accel="${QEMU_ACCEL}" \
+    -cpu max \
+    -smp 2 \
+    -m 2048 \
+    -drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
+    -drive "if=pflash,format=raw,file=${agent_vars}" \
+    -drive "if=virtio,format=raw,file=${AGENT_DISK}" \
+    -netdev "user,id=netuser,hostfwd=tcp:127.0.0.1:${SSH_PORT_AGENT}-:22" \
+    -device "virtio-net-pci,netdev=netuser,mac=${AGENT_SSH_MAC}" \
+    -netdev "socket,id=netlab,connect=127.0.0.1:${PROVISION_SOCKET_PORT}" \
+    -device "virtio-net-pci,netdev=netlab,mac=${AGENT_LAB_MAC}" \
+    -display none \
+    -monitor none \
+    -serial "file:${serial_log}" \
+    -pidfile "${TEST_DIR}/agent-boot.pid" \
+    -no-reboot &
+  AGENT_QEMU_PID=$!
+
+  if ! wait_for_serial "${serial_log}" 'FoldingOS 0.1.0 ready' "${BOOT_TIMEOUT}"; then
+    echo "ERROR: Installed agent did not reach ready state." >&2
+    tail -50 "${serial_log}" >&2 || true
+    exit 1
+  fi
+  if ! wait_for_ssh "${SSH_PORT_AGENT}" "${SSH_READY_TIMEOUT}"; then
+    echo "ERROR: Installed agent SSH did not become available." >&2
+    exit 1
+  fi
+}
+
+verify_installed_agent() {
+  section "Verifying installed agent registration and data expansion"
+  ssh_agent sh -s <<'EOF'
+set -eux
+test "$(cat /data/config/installation-role)" = agent
+test -f /data/config/provision/supervisor.url
+test -f /data/config/foldops/supervisor-ca.pem
+test -f /data/state/foldops/provisioned.json
+systemctl is-active --quiet foldingos-agent-register.service || true
+findmnt /data >/dev/null
+systemctl is-active --quiet folding-at-home.service || true
+EOF
+
+  local node_id
+  node_id="$(ssh_agent tr -d '[:space:]' </data/config/node-id)"
+  if ! ssh_supervisor sudo foldingosctl provision list-enrollments | grep -Fq "${node_id}"; then
+    echo "ERROR: Agent ${node_id} is not enrolled on the supervisor." >&2
+    exit 1
+  fi
+  echo "Agent ${node_id} enrolled on supervisor."
+}
+
+register_lab_update_version() {
+  section "Registering lab update version ${LAB_UPDATE_VERSION}"
+  local image_sha256
+  image_sha256="$(sha256sum "${RELEASE_IMAGE}" | awk '{print $1}')"
+  cat "${RELEASE_IMAGE}" | ssh_supervisor "cat > /tmp/foldingos-lab-update.img"
+  ssh_supervisor sudo sh -s "${LAB_UPDATE_VERSION}" "${image_sha256}" <<'EOF'
+set -eux
+LAB_VERSION="$1"
+IMAGE_SHA256="$2"
+TARGET="/data/registry/images/foldingos-x86_64-${LAB_VERSION}.img"
+install -D -m 0644 /tmp/foldingos-lab-update.img "${TARGET}"
+rm -f /tmp/foldingos-lab-update.img
+GIT_REVISION="$(tr -d '\n' </usr/share/foldingos/build-revision)"
+cat >"/data/registry/entries/${LAB_VERSION}.json" <<JSON
+{
+  "schema_version": 1,
+  "foldingos_version": "${LAB_VERSION}",
+  "git_revision": "${GIT_REVISION}",
+  "image_sha256": "${IMAGE_SHA256}",
+  "image_size_bytes": 4294967296,
+  "verification_method": "sha256",
+  "import_timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "rollout_state": "ready",
+  "local_image_path": "${TARGET}"
+}
+JSON
+python3 - "${LAB_VERSION}" <<'PY'
+import json
+import sys
+from pathlib import Path
+version = sys.argv[1]
+index_path = Path("/data/registry/index.json")
+index = json.loads(index_path.read_text() or '{"schema_version":1,"versions":[]}')
+if version not in index.get("versions", []):
+    index.setdefault("versions", []).append(version)
+    index["versions"] = sorted(index["versions"])
+index_path.write_text(json.dumps(index, indent=2) + "\n")
+PY
+foldingosctl registry show "${LAB_VERSION}"
+EOF
+}
+
+test_agent_staged_update() {
+  section "Staging and applying desired-version update"
+  local node_id
+  node_id="$(ssh_agent tr -d '[:space:]' </data/config/node-id)"
+  ssh_supervisor sudo foldingosctl provision assign \
+    --version "${LAB_UPDATE_VERSION}" \
+    --node "${node_id}"
+  ssh_agent sudo rm -f \
+    /data/state/provision/staged-update.img \
+    /data/state/provision/staged-update.json \
+    /data/state/provision/staged-update.partial
+  local staged_version
+  staged_version="$(ssh_agent sudo foldingosctl provision check-version | tail -1)"
+  if [ "${staged_version}" != "${LAB_UPDATE_VERSION}" ]; then
+    echo "ERROR: check-version returned ${staged_version}; expected ${LAB_UPDATE_VERSION}." >&2
+    exit 1
+  fi
+  ssh_agent sudo foldingosctl provision apply-update || true
+  local attempts=0
+  while [ "${attempts}" -lt 120 ]; do
+    if wait_for_ssh "${SSH_PORT_AGENT}" 5; then
+      if ssh_agent sudo test ! -f /data/state/provision/staged-update.json; then
+        break
+      fi
+    fi
+    sleep 5
+    attempts=$((attempts + 1))
+  done
+  if [ "${attempts}" -ge 120 ]; then
+    echo "ERROR: Agent did not finish staged update apply." >&2
+    exit 1
+  fi
+  ssh_agent sh -s <<'EOF'
+set -eux
+sudo test ! -f /data/state/provision/staged-update.json
+sudo test ! -f /data/state/provision/staged-update.img
+sudo foldingosctl provision check-version | grep -Fx current
+EOF
+  ssh_supervisor sh -s "${node_id}" "${LAB_UPDATE_VERSION}" <<'EOF'
+set -eux
+NODE_ID="$1"
+LAB_VERSION="$2"
+sudo foldingosctl provision list-enrollments | grep "${NODE_ID}" | grep "current=${LAB_VERSION}" | grep 'desired=current'
+EOF
+  ssh_agent systemctl is-active --quiet folding-at-home.service
+  echo "Agent update applied; enrollment current=${LAB_UPDATE_VERSION}; Folding@home active."
+}
+
+section "FoldingOS network provisioning QEMU acceptance"
+echo "Image: ${RELEASE_IMAGE}"
+echo "Test directory: ${TEST_DIR}"
+
+if [ ! -f "${RELEASE_IMAGE}" ]; then
+  echo "ERROR: Release image not found. Run ./scripts/build first." >&2
+  exit 1
+fi
+if [ "$(stat -c '%s' "${RELEASE_IMAGE}")" -ne "${EXPECTED_IMAGE_SIZE}" ]; then
+  echo "ERROR: Expected a 4 GiB release image." >&2
+  exit 1
+fi
+if [ -c /dev/kvm ] && [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
+  QEMU_ACCEL="kvm"
+  echo "Using KVM acceleration."
+else
+  echo "WARNING: /dev/kvm unavailable; using TCG (network install may take a long time)." >&2
+fi
+
+QEMU="$(find_tool qemu-system-x86_64)"
+OVMF_CODE="$(find_ovmf_file OVMF_CODE_4M.fd)"
+OVMF_VARS="$(find_ovmf_file OVMF_VARS_4M.fd)"
+MCOPY="$(find_tool mcopy)"
+SSH_KEYGEN="$(find_tool ssh-keygen)"
+CURL="$(find_tool curl)"
+SSH_BASE=(
+  ssh
+  -F /dev/null
+  -i "${SSH_KEY}"
+  -o BatchMode=yes
+  -o ConnectTimeout=10
+  -o LogLevel=ERROR
+  -o StrictHostKeyChecking=no
+  -o UserKnownHostsFile=/dev/null
+)
+
+mkdir -p "${TEST_DIR}"
+rm -f "${SSH_KEY}" "${SSH_KEY}.pub"
+"${SSH_KEYGEN}" -q -t ed25519 -N "" -f "${SSH_KEY}"
+openssl rand -hex 32 >"${FOLDOPS_TOKEN_FILE}"
+
+prepare_supervisor_image
+start_supervisor_qemu
+wait_for_supervisor_provisioning
+configure_supervisor_lab_network
+test_registry_import
+test_rejects_unenrolled_client
+allow_agent_network_boot
+test_rejects_undersized_target
+test_rejects_corrupt_registry_image
+test_network_install_agent
+boot_installed_agent
+verify_installed_agent
+register_lab_update_version
+test_agent_staged_update
+
+section "Network provisioning QEMU acceptance complete"
+echo "Supervisor-led network install, safety checks, registration, and staged update verified."
