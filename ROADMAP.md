@@ -70,6 +70,9 @@ Status: **In planning** (2026-06-14)
 
 - Delegate node-local operations to `foldingosctl` instead of duplicating OS logic in FoldOps
 - Add machine-readable `foldingosctl inspect` and `--format json` automation output
+- Import FoldOps Rust source into `packages/foldops/` (monorepo; runtime still on `/data`)
+- Adopt `layout-tar-zst` appliance transport and supervisor-assigned FoldOps/tools versions
+- Add `foldingosctl tools acquire` for control-plane updates without OS reimage
 - Refactor FoldOps agent ingest to collect inventory, health, FAH, and update state via `foldingosctl`
 - Correlate FoldOps ingest with FoldingOS `node-id` and installation role
 - Integrate FoldOps supervisor with local `foldingosctl provision` and `registry` fleet commands
@@ -78,12 +81,16 @@ Status: **In planning** (2026-06-14)
 
 See [ADR-0020](doc/adr/0020-foldops-delegates-node-operations-to-foldingosctl.md),
 [ADR-0021](doc/adr/0021-machine-readable-foldingosctl-automation-interface.md),
+[ADR-0022](doc/adr/0022-foldops-rust-source-in-foldingos-monorepo.md),
+[ADR-0023](doc/adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md),
+[doc/milestone/4-appliance-artifact-and-monorepo-plan.md](doc/milestone/4-appliance-artifact-and-monorepo-plan.md),
 [doc/milestone/4-implementation-spec.md](doc/milestone/4-implementation-spec.md), and
 [doc/milestone/4-engineering-spec.md](doc/milestone/4-engineering-spec.md).
 
 Package acquisition, role-specific service activation, and supervisor TLS
-provisioning remain Milestone 3 scope per
+provisioning were delivered in Milestone 3 per
 [ADR-0018](doc/adr/0018-foldops-package-acquisition-and-update-model.md).
+Runtime assignment and layout-bundle transport extend that model in Milestone 4.
 
 ## Milestone 5: Update System
 

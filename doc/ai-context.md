@@ -63,9 +63,11 @@ precedence or silently choose one statement.
 - Preserve deterministic, explicit, and documented behavior.
 - Design for unattended operation and expected failures.
 - Keep node operation independent of FoldOps availability.
-- Treat [pacificnm/foldops](https://github.com/pacificnm/foldops) as the
-  authoritative FoldOps code repository and coordinate cross-repository
-  contract changes explicitly.
+- FoldOps Rust source lives in `packages/foldops/` in this repository per
+  [ADR-0022](adr/0022-foldops-rust-source-in-foldingos-monorepo.md). Runtime
+  acquisition remains separate from the OS image per
+  [ADR-0018](adr/0018-foldops-package-acquisition-and-update-model.md) and
+  [ADR-0023](adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md).
 - Preserve configuration and Folding@home work across recovery and updates.
 - Do not introduce undocumented behavior.
 - Update documentation with implementation changes.
@@ -93,7 +95,9 @@ precedence or silently choose one statement.
 - Milestone 4 FoldOps integration is the active implementation target; FoldOps
   delegates node-local operations to `foldingosctl` per
   [ADR-0020](adr/0020-foldops-delegates-node-operations-to-foldingosctl.md),
-  [ADR-0021](adr/0021-machine-readable-foldingosctl-automation-interface.md), and
+  [ADR-0021](adr/0021-machine-readable-foldingosctl-automation-interface.md),
+  [ADR-0022](adr/0022-foldops-rust-source-in-foldingos-monorepo.md),
+  [ADR-0023](adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md), and
   [milestone/4-engineering-spec.md](milestone/4-engineering-spec.md).
 - Operator build, deployment, recovery, and Folding@home runtime procedures are
   in [operations.md](operations.md).
@@ -114,6 +118,8 @@ precedence or silently choose one statement.
   provisioned over the network. Roles cannot be changed in place.
 - FoldOps packages are acquired at runtime from pinned manifests per
   [ADR-0018](adr/0018-foldops-package-acquisition-and-update-model.md).
+  Supervisor-assigned manifests and `layout-tar-zst` transport extend this per
+  [ADR-0023](adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md).
   Ingest-token bootstrap and HTTPS use EFI staging per
   [ADR-0019](adr/0019-foldops-supervisor-provisioning-and-tls.md).
 - FoldingOS images do not contain Folding@home client or FahCore binaries.

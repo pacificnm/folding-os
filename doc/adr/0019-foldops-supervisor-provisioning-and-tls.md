@@ -16,6 +16,10 @@
 - [ADR-0014](0014-fixed-installation-roles.md) (supervisor role requirements)
 - [ADR-0018](0018-foldops-package-acquisition-and-update-model.md) (FoldOps package acquisition)
 
+**Amended by:** [ADR-0020](0020-foldops-delegates-node-operations-to-foldingosctl.md),
+[ADR-0023](0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md)
+(supervisor assignment of desired FoldOps and tools versions extends provisioning APIs)
+
 ---
 
 # Context

@@ -9,6 +9,9 @@
 **Amends:** [ADR-0018](0018-foldops-package-acquisition-and-update-model.md),
 [ADR-0019](0019-foldops-supervisor-provisioning-and-tls.md)
 
+**Related:** [ADR-0022](0022-foldops-rust-source-in-foldingos-monorepo.md),
+[ADR-0023](0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md)
+
 ---
 
 ## Context
@@ -17,9 +20,11 @@ Milestone 3 integrated FoldOps packages into FoldingOS appliances and
 established supervisor-led fleet provisioning through `foldingosctl provision`
 and related services.
 
-FoldOps today collects node metrics, Folding@home state, and maintenance signals
-through its own agent implementation (historically Node.js `systeminformation`,
-log parsing, and direct `systemctl`/`apt` calls). FoldingOS already centralizes
+FoldOps collects node metrics, Folding@home state, and maintenance signals
+through its agent implementation. On FoldingOS appliances the authoritative
+implementation is the Rust workspace in `packages/foldops/` per
+[ADR-0022](0022-foldops-rust-source-in-foldingos-monorepo.md). The legacy
+Node.js tree is not used on appliances. FoldingOS already centralizes
 appliance behavior in `foldingosctl` for:
 
 - node identity and configuration

@@ -10,6 +10,15 @@
 
 **Amends:** [ADR-0014](0014-fixed-installation-roles.md) (FoldOps artifact integration)
 
+**Amended by:**
+
+- [ADR-0022](0022-foldops-rust-source-in-foldingos-monorepo.md) — FoldOps Rust source in `packages/foldops/`
+- [ADR-0023](0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md) — layout bundles, assigned manifests, `tools acquire`
+
+The body of this ADR remains the Milestone 3 baseline. Appliance transport and
+fleet assignment extensions are defined in the amending ADRs and
+[milestone/4-appliance-artifact-and-monorepo-plan.md](../milestone/4-appliance-artifact-and-monorepo-plan.md).
+
 ---
 
 # Context

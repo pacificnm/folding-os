@@ -13,6 +13,10 @@
 
 **Amends:** [ADR-0016](0016-network-provisioning-via-supervisor.md) (upstream release origin)
 
+**Amended by:** [ADR-0023](0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md)
+(adds `packages.folding-os.com` publication channels for FoldOps bundles and
+`foldingosctl` tools; OS image channel unchanged)
+
 ---
 
 # Context
