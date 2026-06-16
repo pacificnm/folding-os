@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# Build a pinned foldingosctl binary for the tools publication channel.
+#
+# Output: build/output/foldingos-tools/<version>/
+#   foldingosctl-x86_64
+#   SHA256SUMS
+set -euo pipefail
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+FOLDINGOSCTL_SRC="${PROJECT_ROOT}/packages/foldingosctl/src"
+
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") [options]
+
+Build a static foldingosctl binary for packages.folding-os.com/foldingos-tools/.
+
+Options:
+  --version <id>   Release directory name (default: 0.1.0)
+  -h, --help       Show this help
+EOF
+}
+
+TOOLS_VERSION="0.1.0"
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --version)
+      TOOLS_VERSION="${2:?missing value for --version}"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "ERROR: unknown option: $1" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+done
+
+if ! command -v go >/dev/null 2>&1; then
+  echo "ERROR: go not found" >&2
+  exit 1
+fi
+
+OUTPUT_DIR="${PROJECT_ROOT}/build/output/foldingos-tools/${TOOLS_VERSION}"
+BINARY_NAME="foldingosctl-x86_64"
+OUTPUT_BINARY="${OUTPUT_DIR}/${BINARY_NAME}"
+
+mkdir -p "${OUTPUT_DIR}"
+
+echo "Building foldingosctl tools release ${TOOLS_VERSION} …"
+(
+  cd "${FOLDINGOSCTL_SRC}"
+  CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -trimpath -ldflags "-buildid=" -o "${OUTPUT_BINARY}" .
+)
+
+chmod 0755 "${OUTPUT_BINARY}"
+
+(
+  cd "${OUTPUT_DIR}"
+  sha256sum "${BINARY_NAME}" > SHA256SUMS
+)
+
+echo ""
+echo "Tools release ready:"
+echo "  ${OUTPUT_BINARY}"
+echo "  ${OUTPUT_DIR}/SHA256SUMS"
+echo ""
+echo "Publish to: https://packages.folding-os.com/foldingos-tools/${TOOLS_VERSION}/"

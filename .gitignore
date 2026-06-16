@@ -41,3 +41,9 @@ __pycache__/
 *.py[cod]
 .coverage
 coverage/
+
+# FoldOps Rust workspace (issue #83)
+/packages/foldops/target/
+/packages/foldops/web/node_modules/
+/packages/foldops/web/dist/
+/packages/foldops/web/tsconfig.tsbuildinfo

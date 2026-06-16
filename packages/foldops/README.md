@@ -2,13 +2,12 @@
 
 FoldOps fleet management applications for FoldingOS appliances.
 
-**Status:** Planned import — source tree not yet present in this repository.
-
 ## Authority
 
 Per [ADR-0022](../../doc/adr/0022-foldops-rust-source-in-foldingos-monorepo.md), the
 authoritative FoldOps implementation for FoldingOS is the Rust workspace here.
-The legacy Node.js repository is deprecated for appliance work.
+The legacy Node.js repository at [pacificnm/foldops](https://github.com/pacificnm/foldops)
+is deprecated for appliance work.
 
 ## Runtime model
 
@@ -19,17 +18,7 @@ bundles at runtime via `foldingosctl foldops acquire` per
 
 Install root: `/data/apps/foldops/<release>/`
 
-## Build (target)
-
-```bash
-# From repository root after import:
-./scripts/build-foldops-bundles
-```
-
-Build uses `cargo` and repository shell scripts only. FoldingOS does not use
-Node.js or `npm` in the appliance or platform build path.
-
-## Layout (target)
+## Layout
 
 ```text
 packages/foldops/
@@ -37,8 +26,45 @@ packages/foldops/
   crates/
     foldops-agent/
     foldops-supervisor/
-    foldops-shared/
-  packaging/appliance-bundle/
+    foldops-types/
+  web/                         # React dashboard (build host only)
+  packaging/appliance-bundle/  # reserved for bundle helpers
 ```
 
-See [Milestone 4 appliance artifact and monorepo plan](../../doc/milestone/4-appliance-artifact-and-monorepo-plan.md).
+FoldingOS-owned systemd units remain in the repository overlay; bundles ship
+application binaries and static web assets only.
+
+## Build host prerequisites
+
+- `cargo` / `rustc` (Rust 1.85+ per workspace `rust-version`)
+- `npm` (dashboard static assets only; not used by `./scripts/build`)
+- `zstd`, `tar`, `sha256sum`
+
+Optional publication: `rclone` configured for Cloudflare R2.
+
+## Commands
+
+From the repository root:
+
+```bash
+# Rust workspace
+cd packages/foldops && cargo test --workspace
+
+# Layout bundles + schema v2 manifest (build/output/foldops/<release>/)
+./scripts/build-foldops-bundles
+
+# foldingosctl binary for tools publication channel
+./scripts/build-foldingosctl-release
+
+# Upload to packages.folding-os.com (when rclone is configured)
+./scripts/publish-foldops-bundles 0.1.0-1
+```
+
+The OS image build (`./scripts/build`) does **not** compile FoldOps. The embedded
+bootstrap manifest in the overlay remains schema v1 until issue #84 lands
+layout-tar-zst acquisition in `foldingosctl`.
+
+## Related documents
+
+- [Milestone 4 appliance artifact and monorepo plan](../../doc/milestone/4-appliance-artifact-and-monorepo-plan.md)
+- [Issue #83](https://github.com/pacificnm/folding-os/issues/83)
