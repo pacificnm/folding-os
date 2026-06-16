@@ -279,14 +279,21 @@ Configuration validation and recovery are defined by
 # Stage 11 - FoldOps Acquisition
 
 If verified FoldOps packages are not yet active for the installation role,
-FoldingOS downloads pinned `.deb` artifacts from `deb.folding-os.com`, verifies
-size and SHA-256, and activates them under `/data/apps/foldops/current`.
+FoldingOS downloads pinned verified artifacts, verifies size and SHA-256, and
+activates them under `/data/apps/foldops/current`.
+
+Milestone 3 uses embedded bootstrap manifest schema v1 and `.deb` extract from
+`deb.folding-os.com`. Milestone 4 adds supervisor-assigned manifests,
+`layout-tar-zst` bundles from `packages.folding-os.com/foldops/`, and
+`foldingosctl tools acquire` per
+[ADR-0023](adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md).
 
 FoldOps acquisition is not required for Folding@home acquisition. Failure must
 not cause unverified FoldOps artifacts to be installed or executed.
 
 Acquisition behavior is defined by
-[ADR-0018](adr/0018-foldops-package-acquisition-and-update-model.md).
+[ADR-0018](adr/0018-foldops-package-acquisition-and-update-model.md) and
+[ADR-0023](adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md).
 
 ---
 

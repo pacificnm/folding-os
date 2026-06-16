@@ -28,16 +28,18 @@ Supervisor-role installations must run FoldOps management services, but the
 FoldOps web dashboard and ingest API must not become remotely reachable until
 initial secrets and TLS identity are configured ([ADR-0014](0014-fixed-installation-roles.md)).
 
-[FoldOps](https://github.com/pacificnm/foldops) authenticates agent ingest with
-a shared bearer secret:
+FoldOps authenticates agent ingest with a shared bearer secret:
 
 - supervisor: `INGEST_TOKEN`
 - every agent: `AGENT_TOKEN` (must match `INGEST_TOKEN`)
 
-The upstream [FoldOps installation guide](https://github.com/pacificnm/foldops/blob/main/docs/installation.md)
-generates this token with `openssl rand -hex 32` and configures
-`/etc/foldops/supervisor.env` and `/etc/foldops/agent.env` manually on Debian
-hosts.
+On general Debian hosts, operators generate this token with
+`openssl rand -hex 32` and configure `/etc/foldops/supervisor.env` and
+`/etc/foldops/agent.env` manually. On FoldingOS appliances,
+`foldingosctl foldops provision` automates the equivalent paths under
+`/data/config/foldops/`. The authoritative FoldOps implementation for appliances
+is the Rust workspace in `packages/foldops/` per
+[ADR-0022](0022-foldops-rust-source-in-foldingos-monorepo.md).
 
 FoldingOS must automate that bootstrap while:
 
@@ -196,9 +198,9 @@ SUPERVISOR_TLS_CA=/data/config/foldops/supervisor-ca.pem
 
 On network-provisioned agents, `supervisor-ca.pem` is written during network
 install. On supervisor direct-flash recovery paths, `foldops provision` copies
-from `/data/foldops/tls/ca.pem`. Until [FoldOps](https://github.com/pacificnm/foldops)
-adds native TLS env support, the HTTPS terminator is owned by FoldingOS; the
-supervisor process remains HTTP on loopback.
+from `/data/foldops/tls/ca.pem`. The HTTPS terminator is owned by FoldingOS; the
+Rust FoldOps agent in `packages/foldops/` consumes `SUPERVISOR_TLS_CA` from the
+rendered `agent.env`. The supervisor process remains HTTP on loopback.
 
 ## Persistent configuration layout
 
@@ -283,8 +285,9 @@ supports recovery without FoldOps availability.
 
 ## TLS inside foldops-supervisor binary
 
-Deferred to the FoldOps repository. FoldingOS terminates TLS externally in
-Milestone 3 to avoid blocking on cross-repo releases.
+Deferred. FoldingOS terminates TLS externally in Milestone 3 via
+`foldingosctl foldops serve-https` so appliance delivery is not blocked on
+in-process TLS in `packages/foldops/`.
 
 ## Public HTTP until TLS exists
 
@@ -325,17 +328,17 @@ FoldingOS (Issue #62):
   CA staging, and `make-bootable-usb --foldops-ingest-token` are implemented in
   `foldingosctl` and the Milestone 3 systemd graph.
 
-Upstream FoldOps:
-
-- Coordinate `SUPERVISOR_TLS_CA` support in [pacificnm/foldops](https://github.com/pacificnm/foldops) if needed
-  ([foldops#2](https://github.com/pacificnm/foldops/issues/2))
+- FoldOps agent in `packages/foldops/` honors `SUPERVISOR_TLS_CA` from rendered
+  `agent.env` per [ADR-0022](0022-foldops-rust-source-in-foldingos-monorepo.md)
 
 ---
 
 # Related Documents
 
 - [Issue #62](https://github.com/pacificnm/folding-os/issues/62)
-- [FoldOps installation](https://github.com/pacificnm/foldops/blob/main/docs/installation.md)
-- [FoldOps configuration](https://github.com/pacificnm/foldops/blob/main/docs/configuration.md)
+- [FoldOps integration](../foldops-integration.md)
+- [ADR-0022: FoldOps Rust Source In FoldingOS Monorepo](0022-foldops-rust-source-in-foldingos-monorepo.md)
+- [ADR-0023: Runtime FoldOps And foldingosctl Updates Without OS Reimage](0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md)
+- [FoldOps installation](https://www.folding-os.com/foldops)
 - [Milestone 3 engineering specification](../milestone/3-engineering-spec.md)
 - [foldingosctl command reference](../foldingosctl.md)

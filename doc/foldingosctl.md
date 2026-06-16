@@ -507,8 +507,11 @@ Long-running. Invoked by `folding-at-home.service`.
 
 # FoldOps Commands
 
-FoldOps package lifecycle and runtime bootstrap commands. The embedded approved
-manifest ships in the image. See
+FoldOps package lifecycle and runtime bootstrap commands. The embedded bootstrap
+manifest ships in the image; supervisor-assigned manifests override the bootstrap
+floor when present per
+[ADR-0023](adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md).
+See
 [ADR-0018](adr/0018-foldops-package-acquisition-and-update-model.md),
 [ADR-0019](adr/0019-foldops-supervisor-provisioning-and-tls.md), and
 [foldops-integration.md](foldops-integration.md).
@@ -524,16 +527,27 @@ Agents run `foldops acquire` → `foldops provision` before `foldops-agent`.
 
 ## `foldops validate-manifest`
 
-Validates the embedded FoldOps acquisition manifest at
-`/usr/share/foldingos/manifests/foldops.toml`.
+Validates the embedded bootstrap FoldOps acquisition manifest at
+`/usr/share/foldingos/manifests/foldops.toml`. When
+`/data/config/foldops/assigned-manifest.toml` exists, assigned pins are validated
+separately during acquire.
 
 ## `foldops acquire`
 
-Downloads pinned `.deb` artifacts from `deb.folding-os.com`, verifies size and
-SHA-256, extracts payload only (no `dpkg` install) into
+Downloads pinned verified artifacts, verifies size and SHA-256, extracts payload
+only (no `dpkg` install or maintainer scripts) into
 `/data/apps/foldops/<manifest_release>/<package>/`, writes a
 `.foldingos-verified` marker per package, and activates
-`/data/apps/foldops/current`. Required packages depend on installation role:
+`/data/apps/foldops/current`.
+
+**Milestone 3 (shipped):** schema v1, `artifact_format = deb`, download from
+`deb.folding-os.com`.
+
+**Milestone 4 (target):** schema v2, `artifact_format = layout-tar-zst`, download
+from `packages.folding-os.com/foldops/`, with assigned manifest precedence over
+the embedded bootstrap manifest.
+
+Required packages depend on installation role:
 
 | Role | Packages |
 | --- | --- |
@@ -550,6 +564,16 @@ online, and NTP synchronized.
 Invoked by `foldingos-foldops-acquire.service`, scheduled by
 `foldingos-foldops-acquire.timer` (first attempt 1 minute after boot, then
 every minute while acquisition is incomplete).
+
+## `tools acquire` (Milestone 4)
+
+Downloads the supervisor-assigned `foldingosctl` binary from
+`packages.folding-os.com/foldingos-tools/`, verifies SHA-256, atomically
+replaces `/usr/bin/foldingosctl`, and records state under `/data/state/tools/`.
+Does not require OS image reflash. See
+[ADR-0023](adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md).
+
+Assignment file: `/data/config/tools/assigned-version.json`
 
 ## `foldops provision`
 
@@ -658,10 +682,9 @@ Supervisor-only units use `ExecCondition` so they no-op on agent appliances.
 FoldOps service failure must not block boot or Folding@home
 ([ADR-0014](adr/0014-fixed-installation-roles.md)).
 
-Agent HTTPS trust for self-signed supervisor TLS depends on upstream FoldOps
-support for `SUPERVISOR_TLS_CA` ([foldops#2](https://github.com/pacificnm/foldops/issues/2)).
-Until then, the HTTPS terminator and CA staging are owned by FoldingOS; the
-supervisor process remains HTTP on loopback.
+Agent HTTPS trust for self-signed supervisor TLS uses `SUPERVISOR_TLS_CA` in the
+Rust FoldOps agent (`packages/foldops/`). The HTTPS terminator and CA staging
+are owned by FoldingOS; the supervisor process remains HTTP on loopback.
 
 ---
 
@@ -682,7 +705,10 @@ supervisor process remains HTTP on loopback.
 | `/data/state/provision/staged-update.json` | Staged update metadata and verification state |
 | `/data/provision/enrollments/` | Agent enrollment records |
 | `/data/registry/` | Supervisor release image registry |
-| `/usr/share/foldingos/manifests/foldops.toml` | Embedded FoldOps acquisition manifest |
+| `/usr/share/foldingos/manifests/foldops.toml` | Embedded bootstrap FoldOps acquisition manifest |
+| `/data/config/foldops/assigned-manifest.toml` | Supervisor-assigned FoldOps manifest (Milestone 4) |
+| `/data/config/tools/assigned-version.json` | Supervisor-assigned `foldingosctl` version (Milestone 4) |
+| `/data/state/tools/` | Active and last `tools acquire` state (Milestone 4) |
 | `/usr/share/keyrings/foldops.gpg` | Official FoldOps apt archive keyring |
 | `/data/apps/foldops/current` | Active verified FoldOps installation tree |
 | `/data/state/foldops/` | FoldOps acquire retry state and provision marker |

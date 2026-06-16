@@ -678,9 +678,9 @@ partition across reflashes is not guaranteed in v0.1.0.
 
 - No local GUI or installer UI in v0.1.0
 - No package manager on the target image
-- Agent FoldOps HTTPS trust requires upstream `SUPERVISOR_TLS_CA` support
-  ([foldops#2](https://github.com/pacificnm/foldops/issues/2)); FoldingOS
-  stages the CA and terminates TLS on the supervisor
+- Agent FoldOps HTTPS trust uses `SUPERVISOR_TLS_CA` in the Rust agent
+  (`packages/foldops/`); FoldingOS stages the CA and terminates TLS on the
+  supervisor
 - No Folding@home client embedded in the release image
 - CPU-only Folding@home in v0.1.0; GPU support is out of scope
 - First client acquisition requires upstream HTTPS reachability

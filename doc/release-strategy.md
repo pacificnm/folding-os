@@ -249,9 +249,14 @@ official FoldingOS releases with minimal manual intervention.
 
 Stable releases publish to `releases.folding-os.com` per
 [ADR-0017](adr/0017-official-release-publication-and-supervisor-upstream-polling.md).
-FoldOps packages publish to `deb.folding-os.com` per
-[FoldOps installation](https://www.folding-os.com/foldops). FoldingOS appliances
-acquire pinned `.deb` artifacts at runtime per
+
+FoldOps appliance bundles publish to `packages.folding-os.com/foldops/` and
+`foldingosctl` tools binaries to `packages.folding-os.com/foldingos-tools/` per
+[ADR-0023](adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md).
+Optional FoldOps Debian packages remain on `deb.folding-os.com` for general
+Debian hosts ([FoldOps installation](https://www.folding-os.com/foldops)).
+
+FoldingOS appliances acquire pinned verified artifacts at runtime per
 [ADR-0018](adr/0018-foldops-package-acquisition-and-update-model.md); they do
 not ship runtime APT.
 

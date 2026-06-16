@@ -33,10 +33,12 @@ appliance behavior in `foldingosctl` for:
 - provisioning enrollment and staged updates
 - FoldOps package acquisition and local provisioning
 
-Duplicating OS-specific logic inside FoldOps creates drift risk. FoldOps and
-FoldingOS are separate repositories with different release cadences. When
-FoldingOS changes storage layout, service names, paths, or validation rules,
-FoldOps should not need parallel reimplementation.
+Duplicating OS-specific logic inside FoldOps creates drift risk. FoldOps Rust
+source lives in `packages/foldops/` in this repository per
+[ADR-0022](0022-foldops-rust-source-in-foldingos-monorepo.md), while runtime
+binaries remain acquired on `/data` separately from the OS image. When FoldingOS
+changes storage layout, service names, paths, or validation rules, FoldOps should
+not need parallel reimplementation outside `foldingosctl`.
 
 Milestone 4 requires full FoldOps integration: inventory, health reporting,
 remote configuration, and fleet operations. The project needs a stable boundary
@@ -157,4 +159,5 @@ on the fleet node.
 - [Milestone 4 implementation specification](../milestone/4-implementation-spec.md)
 - [Milestone 4 engineering specification](../milestone/4-engineering-spec.md)
 - [ADR-0021: Machine-Readable foldingosctl Automation Interface](0021-machine-readable-foldingosctl-automation-interface.md)
-- [pacificnm/foldops](https://github.com/pacificnm/foldops)
+- [ADR-0022: FoldOps Rust Source In FoldingOS Monorepo](0022-foldops-rust-source-in-foldingos-monorepo.md)
+- [ADR-0023: Runtime FoldOps And foldingosctl Updates Without OS Reimage](0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md)

@@ -192,9 +192,9 @@ sudo ./scripts/make-bootable-usb \
   /dev/sdX build/output/images/foldingos-x86_64-0.1.0.img
 ```
 
-Agent HTTPS trust for self-signed supervisor TLS depends on upstream FoldOps
-support for `SUPERVISOR_TLS_CA`
-([foldops#2](https://github.com/pacificnm/foldops/issues/2)).
+Agent HTTPS trust for self-signed supervisor TLS uses `SUPERVISOR_TLS_CA` in the
+Rust FoldOps agent (`packages/foldops/`). FoldingOS stages the CA and terminates
+TLS on the supervisor per [ADR-0019](adr/0019-foldops-supervisor-provisioning-and-tls.md).
 
 ---
 

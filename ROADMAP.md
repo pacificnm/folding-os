@@ -53,7 +53,9 @@ Status: **Complete** (2026-06-14)
 - Register agents with the supervisor
 - Assign fixed `agent` and `supervisor` roles at provision time
 - Check desired image version on agent boot and stage updates
-- Acquire FoldOps packages from `deb.folding-os.com` at runtime (ADR-0018)
+- Acquire FoldOps packages at runtime per [ADR-0018](doc/adr/0018-foldops-package-acquisition-and-update-model.md)
+  (Milestone 3: `.deb` from `deb.folding-os.com`; Milestone 4: layout bundles from
+  `packages.folding-os.com` per [ADR-0023](doc/adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md))
 - Provision initial supervisor administrator and TLS configuration
 - Validate network provisioning on approved SATA and NVMe targets
 
