@@ -10,12 +10,14 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 )
 
 const (
 	provisionBootTFTPRootDefault      = "/data/provision/boot/tftp"
 	provisionBootAllowlistPathDefault = "/data/config/provision/boot-allowlist"
+	provisionBootInstallDiskAllowlistPathDefault = "/data/config/provision/boot-install-disk-allowlist"
 	provisionBootInterfacePathDefault = "/data/config/provision/boot.interface"
 	provisionBootDnsmasqConfigDefault   = "/data/config/provision/dnsmasq.conf"
 	provisionBootIsolatedNetworkPathDefault = "/data/config/provision/boot-isolated-network"
@@ -29,6 +31,7 @@ var macAddressPattern = regexp.MustCompile(`^([0-9a-f]{2}:){5}[0-9a-f]{2}$`)
 var (
 	provisionBootTFTPRoot      = provisionBootTFTPRootDefault
 	provisionBootAllowlistPath = provisionBootAllowlistPathDefault
+	provisionBootInstallDiskAllowlistPath = provisionBootInstallDiskAllowlistPathDefault
 	provisionBootInterfacePath = provisionBootInterfacePathDefault
 	provisionBootDnsmasqConfig = provisionBootDnsmasqConfigDefault
 	provisionBootIsolatedNetworkPath = provisionBootIsolatedNetworkPathDefault
@@ -306,7 +309,7 @@ func saveBootAllowlist(allowed []string) error {
 	return atomicWrite(provisionBootAllowlistPath, []byte(content), 0644)
 }
 
-func provisionAllowBoot(mac string) error {
+func provisionAllowBoot(mac, installDisk string) error {
 	if err := requireSupervisorRole(); err != nil {
 		return err
 	}
@@ -314,11 +317,24 @@ func provisionAllowBoot(mac string) error {
 	if err != nil {
 		return err
 	}
+	if installDisk != "" {
+		installDisk, err = parseProvisionInstallDiskPath(installDisk)
+		if err != nil {
+			return err
+		}
+	}
 	allowed, err := readBootAllowlistEntries()
 	if err != nil {
 		return err
 	}
 	if containsString(allowed, mac) {
+		if installDisk != "" {
+			if err := saveBootInstallDiskMapping(mac, installDisk); err != nil {
+				return err
+			}
+			fmt.Printf("Pinned network install target disk %s for MAC %s.\n", installDisk, mac)
+			return nil
+		}
 		fmt.Printf("MAC %s is already allowed for network boot.\n", mac)
 		return nil
 	}
@@ -326,8 +342,110 @@ func provisionAllowBoot(mac string) error {
 	if err := saveBootAllowlist(allowed); err != nil {
 		return err
 	}
+	if installDisk != "" {
+		if err := saveBootInstallDiskMapping(mac, installDisk); err != nil {
+			return err
+		}
+	}
 	fmt.Printf("Allowed MAC %s for network boot.\n", mac)
+	if installDisk != "" {
+		fmt.Printf("Pinned network install target disk %s for MAC %s.\n", installDisk, mac)
+	}
 	return nil
+}
+
+func provisionAllowBootCommand(args []string) error {
+	var installDisk string
+	remaining := args
+	for len(remaining) > 0 {
+		switch remaining[0] {
+		case "--disk":
+			if len(remaining) < 2 {
+				return errors.New("--disk requires a whole-disk device path")
+			}
+			installDisk = remaining[1]
+			remaining = remaining[2:]
+		default:
+			if len(remaining) != 1 {
+				return fmt.Errorf("unexpected allow-boot argument %q", remaining[0])
+			}
+			return provisionAllowBoot(remaining[0], installDisk)
+		}
+	}
+	return errors.New("allow-boot requires a MAC address")
+}
+
+func readBootInstallDiskAllowlistEntries() (map[string]string, error) {
+	content, err := os.ReadFile(provisionBootInstallDiskAllowlistPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return map[string]string{}, nil
+		}
+		return nil, err
+	}
+	mappings := map[string]string{}
+	scanner := bufio.NewScanner(strings.NewReader(string(content)))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) != 2 {
+			continue
+		}
+		mac, err := parseMACAddress(fields[0])
+		if err != nil {
+			continue
+		}
+		disk, err := parseProvisionInstallDiskPath(fields[1])
+		if err != nil {
+			continue
+		}
+		mappings[mac] = disk
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	return mappings, nil
+}
+
+func saveBootInstallDiskMapping(mac, installDisk string) error {
+	mappings, err := readBootInstallDiskAllowlistEntries()
+	if err != nil {
+		return err
+	}
+	mappings[mac] = installDisk
+	var lines []string
+	for _, allowedMAC := range sortedMapKeys(mappings) {
+		lines = append(lines, allowedMAC+" "+mappings[allowedMAC])
+	}
+	content := strings.Join(lines, "\n")
+	if len(lines) > 0 {
+		content += "\n"
+	}
+	return atomicWrite(provisionBootInstallDiskAllowlistPath, []byte(content), 0644)
+}
+
+func bootInstallDiskForMAC(mac string) string {
+	mac = normalizeMAC(mac)
+	if mac == "" {
+		return ""
+	}
+	mappings, err := readBootInstallDiskAllowlistEntries()
+	if err != nil {
+		return ""
+	}
+	return mappings[mac]
+}
+
+func sortedMapKeys(mappings map[string]string) []string {
+	keys := make([]string, 0, len(mappings))
+	for key := range mappings {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func parseMACAddress(value string) (string, error) {
@@ -355,7 +473,7 @@ func renderIPXEBootstrapScript(host string) string {
 	}, "\n") + "\n"
 }
 
-func renderIPXEInstallScript(host, mac, enrollmentToken string) (string, error) {
+func renderIPXEInstallScript(host, mac, enrollmentToken, installDisk string) (string, error) {
 	if err := isBootClientEligible(mac, enrollmentToken); err != nil {
 		return "", err
 	}
@@ -366,17 +484,31 @@ func renderIPXEInstallScript(host, mac, enrollmentToken string) (string, error) 
 	if enrollmentToken != "" {
 		token = enrollmentToken
 	}
+	installDisk = strings.TrimSpace(installDisk)
+	if installDisk == "" {
+		installDisk = bootInstallDiskForMAC(mac)
+	}
+	if installDisk != "" {
+		installDisk, err = parseProvisionInstallDiskPath(installDisk)
+		if err != nil {
+			return "", err
+		}
+	}
 	base := strings.TrimRight(host, "/")
 	kernelURL := base + "/boot/vmlinuz"
 	initrdURL := base + "/boot/install-initramfs.cpio.gz"
-	cmdline := strings.Join([]string{
+	cmdlineParts := []string{
 		"foldingos.install=1",
 		"foldingos.supervisor=" + base,
 		"foldingos.enrollment-token=" + token,
 		"ip=dhcp",
 		"console=ttyS0,115200",
 		"console=tty1",
-	}, " ")
+	}
+	if installDisk != "" {
+		cmdlineParts = append(cmdlineParts, "foldingos.install-disk="+installDisk)
+	}
+	cmdline := strings.Join(cmdlineParts, " ")
 	return strings.Join([]string{
 		"#!ipxe",
 		"kernel " + kernelURL + " " + cmdline,

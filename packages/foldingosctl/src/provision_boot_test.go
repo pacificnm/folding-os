@@ -66,7 +66,7 @@ func TestRenderIPXEInstallScriptUsesHTTPAssets(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	script, err := renderIPXEInstallScript("http://192.168.4.12:8743", "52:54:00:12:34:56", "")
+	script, err := renderIPXEInstallScript("http://192.168.4.12:8743", "52:54:00:12:34:56", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,7 +248,7 @@ func TestAddBootAllowlistMAC(t *testing.T) {
 	defer restore()
 	writeSupervisorRole(t, root)
 
-	if err := provisionAllowBoot("00:BE:43:E7:59:5E"); err != nil {
+	if err := provisionAllowBoot("00:BE:43:E7:59:5E", ""); err != nil {
 		t.Fatal(err)
 	}
 	content, err := os.ReadFile(filepath.Join(root, "config", "provision", "boot-allowlist"))
@@ -269,10 +269,10 @@ func TestAddBootAllowlistMACIsIdempotent(t *testing.T) {
 	defer restore()
 	writeSupervisorRole(t, root)
 
-	if err := provisionAllowBoot("52:54:00:12:34:56"); err != nil {
+	if err := provisionAllowBoot("52:54:00:12:34:56", ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := provisionAllowBoot("52-54-00-12-34-56"); err != nil {
+	if err := provisionAllowBoot("52-54-00-12-34-56", ""); err != nil {
 		t.Fatal(err)
 	}
 	content, err := os.ReadFile(filepath.Join(root, "config", "provision", "boot-allowlist"))
@@ -290,7 +290,7 @@ func TestAddBootAllowlistMACRejectsInvalidAddress(t *testing.T) {
 	defer restore()
 	writeSupervisorRole(t, root)
 
-	if err := provisionAllowBoot("not-a-mac"); err == nil {
+	if err := provisionAllowBoot("not-a-mac", ""); err == nil {
 		t.Fatal("invalid MAC was accepted")
 	}
 }
@@ -300,8 +300,95 @@ func TestAddBootAllowlistMACRequiresSupervisorRole(t *testing.T) {
 	restore := setProvisionBootPaths(root)
 	defer restore()
 
-	if err := provisionAllowBoot("52:54:00:12:34:56"); err == nil {
+	if err := provisionAllowBoot("52:54:00:12:34:56", ""); err == nil {
 		t.Fatal("missing supervisor role was accepted")
+	}
+}
+
+func TestAddBootAllowlistMACWithInstallDisk(t *testing.T) {
+	root := t.TempDir()
+	restore := setProvisionBootPaths(root)
+	defer restore()
+	writeSupervisorRole(t, root)
+
+	if err := provisionAllowBoot("52:54:00:12:34:56", "/dev/sda"); err != nil {
+		t.Fatal(err)
+	}
+	allowlist, err := os.ReadFile(filepath.Join(root, "config", "provision", "boot-allowlist"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(allowlist) != "52:54:00:12:34:56\n" {
+		t.Fatalf("allowlist = %q", allowlist)
+	}
+	diskAllowlist, err := os.ReadFile(filepath.Join(root, "config", "provision", "boot-install-disk-allowlist"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(diskAllowlist) != "52:54:00:12:34:56 /dev/sda\n" {
+		t.Fatalf("install disk allowlist = %q", diskAllowlist)
+	}
+}
+
+func TestRenderIPXEInstallScriptPinsInstallDiskFromQuery(t *testing.T) {
+	root := t.TempDir()
+	restore := setProvisionBootPaths(root)
+	defer restore()
+	writeEnrollmentTokenForStreamTest(root, "boot-token")
+	if err := os.MkdirAll(filepath.Join(root, "config", "provision"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(root, "config", "provision", "boot-allowlist"),
+		[]byte("52:54:00:12:34:56\n"),
+		0644,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	script, err := renderIPXEInstallScript(
+		"http://192.168.4.12:8743",
+		"52:54:00:12:34:56",
+		"",
+		"/dev/sda",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(script, "foldingos.install-disk=/dev/sda") {
+		t.Fatalf("script missing pinned install disk:\n%s", script)
+	}
+}
+
+func TestRenderIPXEInstallScriptPinsInstallDiskFromAllowlist(t *testing.T) {
+	root := t.TempDir()
+	restore := setProvisionBootPaths(root)
+	defer restore()
+	writeEnrollmentTokenForStreamTest(root, "boot-token")
+	if err := os.MkdirAll(filepath.Join(root, "config", "provision"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(root, "config", "provision", "boot-allowlist"),
+		[]byte("52:54:00:12:34:56\n"),
+		0644,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(root, "config", "provision", "boot-install-disk-allowlist"),
+		[]byte("52:54:00:12:34:56 /dev/nvme0n1\n"),
+		0644,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	script, err := renderIPXEInstallScript("http://192.168.4.12:8743", "52:54:00:12:34:56", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(script, "foldingos.install-disk=/dev/nvme0n1") {
+		t.Fatalf("script missing allowlist install disk:\n%s", script)
 	}
 }
 
@@ -324,6 +411,7 @@ func setProvisionBootPaths(root string) func() {
 	restoreProvision := setProvisionPaths(root)
 	provisionBootTFTPRoot = filepath.Join(root, "boot", "tftp")
 	provisionBootAllowlistPath = filepath.Join(root, "config", "provision", "boot-allowlist")
+	provisionBootInstallDiskAllowlistPath = filepath.Join(root, "config", "provision", "boot-install-disk-allowlist")
 	provisionBootInterfacePath = filepath.Join(root, "config", "provision", "boot.interface")
 	provisionBootDnsmasqConfig = filepath.Join(root, "config", "provision", "dnsmasq.conf")
 	provisionBootIsolatedNetworkPath = filepath.Join(root, "config", "provision", "boot-isolated-network")
@@ -337,6 +425,7 @@ func setProvisionBootPaths(root string) func() {
 	return func() {
 		provisionBootTFTPRoot = provisionBootTFTPRootDefault
 		provisionBootAllowlistPath = provisionBootAllowlistPathDefault
+		provisionBootInstallDiskAllowlistPath = provisionBootInstallDiskAllowlistPathDefault
 		provisionBootInterfacePath = provisionBootInterfacePathDefault
 		provisionBootDnsmasqConfig = provisionBootDnsmasqConfigDefault
 		provisionBootAssetsDir = provisionBootAssetsDirDefault

@@ -35,7 +35,8 @@ func handleIPXEInstallScript(writer http.ResponseWriter, request *http.Request) 
 	}
 	mac := strings.TrimSpace(request.URL.Query().Get("mac"))
 	token := strings.TrimSpace(request.URL.Query().Get("token"))
-	script, err := renderIPXEInstallScript(host, mac, token)
+	installDisk := strings.TrimSpace(request.URL.Query().Get("disk"))
+	script, err := renderIPXEInstallScript(host, mac, token, installDisk)
 	if err != nil {
 		status := http.StatusForbidden
 		if strings.Contains(err.Error(), "enrollment token") {
