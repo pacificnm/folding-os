@@ -13,8 +13,12 @@
 This document defines the concrete Milestone 4 contract for integrating FoldOps
 with FoldingOS appliances through `foldingosctl`.
 
-It implements [ADR-0020](../adr/0020-foldops-delegates-node-operations-to-foldingosctl.md)
-and [ADR-0021](../adr/0021-machine-readable-foldingosctl-automation-interface.md).
+It implements [ADR-0020](../adr/0020-foldops-delegates-node-operations-to-foldingosctl.md),
+[ADR-0021](../adr/0021-machine-readable-foldingosctl-automation-interface.md),
+[ADR-0022](../adr/0022-foldops-rust-source-in-foldingos-monorepo.md), and
+[ADR-0023](../adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md).
+
+See also [4-appliance-artifact-and-monorepo-plan.md](4-appliance-artifact-and-monorepo-plan.md).
 
 ---
 
@@ -24,7 +28,8 @@ and [ADR-0021](../adr/0021-machine-readable-foldingosctl-automation-interface.md
 | --- | --- | --- |
 | Network install and agent OS enrollment | `foldingosctl provision enroll` → supervisor `/v1/agents/register` | unchanged |
 | Desired image version and staged updates | `foldingosctl provision check-version`, `apply-update`, supervisor assign API | FoldOps dashboard invokes same commands locally on supervisor |
-| FoldOps package install | `foldingosctl foldops acquire` | unchanged |
+| FoldOps package install | `foldingosctl foldops acquire` | assigned manifest + `layout-tar-zst` per ADR-0023 |
+| foldingosctl update | image rebuild (M3) | `foldingosctl tools acquire` per ADR-0023 |
 | FoldOps token/TLS bootstrap | `foldingosctl foldops provision` | unchanged |
 | Metrics and fleet dashboard | FoldOps agent direct OS inspection (legacy) | FoldOps agent delegates to `foldingosctl inspect` |
 | Machine inventory in FoldOps DB | hostname only | hostname + `node_id` + `installation_role` + FoldingOS versions |
@@ -124,6 +129,27 @@ Returns:
   present
 - last reported update status when present
 
+### `inspect foldops`
+
+Returns:
+
+- `bootstrap_manifest_release` from `/usr/share/foldingos/manifests/foldops.toml`
+- `assigned_manifest_release` from `/data/config/foldops/assigned-manifest.toml`
+  when present
+- `active_manifest_release` under `/data/apps/foldops/current`
+- per-package verification paths and last acquire status from
+  `/data/state/foldops/`
+
+### `inspect tools`
+
+Returns:
+
+- `active_tools_version` from `/data/state/tools/` when present
+- `assigned_tools_version` from `/data/config/tools/assigned-version.json` when
+  present
+- `foldingosctl_path` and on-disk binary metadata for `/usr/bin/foldingosctl`
+- last `tools acquire` status when present
+
 ## Existing commands with JSON output
 
 | Command | Role | Milestone 4 JSON |
@@ -157,6 +183,8 @@ foldingosctl inspect node --format json
 foldingosctl inspect system --format json
 foldingosctl inspect fah --format json
 foldingosctl inspect update --format json
+foldingosctl inspect foldops --format json
+foldingosctl inspect tools --format json
 ```
 
 The agent assembles the ingest payload from these documents plus FoldOps-local
@@ -249,9 +277,10 @@ Changes that require coordination:
 | supervisor fleet actions | JSON for provision/registry | dashboard API handlers |
 | config push workflow | `config activate` JSON | agent HTTP handler |
 
-The foldops repository must detect FoldingOS appliances (for example
-`installation_role` file present) and enable delegation mode. Non-FoldingOS
-Debian nodes may retain legacy collection until deprecated separately.
+The `packages/foldops/` Rust workspace detects FoldingOS appliances (for
+example `installation_role` file present) and enables delegation mode.
+Non-FoldingOS Debian nodes may retain legacy collection until deprecated
+separately.
 
 ---
 
@@ -275,15 +304,24 @@ unless implementation discovers a polling gap; prefer extending existing timers.
 
 # Implementation Sequence
 
+0. **Appliance artifact transport and monorepo**
+   - import `packages/foldops/` Rust workspace
+   - `scripts/build-foldops-bundles` and publication to `packages.folding-os.com`
+   - manifest schema v2 and `layout-tar-zst` extract in `foldops acquire`
+   - supervisor-assigned FoldOps manifest on `/data`
+   - `foldingosctl tools acquire` and assigned tools version
+   - QEMU acceptance: acquire FoldOps and tools without OS reimage
+
 1. **Automation foundation**
    - JSON envelope helpers in `foldingosctl`
    - `inspect node`, `inspect system`
    - unit tests and fixture-based golden JSON
    - `foldops` user authorization for inspect
 
-2. **FAH and update inspection**
-   - `inspect fah`, `inspect update`, `inspect commissioning`
-   - map fields to FoldOps ingest schema in foldops repo
+2. **FAH, update, and runtime inspection**
+   - `inspect fah`, `inspect update`, `inspect commissioning`, `inspect foldops`,
+     `inspect tools`
+   - map fields to FoldOps ingest schema in `packages/foldops/`
 
 3. **FoldOps agent delegation**
    - Rust agent executes inspect commands on FoldingOS
@@ -317,7 +355,8 @@ Each step requires automated tests before dependent steps proceed.
 
 A Milestone 4 acceptance suite must validate at minimum:
 
-- `foldingosctl inspect … --format json` succeeds on agent and supervisor images
+- `foldingosctl inspect … --format json` succeeds on agent and supervisor images,
+  including `inspect foldops` and `inspect tools`
 - `foldops-agent` ingest uses delegation on FoldingOS (mock or live supervisor)
 - ingest payload contains stable `node_id`
 - supervisor dashboard/API reads enrollments via `provision list-enrollments --format json`
@@ -353,3 +392,6 @@ See [4-implementation-spec.md](4-implementation-spec.md).
 - [Testing strategy](../testing-strategy.md)
 - [ADR-0020](../adr/0020-foldops-delegates-node-operations-to-foldingosctl.md)
 - [ADR-0021](../adr/0021-machine-readable-foldingosctl-automation-interface.md)
+- [ADR-0022](../adr/0022-foldops-rust-source-in-foldingos-monorepo.md)
+- [ADR-0023](../adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md)
+- [4-appliance-artifact-and-monorepo-plan.md](4-appliance-artifact-and-monorepo-plan.md)

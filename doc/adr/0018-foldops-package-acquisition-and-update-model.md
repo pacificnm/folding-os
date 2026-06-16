@@ -10,6 +10,15 @@
 
 **Amends:** [ADR-0014](0014-fixed-installation-roles.md) (FoldOps artifact integration)
 
+**Amended by:**
+
+- [ADR-0022](0022-foldops-rust-source-in-foldingos-monorepo.md) — FoldOps Rust source in `packages/foldops/`
+- [ADR-0023](0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md) — layout bundles, assigned manifests, `tools acquire`
+
+The body of this ADR remains the Milestone 3 baseline. Appliance transport and
+fleet assignment extensions are defined in the amending ADRs and
+[milestone/4-appliance-artifact-and-monorepo-plan.md](../milestone/4-appliance-artifact-and-monorepo-plan.md).
+
 ---
 
 # Context
@@ -85,10 +94,13 @@ start**. It is not arbitrary package selection.
 | Environment | Install method |
 | --- | --- |
 | General Debian host | `apt` with `deb.folding-os.com` source and `foldops.gpg` keyring |
-| FoldingOS appliance | `foldingosctl foldops acquire` with embedded manifest and HTTPS verification |
+| FoldingOS appliance | `foldingosctl foldops acquire` with bootstrap manifest, optional supervisor-assigned manifest, and HTTPS verification |
 
-Both paths consume the **same official `.deb` artifacts** from
-`deb.folding-os.com`.
+Milestone 3 appliances consumed `.deb` artifacts from `deb.folding-os.com`.
+Milestone 4 appliances use `layout-tar-zst` bundles from
+`packages.folding-os.com/foldops/` per
+[ADR-0023](0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md).
+General Debian hosts may continue to use `.deb` packages from `deb.folding-os.com`.
 
 ## Persistent storage
 
@@ -122,7 +134,8 @@ Download staging and acquire retry state live under `/data/state/foldops/`.
 
 Milestone 3 requires, for each pinned package entry in the manifest:
 
-- exact HTTPS artifact URL on `deb.folding-os.com`
+- exact HTTPS artifact URL (Milestone 3: `deb.folding-os.com`; Milestone 4
+  appliances: `packages.folding-os.com/foldops/`)
 - expected artifact size in bytes
 - SHA-256 digest
 
@@ -213,8 +226,10 @@ surface, complicates deterministic validation, and is unnecessary when the same
 
 ## Build FoldOps from source inside Buildroot
 
-Rejected because FoldOps remains an independent repository with its own release
-process; FoldingOS consumes published Debian packages, not merged source trees.
+Rejected for Milestone 3 because FoldingOS consumed published packages, not merged
+source trees. [ADR-0022](0022-foldops-rust-source-in-foldingos-monorepo.md) later
+places FoldOps Rust source in `packages/foldops/` while keeping runtime acquisition
+separate from the OS image.
 
 ---
 

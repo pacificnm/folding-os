@@ -28,9 +28,9 @@ This index groups the project's documentation by purpose.
 - [Networking](networking.md) - networking behavior and capabilities
 - [Storage layout](storage-layout.md) - logical storage and persistence model
 - [Security model](security.md) - runtime security architecture
-- [FoldOps integration](foldops-integration.md) - fleet-management relationship
-  with the separate [pacificnm/foldops](https://github.com/pacificnm/foldops)
-  repository
+- [FoldOps integration](foldops-integration.md) - fleet-management relationship;
+  Rust source in `packages/foldops/` per
+  [ADR-0022](adr/0022-foldops-rust-source-in-foldingos-monorepo.md)
 
 ## Implementation Specifications
 
@@ -48,6 +48,8 @@ This index groups the project's documentation by purpose.
   proposed scope for FoldOps integration through foldingosctl delegation
 - [Milestone 4 engineering specification](milestone/4-engineering-spec.md) -
   proposed concrete contract for inspect commands, JSON output, and FoldOps wiring
+- [Milestone 4 appliance artifact and monorepo plan](milestone/4-appliance-artifact-and-monorepo-plan.md) -
+  proposed layout-bundle transport, monorepo source, and runtime updates without OS reimage
 - [Deployment and provisioning](installer.md) - supervisor bootstrap and network
   fleet provisioning
 - [Milestone 3 engineering specification](milestone/3-engineering-spec.md) -

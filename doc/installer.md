@@ -180,6 +180,23 @@ See [update-system.md](update-system.md) for trust model and failure behavior.
 Folding@home client acquisition remains independent of operating-system updates
 and is governed by [ADR-0009](adr/0009-fah-acquisition-and-update-model.md).
 
+## FoldOps and foldingosctl updates
+
+FoldOps and `foldingosctl` use separate publication channels from OS disk images.
+Routine updates must not require OS reflash per
+[ADR-0023](adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md):
+
+| Software | Publication host | Assignment |
+| --- | --- | --- |
+| FoldOps bundles | `packages.folding-os.com/foldops/` | `/data/config/foldops/assigned-manifest.toml` |
+| `foldingosctl` | `packages.folding-os.com/foldingos-tools/` | `/data/config/tools/assigned-version.json` |
+| OS images | `releases.folding-os.com` | supervisor `provision assign` (image version) |
+
+The release image embeds bootstrap FoldOps manifest pins only. Supervisors assign
+desired FoldOps and tools versions to enrolled nodes; agents acquire on their
+scheduled timers or on demand. See [operations.md](operations.md) and
+[milestone/4-appliance-artifact-and-monorepo-plan.md](milestone/4-appliance-artifact-and-monorepo-plan.md).
+
 ---
 
 # SSH-Key Provisioning
@@ -276,6 +293,7 @@ See [milestone/3-readiness-review.md](milestone/3-readiness-review.md).
 - [Operations](operations.md)
 - [Physical validation](physical-validation.md)
 - [FoldOps integration](foldops-integration.md)
+- [ADR-0023: Runtime FoldOps And foldingosctl Updates Without OS Reimage](adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md)
 - [Update system](update-system.md)
 
 ---

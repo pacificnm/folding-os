@@ -4,10 +4,11 @@
 
 Draft — **superseded for package integration** by
 [ADR-0018](../adr/0018-foldops-package-acquisition-and-update-model.md), which
-defines runtime acquisition of official `.deb` artifacts from
-`deb.folding-os.com` instead of Buildroot-embedded packages. Enrollment,
-heartbeat, and service requirements below remain directional input for later
-milestones.
+defines runtime acquisition of official artifacts instead of Buildroot-embedded
+packages. **Superseded for source location** by
+[ADR-0022](../adr/0022-foldops-rust-source-in-foldingos-monorepo.md), which
+places FoldOps Rust source in `packages/foldops/`. Enrollment, heartbeat, and
+service requirements below remain directional input for later milestones.
 
 ## Overview
 
@@ -17,15 +18,15 @@ Milestone 2 implements managed-node functionality through integration with the F
 
 # Repository Relationship
 
-FoldOps remains an independent repository.
+FoldOps Rust source for FoldingOS appliances lives in `packages/foldops/` per
+[ADR-0022](../adr/0022-foldops-rust-source-in-foldingos-monorepo.md). Runtime
+binaries are still acquired on `/data` at boot, not embedded in the OS image.
 
-Repository:
+The legacy Node.js repository at `https://github.com/pacificnm/foldops` is
+deprecated for appliance work.
 
-* https://github.com/pacificnm/foldops
-
-FoldingOS consumes approved, pinned FoldOps releases.
-
-The FoldOps source tree is not merged into the FoldingOS repository.
+FoldingOS consumes approved, pinned FoldOps releases from official HTTPS
+publication channels.
 
 ---
 

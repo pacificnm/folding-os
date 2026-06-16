@@ -13,6 +13,10 @@
 
 **Amends:** [ADR-0016](0016-network-provisioning-via-supervisor.md) (upstream release origin)
 
+**Amended by:** [ADR-0023](0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md)
+(adds `packages.folding-os.com` publication channels for FoldOps bundles and
+`foldingosctl` tools; OS image channel unchanged)
+
 ---
 
 # Context
@@ -23,11 +27,18 @@ images and poll an upstream server for newly published versions
 download operating-system images directly from the public internet; they stage
 updates from the supervisor registry or a supervisor-authorized redirect.
 
-The project already publishes FoldOps Debian packages from project-controlled
-HTTPS infrastructure on Cloudflare:
+The project publishes FoldOps artifacts from project-controlled HTTPS
+infrastructure on Cloudflare:
 
-- `https://deb.folding-os.com` — apt repository and archive keyring
+- `https://packages.folding-os.com/foldops/` — appliance layout bundles
+  (`foldingosctl foldops acquire`)
+- `https://packages.folding-os.com/foldingos-tools/` — `foldingosctl` binaries
+  (`foldingosctl tools acquire`)
+- `https://deb.folding-os.com` — optional apt repository and archive keyring for
+  general Debian hosts
 - documented at [https://www.folding-os.com/foldops](https://www.folding-os.com/foldops)
+
+See [ADR-0023](0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md).
 
 FoldingOS operating-system release images require a parallel, documented
 publication channel. Prior documentation described an anonymous “upstream release
@@ -145,15 +156,18 @@ Manual lab registration (for example `validate-agent-update-lab` copying a local
 build image) remains a development-only path and is not part of the official
 publication contract.
 
-## Relationship to FoldOps apt packages
+## Relationship to FoldOps publication channels
 
 | Channel | Host | Consumer | Artifact |
 | --- | --- | --- | --- |
-| FoldOps packages | `deb.folding-os.com` | `apt` on Debian; `foldingosctl foldops acquire` on FoldingOS | `.deb` packages |
+| FoldOps appliance bundles | `packages.folding-os.com/foldops/` | `foldingosctl foldops acquire` on FoldingOS | `layout-tar-zst` bundles |
+| foldingosctl tools | `packages.folding-os.com/foldingos-tools/` | `foldingosctl tools acquire` on FoldingOS | static binary |
+| FoldOps Debian packages (optional) | `deb.folding-os.com` | `apt` on general Debian hosts | `.deb` packages |
 | FoldingOS images | `releases.folding-os.com` | supervisor `registry poll` | raw `.img` disk images |
 
-FoldOps packages and FoldingOS images are distributed through separate URLs and
-verification paths. A node may use both channels independently.
+FoldOps bundles, tools binaries, and FoldingOS images are distributed through
+separate URLs and verification paths. A node may use multiple channels
+independently. FoldingOS appliances do not use runtime `apt`.
 
 ## Supervisor bootstrap unchanged
 
@@ -180,8 +194,10 @@ operate without per-node internet policy complexity.
 
 ## Embed only FoldOps apt and reuse apt for OS images
 
-Rejected. FoldingOS ships raw GPT disk images, not Debian packages. The apt
-infrastructure at `deb.folding-os.com` remains scoped to FoldOps packages.
+Rejected. FoldingOS ships raw GPT disk images, not Debian packages. Optional
+Debian packages on `deb.folding-os.com` are for non-appliance hosts only;
+appliance FoldOps uses `packages.folding-os.com` per
+[ADR-0023](0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md).
 
 ---
 
@@ -272,6 +288,8 @@ Work proceeds in this order within the Milestone 3 / issue #61 stream:
 # Closing Statement
 
 Official FoldingOS upgrades reach fleets through supervisor-local registry
-imports of HTTPS-published releases on `releases.folding-os.com`, using the same
-project-controlled Cloudflare distribution model as FoldOps apt packages on
-`deb.folding-os.com`.
+imports of HTTPS-published releases on `releases.folding-os.com`. FoldOps
+appliance bundles and `foldingosctl` tools publish on `packages.folding-os.com`
+per [ADR-0023](0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md).
+Optional FoldOps Debian packages remain on `deb.folding-os.com` for general
+Debian hosts.

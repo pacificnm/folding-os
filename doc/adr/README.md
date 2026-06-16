@@ -59,6 +59,8 @@ design decisions years after they were originally made.
 - [ADR-0019: FoldOps Supervisor Provisioning And TLS](0019-foldops-supervisor-provisioning-and-tls.md)
 - [ADR-0020: FoldOps Delegates Node Operations To foldingosctl](0020-foldops-delegates-node-operations-to-foldingosctl.md) (proposed)
 - [ADR-0021: Machine-Readable foldingosctl Automation Interface](0021-machine-readable-foldingosctl-automation-interface.md) (proposed)
+- [ADR-0022: FoldOps Rust Source In FoldingOS Monorepo](0022-foldops-rust-source-in-foldingos-monorepo.md) (proposed)
+- [ADR-0023: Runtime FoldOps And foldingosctl Updates Without OS Reimage](0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md) (proposed)
 
 ---
 

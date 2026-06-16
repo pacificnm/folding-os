@@ -6,7 +6,10 @@
 
 **Authors:** FoldingOS project
 
-**Depends on:** [ADR-0020](0020-foldops-delegates-node-operations-to-foldingosctl.md)
+**Depends on:** [ADR-0020](0020-foldops-delegates-node-operations-to-foldingosctl.md),
+[ADR-0023](0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md)
+
+**Related:** [ADR-0022](0022-foldops-rust-source-in-foldingos-monorepo.md)
 
 ---
 
@@ -46,9 +49,15 @@ with the following rules:
    | `inspect system` | Uptime, load, memory, root filesystem, primary NIC |
    | `inspect fah` | Verified client version, service state, runtime summary |
    | `inspect commissioning` | Boot readiness checks currently used by commissioning display |
-   | `inspect update` | Current/desired image version and staged update state |
+   | `inspect update` | Current/desired OS image version and staged update state |
+   | `inspect foldops` | Bootstrap vs assigned vs active FoldOps manifest release and acquisition state |
+   | `inspect tools` | Active `foldingosctl` version, assigned tools version, and last acquire status |
 
    `inspect` commands are read-only and safe for periodic polling.
+
+   `inspect foldops` and `inspect tools` report bootstrap-floor, supervisor-assigned,
+   and active runtime versions per
+   [ADR-0023](0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md).
 
 3. **Existing mutating commands gain JSON output where already used by
    automation**, starting with:
@@ -114,7 +123,8 @@ require stricter authorization and audit boundaries.
 ### Negative
 
 - Every automated command requires explicit JSON implementation and tests
-- FoldOps and FoldingOS must coordinate schema changes across repositories
+- Schema changes require coordinated updates in `packages/foldingosctl/` and
+  `packages/foldops/` within this repository
 
 ### Tradeoffs
 
@@ -136,4 +146,7 @@ require stricter authorization and audit boundaries.
 
 - [foldingosctl command reference](../foldingosctl.md)
 - [Milestone 4 engineering specification](../milestone/4-engineering-spec.md)
+- [Milestone 4 appliance artifact and monorepo plan](../milestone/4-appliance-artifact-and-monorepo-plan.md)
 - [ADR-0020](0020-foldops-delegates-node-operations-to-foldingosctl.md)
+- [ADR-0022](0022-foldops-rust-source-in-foldingos-monorepo.md)
+- [ADR-0023](0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md)

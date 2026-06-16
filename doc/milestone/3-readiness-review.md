@@ -145,8 +145,13 @@ Implemented behavior matches [installer.md](../installer.md) and
 
 ## FoldOps integration
 
-- FoldOps packages are acquired at runtime from `deb.folding-os.com` per
+- Milestone 3 shipped FoldOps acquisition via embedded bootstrap manifest and
+  `.deb` extract from `deb.folding-os.com` per
   [ADR-0018](../adr/0018-foldops-package-acquisition-and-update-model.md)
+- Milestone 4 extends transport to `layout-tar-zst` on
+  `packages.folding-os.com`, supervisor-assigned manifests, and
+  `foldingosctl tools acquire` per
+  [ADR-0023](../adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md)
 - supervisor ingest token and self-signed TLS are provisioned per
   [ADR-0019](../adr/0019-foldops-supervisor-provisioning-and-tls.md)
 - network-provisioned agents receive EFI ingest token and data-partition

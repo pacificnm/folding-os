@@ -67,8 +67,13 @@ Milestone 4 adds:
   `registry` commands on the supervisor role
 - operator workflows in FoldOps for fleet visibility, desired-version assignment,
   and selected configuration actions
+- Rust FoldOps source in `packages/foldops/` per
+  [ADR-0022](../adr/0022-foldops-rust-source-in-foldingos-monorepo.md)
+- runtime FoldOps and `foldingosctl` updates without OS reimage per
+  [ADR-0023](../adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md)
+  (`layout-tar-zst`, supervisor-assigned manifests, `tools acquire`)
 - automated and physical validation of the integrated management path
-- cross-repository contract documentation with [pacificnm/foldops](https://github.com/pacificnm/foldops)
+- contract documentation in this repository (`packages/foldops/`, manifests, ADRs)
 
 Milestone 4 extends but does not replace:
 
@@ -100,11 +105,13 @@ Milestone 4 does not implement:
   not stop folding; invalid configuration changes must not apply.
 - **Fixed roles.** Supervisor and agent capabilities remain role-gated per
   [ADR-0014](../adr/0014-fixed-installation-roles.md).
-- **Separate channels.** FoldOps `.deb` updates and FoldingOS image updates remain
-  separate per [ADR-0017](../adr/0017-official-release-publication-and-supervisor-upstream-polling.md)
-  and [ADR-0018](../adr/0018-foldops-package-acquisition-and-update-model.md).
-- **Coordinate cross-repo.** Schema and API changes require updates in both
-  folding-os and foldops before release.
+- **Separate channels.** FoldOps bundles, `foldingosctl` tools binaries, and
+  FoldingOS image updates remain separate per
+  [ADR-0017](../adr/0017-official-release-publication-and-supervisor-upstream-polling.md),
+  [ADR-0018](../adr/0018-foldops-package-acquisition-and-update-model.md), and
+  [ADR-0023](../adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md).
+- **Monorepo contracts.** Schema and API changes land in this repository
+  (`packages/foldops/`, `packages/foldingosctl/`, docs) before release.
 
 ---
 
@@ -116,7 +123,7 @@ Milestone 4 is complete when:
    `foldingosctl inspect` and approved read commands
 2. FoldOps dashboard shows fleet inventory keyed by FoldingOS `node-id`
 3. FoldOps supervisor on a FoldingOS supervisor can list enrollments and assign
-   desired image versions through `foldingosctl`
+   desired image, FoldOps, and tools versions through `foldingosctl`
 4. At least one remote configuration workflow uses `foldingosctl config activate`
    through an approved FoldOps action path
 5. QEMU and physical validation records are committed
@@ -131,20 +138,24 @@ See [4-engineering-spec.md](4-engineering-spec.md) for the ordered work breakdow
 
 High-level phases:
 
-1. Machine-readable CLI foundation
-2. FoldOps agent delegation on agents
-3. FoldOps supervisor local fleet commands
-4. Dashboard operator workflows
-5. Remote configuration workflow
-6. Validation and readiness review
+1. Appliance artifact transport and monorepo foundation
+2. Machine-readable CLI foundation
+3. FoldOps agent delegation on agents
+4. FoldOps supervisor local fleet commands
+5. Dashboard operator workflows
+6. Remote configuration workflow
+7. Validation and readiness review
 
 ---
 
 # Related Documents
 
+- [Milestone 4 appliance artifact and monorepo plan](4-appliance-artifact-and-monorepo-plan.md)
 - [Milestone 3 engineering specification](3-engineering-spec.md)
 - [Milestone 4 engineering specification](4-engineering-spec.md)
 - [FoldOps integration](../foldops-integration.md)
 - [ADR-0020](../adr/0020-foldops-delegates-node-operations-to-foldingosctl.md)
 - [ADR-0021](../adr/0021-machine-readable-foldingosctl-automation-interface.md)
+- [ADR-0022](../adr/0022-foldops-rust-source-in-foldingos-monorepo.md)
+- [ADR-0023](../adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md)
 - [Roadmap](../../ROADMAP.md)

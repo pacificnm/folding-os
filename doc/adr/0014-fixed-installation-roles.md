@@ -7,13 +7,17 @@
 - [ADR-0016](0016-network-provisioning-via-supervisor.md) (role assignment and
   provisioning mechanism)
 - [ADR-0018](0018-foldops-package-acquisition-and-update-model.md) (FoldOps
-  runtime acquisition from `deb.folding-os.com`)
+  runtime acquisition)
+- [ADR-0022](0022-foldops-rust-source-in-foldingos-monorepo.md) (FoldOps Rust
+  source in `packages/foldops/`)
+- [ADR-0023](0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md)
+  (layout bundles, supervisor-assigned versions, `tools acquire`)
 
-**Version:** 1.1
+**Version:** 1.2
 
 **Date:** 2026-06-11
 
-**Revised:** 2026-06-15 (FoldOps acquisition model)
+**Revised:** 2026-06-14 (appliance transport and monorepo per ADR-0022/0023)
 
 **Authors:** FoldingOS Project Contributors
 
@@ -27,13 +31,19 @@ for those purposes would duplicate the build, release, security, and
 validation work that the combined appliance and installer image is intended to
 avoid.
 
-FoldOps is distributed as three Debian package artifacts:
+FoldOps is distributed as three runtime components:
 
 ```text
 foldops-agent
 foldops-supervisor
 foldops-web
 ```
+
+On FoldingOS appliances these components are acquired as verified layout bundles
+from `packages.folding-os.com` per
+[ADR-0023](0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md).
+Optional Debian packages on `deb.folding-os.com` remain for general Debian hosts
+only.
 
 FoldingOS is an appliance rather than a general-purpose Debian system. It does
 not provide runtime APT package management, and installation must remain
@@ -45,9 +55,9 @@ offline and reproducible.
 
 FoldingOS will provide one combined appliance image for all supported
 installation roles. FoldOps runtime payloads are **not** embedded in the image;
-they are acquired at runtime from official Debian packages on
-`deb.folding-os.com` per
-[ADR-0018](0018-foldops-package-acquisition-and-update-model.md).
+they are acquired at runtime from official HTTPS artifacts per
+[ADR-0018](0018-foldops-package-acquisition-and-update-model.md) and
+[ADR-0023](0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md).
 
 The installer will offer exactly two fixed roles:
 
@@ -91,14 +101,17 @@ FoldOps integration is defined by
 
 Summary:
 
-- the release image embeds a pinned acquisition manifest and archive keyring,
-  not FoldOps application binaries
+- the release image embeds a pinned **bootstrap** acquisition manifest and archive
+  keyring, not FoldOps application binaries
 - after role validation and network availability, `foldingosctl foldops acquire`
-  downloads the same `.deb` artifacts that `apt` installs from
-  `deb.folding-os.com`, verifies them, and activates them under
-  `/data/apps/foldops/`
+  downloads verified `layout-tar-zst` bundles from `packages.folding-os.com`
+  (Milestone 3 shipped `.deb` extract from `deb.folding-os.com`; see
+  [Milestone 3 engineering specification](../milestone/3-engineering-spec.md))
+- when a supervisor-assigned manifest exists at
+  `/data/config/foldops/assigned-manifest.toml`, it takes precedence over the
+  embedded bootstrap pin per [ADR-0023](0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md)
 - FoldingOS does not ship runtime APT; general Debian hosts continue to use
-  `apt` against the same repository
+  `apt` against `deb.folding-os.com` when needed
 
 Service-unit integration and acquisition implementation details are defined in
 the [Milestone 3 engineering specification](../milestone/3-engineering-spec.md).
@@ -181,8 +194,10 @@ pipeline, validation matrix, and maintenance burden.
 
 Rejected because a general-purpose package manager is incompatible with the
 appliance model. [ADR-0018](0018-foldops-package-acquisition-and-update-model.md)
-instead downloads the same pinned `.deb` pool objects over HTTPS with
-`foldingosctl`-controlled verification and extract-only installation.
+and [ADR-0023](0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md)
+instead download pinned artifacts over HTTPS with `foldingosctl`-controlled
+verification and extract-only installation (`layout-tar-zst` on appliances;
+`.deb` data-archive extract was the Milestone 3 implementation).
 
 ## Embed all FoldOps binaries at Buildroot build time
 
@@ -234,6 +249,8 @@ Supervisor ingest-token bootstrap, TLS, and EFI staging are defined by
 # Related Documents
 
 - [ADR-0018: FoldOps Package Acquisition And Update Model](0018-foldops-package-acquisition-and-update-model.md)
+- [ADR-0022: FoldOps Rust Source In FoldingOS Monorepo](0022-foldops-rust-source-in-foldingos-monorepo.md)
+- [ADR-0023: Runtime FoldOps And foldingosctl Updates Without OS Reimage](0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md)
 - [ADR-0016: Network Provisioning Via Supervisor](0016-network-provisioning-via-supervisor.md)
 - [FoldingOS deployment and provisioning](../installer.md)
 - [FoldOps Integration](../foldops-integration.md)

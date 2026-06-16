@@ -14,15 +14,15 @@ for FoldingOS deployments.
 This document defines the intended architectural relationship between FoldingOS
 and FoldOps.
 
-FoldOps is developed in a separate repository:
-
-```text
-https://github.com/pacificnm/foldops
-```
+FoldOps Rust source for FoldingOS appliances lives in this repository under
+`packages/foldops/` per
+[ADR-0022](adr/0022-foldops-rust-source-in-foldingos-monorepo.md). The legacy
+Node.js repository at [pacificnm/foldops](https://github.com/pacificnm/foldops)
+is deprecated for appliance work.
 
 Changes to the node-management protocol, enrollment workflow, configuration
-contract, workload-manifest coordination, or update reporting must be
-coordinated with that repository.
+contract, workload-manifest coordination, or update reporting are coordinated in
+this repository alongside `foldingosctl` and acquisition manifests.
 
 ---
 
@@ -54,16 +54,22 @@ The supervisor:
 - polls `releases.folding-os.com` for new FoldingOS image releases
 - assigns desired image versions to enrolled agents
 
-FoldOps `.deb` packages and FoldingOS disk images use separate official HTTPS
-origins on Cloudflare:
+FoldOps layout bundles, `foldingosctl` tools binaries, and FoldingOS disk images
+use separate official HTTPS origins:
 
 | Channel | Host | Consumer |
 | --- | --- | --- |
-| FoldOps packages | `deb.folding-os.com` | `apt` on Debian; `foldingosctl foldops acquire` on FoldingOS |
+| FoldOps bundles | `packages.folding-os.com/foldops/` | `foldingosctl foldops acquire` on FoldingOS |
+| foldingosctl tools | `packages.folding-os.com/foldingos-tools/` | `foldingosctl tools acquire` on FoldingOS |
+| FoldOps Debian packages (optional) | `deb.folding-os.com` | `apt` on general Debian hosts only |
 | FoldingOS images | `releases.folding-os.com` | supervisor `foldingosctl registry poll` |
 
+FoldingOS appliances do not use runtime `apt`. See
+[ADR-0023](adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md).
+
 See [ADR-0017](adr/0017-official-release-publication-and-supervisor-upstream-polling.md),
-[ADR-0018](adr/0018-foldops-package-acquisition-and-update-model.md), and
+[ADR-0018](adr/0018-foldops-package-acquisition-and-update-model.md),
+[milestone/4-appliance-artifact-and-monorepo-plan.md](milestone/4-appliance-artifact-and-monorepo-plan.md), and
 [FoldOps installation](https://www.folding-os.com/foldops).
 
 Additional nodes are `agent` roles provisioned over the network by the
@@ -122,9 +128,11 @@ and [milestone/4-engineering-spec.md](milestone/4-engineering-spec.md).
 
 After role validation and network availability:
 
-1. `foldingosctl foldops acquire` reads
-   `/usr/share/foldingos/manifests/foldops.toml`
-2. downloads each required `.deb` from pinned URLs on `deb.folding-os.com`
+1. `foldingosctl foldops acquire` reads the bootstrap manifest at
+   `/usr/share/foldingos/manifests/foldops.toml` and, when present, the
+   supervisor-assigned manifest at `/data/config/foldops/assigned-manifest.toml`
+2. downloads each required `layout-tar-zst` bundle (or legacy `.deb` during
+   migration) from pinned URLs on `packages.folding-os.com`
 3. verifies size and SHA-256
 4. extracts and activates under `/data/apps/foldops/`
 5. `foldingosctl foldops provision` imports the ingest token, renders env
@@ -135,6 +143,10 @@ After role validation and network availability:
    [foldingosctl.md](foldingosctl.md))
 
 FoldingOS does **not** ship runtime APT.
+
+`foldingosctl tools acquire` updates the control-plane binary from
+`packages.folding-os.com/foldingos-tools/` without OS reimage per
+[ADR-0023](adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md).
 
 ## On general Debian hosts
 
@@ -152,7 +164,8 @@ sudo apt install foldops-agent              # every FAH node
 sudo apt install foldops-supervisor         # supervisor node
 ```
 
-Both paths consume identical official `.deb` artifacts.
+Both paths may consume the same release artifacts; Debian hosts use `.deb`,
+FoldingOS appliances use layout bundles.
 
 ## Ingest token and TLS (supervisor bootstrap)
 
@@ -179,9 +192,9 @@ sudo ./scripts/make-bootable-usb \
   /dev/sdX build/output/images/foldingos-x86_64-0.1.0.img
 ```
 
-Agent HTTPS trust for self-signed supervisor TLS depends on upstream FoldOps
-support for `SUPERVISOR_TLS_CA`
-([foldops#2](https://github.com/pacificnm/foldops/issues/2)).
+Agent HTTPS trust for self-signed supervisor TLS uses `SUPERVISOR_TLS_CA` in the
+Rust FoldOps agent (`packages/foldops/`). FoldingOS stages the CA and terminates
+TLS on the supervisor per [ADR-0019](adr/0019-foldops-supervisor-provisioning-and-tls.md).
 
 ---
 

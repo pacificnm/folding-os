@@ -12,8 +12,11 @@ v1.1 (2026-06-11)
 **Revision 2.3 (2026-06-15):** Upstream object prefix `/release/` on
 `releases.folding-os.com` per ADR-0017 v1.1.
 
-**Revision 2.2 (2026-06-15):** Official upstream release origin (`releases.folding-os.com`)
-per ADR-0017.
+**Revision 2.4 (2026-06-14):** Document Milestone 4 appliance transport extensions
+per [ADR-0022](../adr/0022-foldops-rust-source-in-foldingos-monorepo.md) and
+[ADR-0023](../adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md).
+Milestone 3 shipped `deb`/schema v1 acquisition; extensions below do not alter
+the completed M3 implementation contract.
 
 ---
 
@@ -290,14 +293,27 @@ Published disk images use:
 https://releases.folding-os.com/release/images/foldingos-x86_64-<version>.img
 ```
 
-FoldOps Debian packages remain on `deb.folding-os.com` ([FoldOps install](https://www.folding-os.com/foldops)); operating-system images use the releases host above. FoldingOS nodes acquire FoldOps packages at runtime per [ADR-0018](../adr/0018-foldops-package-acquisition-and-update-model.md).
+FoldOps layout bundles publish to `packages.folding-os.com/foldops/` per
+[ADR-0023](../adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md).
+Optional Debian packages remain on `deb.folding-os.com` for general Debian hosts
+([FoldOps install](https://www.folding-os.com/foldops)). Operating-system images
+use the releases host above. FoldingOS nodes acquire FoldOps at runtime per
+[ADR-0018](../adr/0018-foldops-package-acquisition-and-update-model.md).
 
 ---
 
 # FoldOps Package Acquisition
 
-FoldingOS release images embed a pinned FoldOps acquisition manifest and the
-official archive keyring. They do **not** embed FoldOps application binaries.
+FoldingOS release images embed a pinned **bootstrap** FoldOps acquisition manifest
+and the official archive keyring. They do **not** embed FoldOps application
+binaries.
+
+Milestone 3 implemented schema version `1` with `artifact_format = "deb"` and
+`.deb` extract from `deb.folding-os.com`. Milestone 4 adds schema version `2`,
+`layout-tar-zst` bundles on `packages.folding-os.com`, supervisor-assigned
+manifests, and `foldingosctl tools acquire` per
+[ADR-0023](../adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md)
+and [4-appliance-artifact-and-monorepo-plan.md](4-appliance-artifact-and-monorepo-plan.md).
 
 ## Manifest and trust
 
@@ -375,8 +391,23 @@ Folding@home acquisition.
 
 ## Parallel Debian install path
 
-General Debian hosts install the same artifacts with `apt` against
-`deb.folding-os.com`. See [FoldOps integration](../foldops-integration.md).
+General Debian hosts install optional `.deb` artifacts with `apt` against
+`deb.folding-os.com`. FoldingOS appliances use layout bundles from
+`packages.folding-os.com` and do not run runtime `apt`. See
+[FoldOps integration](../foldops-integration.md).
+
+## Milestone 4 extensions (target)
+
+| Concern | Milestone 3 (shipped) | Milestone 4 (target) |
+| --- | --- | --- |
+| Manifest schema | `schema_version = 1`, `artifact_format = deb` | `schema_version = 2`, `artifact_format = layout-tar-zst` |
+| Manifest source | embedded bootstrap only | bootstrap floor + `/data/config/foldops/assigned-manifest.toml` |
+| Publication host | `deb.folding-os.com` | `packages.folding-os.com/foldops/` |
+| `foldingosctl` updates | OS image reflash | `foldingosctl tools acquire` from `packages.folding-os.com/foldingos-tools/` |
+| FoldOps source | external repository | `packages/foldops/` per [ADR-0022](../adr/0022-foldops-rust-source-in-foldingos-monorepo.md) |
+
+Assigned manifests and layout bundles must not require a new OS image for routine
+FoldOps or `foldingosctl` fixes.
 
 ---
 
@@ -658,6 +689,9 @@ Milestone 3 does not implement:
 - [ADR-0016: Network Provisioning Via Supervisor](../adr/0016-network-provisioning-via-supervisor.md)
 - [ADR-0014: Fixed Installation Roles](../adr/0014-fixed-installation-roles.md)
 - [ADR-0019: FoldOps Supervisor Provisioning And TLS](../adr/0019-foldops-supervisor-provisioning-and-tls.md)
+- [ADR-0022: FoldOps Rust Source In FoldingOS Monorepo](../adr/0022-foldops-rust-source-in-foldingos-monorepo.md)
+- [ADR-0023: Runtime FoldOps And foldingosctl Updates Without OS Reimage](../adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md)
+- [Milestone 4 appliance artifact and monorepo plan](4-appliance-artifact-and-monorepo-plan.md)
 - [Deployment and provisioning](../installer.md)
 - [Update system](../update-system.md)
 - [FoldOps integration](../foldops-integration.md)
