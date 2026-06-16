@@ -127,7 +127,7 @@ Supervisor recognizes MAC / enrollment token
 ↓
 Supervisor assigns role=agent
 ↓
-Supervisor streams verified image to internal disk over HTTP(S)
+Supervisor streams verified image to selected internal disk over HTTP
 ↓
 Supervisor resets inherited data-partition state, stages
 `/data/config/foldops/supervisor-ca.pem`, and clears inherited GRUB
@@ -141,6 +141,21 @@ Agent runs foldops acquire and foldops provision
 ↓
 Agent registers with supervisor and begins normal operation
 ```
+
+On the supervisor, allow each blank machine before first network boot:
+
+```bash
+sudo foldingosctl provision allow-boot <mac>
+```
+
+When a machine has multiple internal disks and automatic selection would choose
+the wrong target, pin the install disk for that MAC:
+
+```bash
+sudo foldingosctl provision allow-boot --disk /dev/sda <mac>
+```
+
+See [foldingosctl.md](foldingosctl.md) and [operations.md](operations.md).
 
 TFTP is used only for the PXE/iPXE bootstrap chain. The full release image is
 transferred over HTTP or HTTPS.
@@ -239,10 +254,19 @@ The approved implementation specification is:
 
 Validation must include:
 
-- QEMU network provisioning and update tests
+- QEMU network provisioning and update tests (`scripts/test-provision-qemu`)
 - physical supervisor bootstrap by direct flash
-- physical agent provisioning to internal SATA or NVMe
+- physical agent provisioning to internal SATA and NVMe
 - post-update Folding@home runtime behavior on agents
+
+Committed validation records:
+
+```text
+validation/network-provision-qemu-0.1.0.json
+validation/network-provision-physical-0.1.0.json
+```
+
+See [milestone/3-readiness-review.md](milestone/3-readiness-review.md).
 
 ---
 

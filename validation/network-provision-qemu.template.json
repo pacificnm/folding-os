@@ -1,0 +1,22 @@
+{
+  "acceptance_command": "./scripts/test-provision-qemu",
+  "foldingos_version": "0.1.0",
+  "git_revision": "REQUIRED",
+  "image_sha256": "REQUIRED",
+  "overall": "fail",
+  "record_type": "network_provision_qemu",
+  "schema_version": 1,
+  "tests": {
+    "agent_boot_and_data_expansion": "not_run",
+    "agent_registration": "not_run",
+    "corrupt_image_rejection": "not_run",
+    "enrollment_gating": "not_run",
+    "fah_runtime_after_update": "not_run",
+    "network_install_selected_disk_only": "not_run",
+    "staged_update_apply": "not_run",
+    "supervisor_registry_import": "not_run",
+    "undersized_target_rejection": "not_run"
+  },
+  "validation_date": "YYYY-MM-DD",
+  "validator": "REQUIRED"
+}

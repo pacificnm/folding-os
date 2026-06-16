@@ -201,6 +201,96 @@ Malformed or private-key material does not replace an existing valid key set.
 
 ---
 
+# Network Fleet Provisioning
+
+Supervisor-led fleet expansion is defined by
+[ADR-0016](adr/0016-network-provisioning-via-supervisor.md) and
+[installer.md](installer.md). The first node is always a `supervisor` installed
+by direct flash. Additional `agent` nodes network boot from the supervisor path.
+
+## Supervisor services
+
+On a provisioned supervisor:
+
+```bash
+systemctl status foldingos-provision.service foldingos-provision-boot.service
+foldingosctl registry list
+foldingosctl provision list-enrollments
+```
+
+`foldingos-provision.service` serves the HTTP provisioning API and image
+streaming endpoints. `foldingos-provision-boot.service` runs proxy-DHCP, TFTP,
+and HTTP boot assistance for blank agent machines.
+
+## Allow a blank agent to network boot
+
+Before a machine can fetch the install iPXE script, add its Ethernet MAC to the
+boot allowlist:
+
+```bash
+sudo foldingosctl provision allow-boot 00:be:43:e7:59:5e
+```
+
+On dual-disk agents where automatic target selection would pick the wrong
+internal disk, pin the install target at the same time:
+
+```bash
+sudo foldingosctl provision allow-boot --disk /dev/sda 00:be:43:e7:59:5e
+```
+
+The pinned mapping is stored at
+`/data/config/provision/boot-install-disk-allowlist` and passed to the install
+initramfs as `foldingos.install-disk=` in the iPXE kernel command line.
+
+## Registry refresh during lab work
+
+When iterating on a local build, replace the supervisor registry image with the
+candidate from `build/output/images/`:
+
+```bash
+./scripts/refresh-supervisor-registry-lab <supervisor-host> <ssh-private-key>
+```
+
+## Assign and validate agent updates
+
+Assign a desired image version on the supervisor:
+
+```bash
+foldingosctl provision assign --version 0.1.0 --all
+# or
+foldingosctl provision assign --version 0.1.0 --node <node-uuid>
+```
+
+Validate staged update behavior on physical lab hardware:
+
+```bash
+./scripts/validate-agent-update-lab <supervisor-host> <agent-host> <ssh-private-key>
+```
+
+## Automated QEMU acceptance
+
+```bash
+./scripts/test-provision-qemu
+```
+
+See [testing-strategy.md](testing-strategy.md) and
+[milestone/3-readiness-review.md](milestone/3-readiness-review.md).
+
+## Network install recovery
+
+If network installation fails before the agent reaches first boot:
+
+1. Correct enrollment, registry, networking, or target-disk faults on the
+   supervisor.
+2. Re-run `allow-boot` for the client MAC when needed.
+3. Network boot the blank machine again.
+
+Interrupted installation may leave the target disk unbootable. Repeating network
+provisioning is the supported recovery path. Direct flash remains available for
+single-node emergencies.
+
+---
+
 # Normal Operation
 
 After boot, the foundation appliance should provide:
@@ -460,6 +550,12 @@ sha256sum -c build/output/images/foldingos-x86_64-0.1.0.img.sha256
 
 # Recovery
 
+## Failed network provisioning
+
+If a blank machine fails during PXE network install before first agent boot, see
+[Network Fleet Provisioning](#network-fleet-provisioning) (network install
+recovery). Direct flash remains the single-node emergency recovery path.
+
 ## No SSH access
 
 1. Mount the EFI System Partition from another machine or from prepared boot
@@ -570,6 +666,7 @@ Validated physical systems are listed in [hardware-support.md](hardware-support.
 - [Build system](build-system.md)
 - [Boot process](boot-process.md)
 - [Physical validation](physical-validation.md)
+- [Milestone 3 readiness review](milestone/3-readiness-review.md)
 - [Deployment and provisioning](installer.md)
 - [Milestone 3 engineering specification](milestone/3-engineering-spec.md)
 - [Milestone 2 readiness review](milestone/2-readiness-review.md)

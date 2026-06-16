@@ -45,6 +45,8 @@ See [doc/milestone/2-readiness-review.md](doc/milestone/2-readiness-review.md).
 
 ## Milestone 3: Network Fleet Provisioning
 
+Status: **Complete** (2026-06-14)
+
 - Bootstrap the first supervisor by direct flash to NVMe or SATA
 - Add supervisor image registry and upstream release polling
 - Provision agent nodes over UEFI PXE/iPXE with HTTP image transfer
@@ -55,8 +57,9 @@ See [doc/milestone/2-readiness-review.md](doc/milestone/2-readiness-review.md).
 - Provision initial supervisor administrator and TLS configuration
 - Validate network provisioning on approved SATA and NVMe targets
 
-See [ADR-0016](doc/adr/0016-network-provisioning-via-supervisor.md) and
-[doc/milestone/3-engineering-spec.md](doc/milestone/3-engineering-spec.md).
+See [ADR-0016](doc/adr/0016-network-provisioning-via-supervisor.md),
+[doc/milestone/3-engineering-spec.md](doc/milestone/3-engineering-spec.md), and
+[doc/milestone/3-readiness-review.md](doc/milestone/3-readiness-review.md).
 
 The superseded combined-image USB installer is recorded in
 [ADR-0013](doc/adr/0013-combined-appliance-and-installer-image.md).

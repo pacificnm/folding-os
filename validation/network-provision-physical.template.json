@@ -1,0 +1,30 @@
+{
+  "foldingos_version": "0.1.0",
+  "git_revision": "REQUIRED",
+  "image_sha256": "REQUIRED",
+  "hardware": {
+    "firmware_version": "REQUIRED",
+    "manufacturer": "REQUIRED",
+    "model": "REQUIRED"
+  },
+  "overall": "fail",
+  "record_type": "network_provision_physical",
+  "schema_version": 1,
+  "targets": {
+    "agents": [],
+    "supervisor": {
+      "installation_method": "direct_flash",
+      "storage_transport": "REQUIRED"
+    }
+  },
+  "tests": {
+    "agent_provision_nvme": "not_run",
+    "agent_provision_sata": "not_run",
+    "agent_registration_ssh": "not_run",
+    "desired_version_update": "not_run",
+    "fah_runtime_after_update": "not_run",
+    "supervisor_direct_flash": "not_run"
+  },
+  "validation_date": "YYYY-MM-DD",
+  "validator": "REQUIRED"
+}

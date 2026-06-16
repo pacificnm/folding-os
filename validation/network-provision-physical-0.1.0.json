@@ -1,0 +1,46 @@
+{
+  "foldingos_version": "0.1.0",
+  "git_revision": "35ddb0cdbceb6d001f26fd517b6151ed8d03eff0",
+  "image_sha256": "8427d4e4aaec3194558f07a925222badaaff471d0f5e302cd3484713ef2e6d85",
+  "hardware": {
+    "firmware_version": "Dell UEFI",
+    "manufacturer": "Dell",
+    "model": "OptiPlex Micro"
+  },
+  "overall": "pass",
+  "record_type": "network_provision_physical",
+  "schema_version": 1,
+  "targets": {
+    "agents": [
+      {
+        "hostname": "folding-9da275",
+        "installation_method": "network_provision_auto_disk",
+        "node_id_prefix": "9da2751e",
+        "storage_transport": "nvme"
+      },
+      {
+        "hostname": "folding-6eac14",
+        "install_disk": "/dev/sda",
+        "installation_method": "network_provision_pinned_disk",
+        "node_id_prefix": "6eac140a",
+        "notes": "Dual-disk OptiPlex with onboard NVMe; install pinned to internal SATA via allow-boot --disk",
+        "storage_model": "Crucial SATA",
+        "storage_transport": "sata"
+      }
+    ],
+    "supervisor": {
+      "installation_method": "direct_flash",
+      "storage_transport": "nvme"
+    }
+  },
+  "tests": {
+    "agent_provision_nvme": "pass",
+    "agent_provision_sata": "pass",
+    "agent_registration_ssh": "pass",
+    "desired_version_update": "pass",
+    "fah_runtime_after_update": "pass",
+    "supervisor_direct_flash": "pass"
+  },
+  "validation_date": "2026-06-14",
+  "validator": "Jaimie Garner"
+}

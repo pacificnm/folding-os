@@ -86,8 +86,9 @@ precedence or silently choose one statement.
   [milestone/1-readiness-review.md](milestone/1-readiness-review.md).
 - Milestone 2 Folding@home runtime implementation and validation are complete;
   see [milestone/2-readiness-review.md](milestone/2-readiness-review.md).
-- Milestone 3 network fleet provisioning is the active implementation target;
-  see [ADR-0016](adr/0016-network-provisioning-via-supervisor.md) and
+- Milestone 3 network fleet provisioning implementation and validation are
+  complete; see [milestone/3-readiness-review.md](milestone/3-readiness-review.md),
+  [ADR-0016](adr/0016-network-provisioning-via-supervisor.md), and
   [milestone/3-engineering-spec.md](milestone/3-engineering-spec.md).
 - Operator build, deployment, recovery, and Folding@home runtime procedures are
   in [operations.md](operations.md).
