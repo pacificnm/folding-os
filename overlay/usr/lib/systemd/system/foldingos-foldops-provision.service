@@ -1,0 +1,14 @@
+[Unit]
+Description=Provision FoldOps ingest token and TLS configuration
+After=foldingos-installation-role.service network-online.target systemd-time-wait-sync.service data.mount
+Wants=network-online.target
+ConditionPathExists=/data/config/installation-role
+ConditionPathExists=/data/apps/foldops/current
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/foldingosctl foldops provision
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

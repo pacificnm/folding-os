@@ -106,9 +106,15 @@ Runtime FoldOps configuration and state remain under the paths defined by
 [ADR-0005](0005-configuration-ownership-and-precedence.md):
 
 ```text
-/data/config/foldops.toml
+/data/config/foldops/supervisor.env
+/data/config/foldops/agent.env
+/data/config/foldops/ingest-token
+/data/config/foldops/supervisor-ca.pem
 /data/foldops/
 ```
+
+`/data/config/foldops.toml` is reserved for a future FoldOps TOML domain;
+Milestone 3 uses the env files above instead.
 
 Download staging and acquire retry state live under `/data/state/foldops/`.
 
@@ -233,20 +239,19 @@ process; FoldingOS consumes published Debian packages, not merged source trees.
 ## Tradeoffs
 
 - Manifest-only trust in Milestone 3; signed `Release` polling is future work
-- Supervisor administrator/TLS provisioning remains a separate implementation
-  step after acquisition succeeds
+- Extract-only FoldOps install requires explicit env/TLS bootstrap in
+  `foldingosctl` ([ADR-0019](0019-foldops-supervisor-provisioning-and-tls.md))
 
 ---
 
 # Required Follow-Up
 
-Implementation specifications must define:
+Implementation specifications and `scripts/verify-systemd-graph` define the
+approved FoldOps systemd unit graph and dependency ordering.
 
-- exact systemd unit graph and dependency ordering
-- manifest schema examples and build-time verification script
-
-Supervisor ingest-token bootstrap, self-signed TLS, and EFI staging are defined
-by [ADR-0019](0019-foldops-supervisor-provisioning-and-tls.md).
+Supervisor ingest-token bootstrap, self-signed TLS, EFI staging, and the HTTPS
+front end are defined and implemented per
+[ADR-0019](0019-foldops-supervisor-provisioning-and-tls.md).
 
 ---
 

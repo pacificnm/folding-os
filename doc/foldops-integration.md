@@ -122,7 +122,12 @@ After role validation and network availability:
 2. downloads each required `.deb` from pinned URLs on `deb.folding-os.com`
 3. verifies size and SHA-256
 4. extracts and activates under `/data/apps/foldops/`
-5. enables role-appropriate FoldOps systemd units
+5. `foldingosctl foldops provision` imports the ingest token, renders env
+   files, generates supervisor TLS when required, and writes
+   `/data/state/foldops/provisioned.json`
+6. role-appropriate FoldOps systemd units start (`foldingos-foldops-serve-https`,
+   `foldingos-foldops-supervisor`, and `foldingos-foldops-agent`; see
+   [foldingosctl.md](foldingosctl.md))
 
 FoldingOS does **not** ship runtime APT.
 
@@ -158,6 +163,20 @@ Fleet-wide FoldOps authentication uses a shared ingest secret (`INGEST_TOKEN` /
 | Remote access | `foldingosctl foldops serve-https` on `:3443` | POST ingest to `https://<supervisor-host>:3443` |
 
 Generate token: `openssl rand -hex 32`
+
+Supervisor USB preparation:
+
+```bash
+sudo ./scripts/make-bootable-usb \
+  --ssh-public-key /path/to/admin-key.pub \
+  --role supervisor \
+  --foldops-ingest-token /path/to/foldops-ingest-token \
+  /dev/sdX build/output/images/foldingos-x86_64-0.1.0.img
+```
+
+Agent HTTPS trust for self-signed supervisor TLS depends on upstream FoldOps
+support for `SUPERVISOR_TLS_CA`
+([foldops#2](https://github.com/pacificnm/foldops/issues/2)).
 
 ---
 

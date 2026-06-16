@@ -369,7 +369,8 @@ message on `tty1` when a monitor is attached, as defined by
 The script is required because the release artifact is a fixed 4 GiB raw GPT
 image. Larger removable devices need backup GPT relocation before UEFI firmware
 can boot them reliably. The script also verifies the EFI bootloader layout and
-can stage administrator SSH public keys on the EFI System Partition.
+can stage administrator SSH public keys, installation role, and FoldOps ingest
+token on the EFI System Partition.
 
 Manual `dd` without `sgdisk -e` is not an approved preparation method for
 physical validation.

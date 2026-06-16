@@ -1,0 +1,16 @@
+[Unit]
+Description=FoldOps FAH farm monitoring agent
+After=foldingos-foldops-provision.service network-online.target folding-at-home.service
+Wants=network-online.target
+ConditionPathExists=/data/config/installation-role
+ConditionPathExists=/data/state/foldops/provisioned.json
+
+[Service]
+Type=simple
+EnvironmentFile=/data/config/foldops/agent.env
+ExecStart=/data/apps/foldops/current/foldops-agent/usr/bin/foldops-agent
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

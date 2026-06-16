@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -29,17 +30,19 @@ type provisionAuthorizeRequest struct {
 }
 
 type provisionAuthorizeResponse struct {
-	SchemaVersion      int    `json:"schema_version"`
-	InstallSessionID   string `json:"install_session_id"`
-	ImageVersion       string `json:"image_version"`
-	ImageSizeBytes     int64  `json:"image_size_bytes"`
-	ImageSHA256        string `json:"image_sha256"`
-	ImageStreamPath    string `json:"image_stream_path"`
-	InstallationRole   string `json:"installation_role"`
-	AuthorizedKeys     string `json:"authorized_keys"`
-	RebootRequired     bool   `json:"reboot_required"`
-	TargetDisk         string `json:"target_disk"`
-	TargetSerial       string `json:"target_serial"`
+	SchemaVersion          int    `json:"schema_version"`
+	InstallSessionID       string `json:"install_session_id"`
+	ImageVersion           string `json:"image_version"`
+	ImageSizeBytes         int64  `json:"image_size_bytes"`
+	ImageSHA256            string `json:"image_sha256"`
+	ImageStreamPath        string `json:"image_stream_path"`
+	InstallationRole       string `json:"installation_role"`
+	AuthorizedKeys         string `json:"authorized_keys"`
+	FoldOpsIngestToken     string `json:"foldops_ingest_token"`
+	FoldOpsSupervisorCAPEM string `json:"foldops_supervisor_ca_pem"`
+	RebootRequired         bool   `json:"reboot_required"`
+	TargetDisk             string `json:"target_disk"`
+	TargetSerial           string `json:"target_serial"`
 }
 
 type installSession struct {
@@ -102,6 +105,10 @@ func authorizeProvisionInstall(request provisionAuthorizeRequest) (provisionAuth
 	if err != nil {
 		return provisionAuthorizeResponse{}, err
 	}
+	foldOpsIngestToken, foldOpsSupervisorCAPEM, err := loadSupervisorFoldOpsInstallMaterials()
+	if err != nil {
+		return provisionAuthorizeResponse{}, err
+	}
 
 	sessionID, err := newInstallSessionID()
 	if err != nil {
@@ -124,18 +131,45 @@ func authorizeProvisionInstall(request provisionAuthorizeRequest) (provisionAuth
 	}
 
 	return provisionAuthorizeResponse{
-		SchemaVersion:    1,
-		InstallSessionID: sessionID,
-		ImageVersion:     entry.FoldingOSVersion,
-		ImageSizeBytes:   entry.ImageSizeBytes,
-		ImageSHA256:      entry.ImageSHA256,
-		ImageStreamPath:  fmt.Sprintf("/v1/provision/images/%s/stream", entry.FoldingOSVersion),
-		InstallationRole: agentInstallationRole,
-		AuthorizedKeys:   authorizedKeys,
-		RebootRequired:   true,
-		TargetDisk:       targetDisk,
-		TargetSerial:     targetSerial,
+		SchemaVersion:          1,
+		InstallSessionID:       sessionID,
+		ImageVersion:           entry.FoldingOSVersion,
+		ImageSizeBytes:         entry.ImageSizeBytes,
+		ImageSHA256:            entry.ImageSHA256,
+		ImageStreamPath:        fmt.Sprintf("/v1/provision/images/%s/stream", entry.FoldingOSVersion),
+		InstallationRole:       agentInstallationRole,
+		AuthorizedKeys:         authorizedKeys,
+		FoldOpsIngestToken:     foldOpsIngestToken,
+		FoldOpsSupervisorCAPEM: string(foldOpsSupervisorCAPEM),
+		RebootRequired:         true,
+		TargetDisk:             targetDisk,
+		TargetSerial:           targetSerial,
 	}, nil
+}
+
+func loadSupervisorFoldOpsInstallMaterials() (string, []byte, error) {
+	content, err := os.ReadFile(foldOpsIngestTokenPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil, errors.New("supervisor FoldOps provisioning must complete before network agent install")
+		}
+		return "", nil, fmt.Errorf("read supervisor ingest token: %w", err)
+	}
+	token, err := parseFoldOpsIngestToken(string(content))
+	if err != nil {
+		return "", nil, fmt.Errorf("supervisor ingest token is invalid: %w", err)
+	}
+	caBytes, err := os.ReadFile(filepath.Join(foldOpsTLSDir, "ca.pem"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil, errors.New("supervisor FoldOps TLS material is unavailable for network agent install")
+		}
+		return "", nil, fmt.Errorf("read supervisor TLS CA: %w", err)
+	}
+	if len(bytes.TrimSpace(caBytes)) == 0 {
+		return "", nil, errors.New("supervisor TLS CA material is empty")
+	}
+	return token, caBytes, nil
 }
 
 func resolveProvisionImageVersion(version string) (registryEntry, error) {

@@ -105,6 +105,12 @@ func dispatch(args []string) error {
 	if len(args) == 2 && args[0] == "foldops" && args[1] == "acquire" {
 		return foldOpsAcquire()
 	}
+	if len(args) == 2 && args[0] == "foldops" && args[1] == "provision" {
+		return foldOpsProvision()
+	}
+	if len(args) == 2 && args[0] == "foldops" && args[1] == "serve-https" {
+		return foldOpsServeHTTPS()
+	}
 	if len(args) == 2 && args[0] == "fah" && args[1] == "acquire" {
 		return fahAcquire()
 	}

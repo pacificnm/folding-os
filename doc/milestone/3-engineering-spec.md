@@ -136,14 +136,14 @@ Required workflow:
 sudo ./scripts/make-bootable-usb \
   --ssh-public-key /path/to/admin-key.pub \
   --role supervisor \
+  --foldops-ingest-token /path/to/foldops-ingest-token \
   /dev/sdX \
   build/output/images/foldingos-x86_64-0.1.0.img
 ```
 
-`--role supervisor` is a required Milestone 3 extension to
-`scripts/make-bootable-usb`. Until implemented, operators may provision the
-supervisor role through the approved interim mechanism defined in the
-implementation sequence below.
+`--role supervisor` stages the installation role on the EFI System Partition.
+`--foldops-ingest-token` stages the fleet FoldOps ingest token required before
+`foldingosctl foldops provision` on first supervisor boot.
 
 After first boot the supervisor must:
 
@@ -198,16 +198,18 @@ never transferred over TFTP.
 5. The supervisor streams the verified release image to the selected internal
    target disk over HTTP or HTTPS.
 6. The supervisor resets inherited persistent state on the target data
-   partition, then writes agent-only provisioning files under `/data/config/`.
+   partition, then writes agent-only provisioning files under `/data/config/`,
+   including `/data/config/foldops/supervisor-ca.pem` copied from the
+   supervisor TLS CA.
 7. The supervisor writes administrator SSH public keys and the fleet ingest
    token to the target EFI System Partition at
    `/foldingos/provision/authorized_keys` and
    `/foldingos/provision/foldops-ingest-token`, and clears any inherited GRUB
    one-shot boot state on the target EFI partition.
 8. The supervisor verifies the written image and instructs the node to reboot.
-9. The installed agent completes first-boot appliance initialization, registers
-   with the supervisor, and begins normal operation including Folding@home
-   acquisition.
+9. The installed agent completes first-boot appliance initialization, runs
+   `foldops acquire` and `foldops provision`, registers with the supervisor,
+   and begins normal operation including Folding@home acquisition.
 
 ### Inherited state reset during network install
 
@@ -362,9 +364,11 @@ FoldOps acquisition runs after:
 - installation role is validated
 - networking and time synchronization are available
 
-FoldOps systemd units must not start until acquisition succeeds. On supervisor
-role, FoldOps web must not listen remotely until administrator and TLS
-provisioning also succeed.
+FoldOps runtime services (`foldops-supervisor`, `foldops-agent`, and the HTTPS
+front end) must not start until `/data/state/foldops/provisioned.json` exists
+and validates. Provision requires verified packages at
+`/data/apps/foldops/current`. On supervisor role, FoldOps web must not listen
+remotely until ingest-token and TLS provisioning also succeed.
 
 Scheduled acquisition uses `foldingos-foldops-acquire.timer`, analogous to
 Folding@home acquisition.
@@ -397,15 +401,19 @@ install, parallel to SSH keys.
 
 `foldingosctl foldops provision`:
 
-1. reads and validates the EFI token file (supervisor and agent)
-2. persists `/data/config/foldops/ingest-token` (`0600`) on supervisor
-3. on supervisor: generates self-signed TLS under `/data/foldops/tls/`
-4. renders `/data/config/foldops/supervisor.env` and local `agent.env`
-5. on agent: renders `agent.env` with `AGENT_TOKEN` and
+1. requires verified packages at `/data/apps/foldops/current`
+2. uses persistent `/data/config/foldops/ingest-token` when present, otherwise
+   reads and validates the EFI token file (supervisor and agent)
+3. persists `/data/config/foldops/ingest-token` (`0600`) when imported from EFI
+4. on supervisor: generates self-signed TLS under `/data/foldops/tls/`, copies
+   the CA to `/data/config/foldops/supervisor-ca.pem`
+5. renders `/data/config/foldops/supervisor.env` and local `agent.env`
+6. on agent: requires `/data/config/foldops/supervisor-ca.pem`, renders
+   `agent.env` with `AGENT_TOKEN` and
    `SUPERVISOR_URL=https://<host>:3443`, where `<host>` is parsed from
    `/data/config/provision/supervisor.url`
-6. writes `/data/state/foldops/provisioned.json`
-7. removes the EFI staging file after successful import
+7. writes `/data/state/foldops/provisioned.json`
+8. removes the EFI staging file after successful EFI import
 
 Network install also writes `/data/config/foldops/supervisor-ca.pem` on the
 target data partition (public CA copied from the supervisor).
@@ -425,12 +433,13 @@ Remote HTTPS must not listen until provision succeeds.
 foldingos-installation-role.service
   → foldingos-foldops-acquire.service
   → foldingos-foldops-provision.service
-  → foldingos-foldops-provision.service
   → foldingos-provision.service / registry import
   → foldingos-foldops-serve-https.service + foldops-supervisor (loopback)
+  → foldingos-foldops-agent.service
 ```
 
 Agents run `foldops acquire` → `foldops provision` before `foldops-agent`.
+`foldingos-foldops-agent.service` starts after `folding-at-home.service`.
 
 ---
 
@@ -547,6 +556,14 @@ Milestone 3 adds or extends:
 | `foldingos-agent-register.service` | Agent registration oneshot |
 | `foldingos-agent-version-check.service` | Agent desired-version check on boot |
 | `foldingos-agent-apply-update.service` | Agent staged update scheduling on boot while `apply_state` is `staged` or `boot_scheduled` |
+| `foldingosctl foldops acquire` | Download, verify, and activate FoldOps packages |
+| `foldingosctl foldops provision` | Import ingest token, TLS, env, provisioned marker |
+| `foldingosctl foldops serve-https` | Supervisor TLS front end on `:3443` |
+| `foldingos-foldops-acquire.timer` | Schedule FoldOps package acquisition |
+| `foldingos-foldops-provision.service` | One-shot FoldOps env/TLS bootstrap |
+| `foldingos-foldops-serve-https.service` | Supervisor HTTPS terminator |
+| `foldingos-foldops-supervisor.service` | Loopback `foldops-supervisor` |
+| `foldingos-foldops-agent.service` | `foldops-agent` after provision |
 
 GRUB EFI must include the `loadenv` module so `grub.cfg` can read and clear
 `next_entry` from `grubenv` for one-shot update boots

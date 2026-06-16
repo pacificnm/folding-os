@@ -129,12 +129,15 @@ Supervisor assigns role=agent
 ↓
 Supervisor streams verified image to internal disk over HTTP(S)
 ↓
-Supervisor resets inherited data-partition state and clears inherited GRUB
+Supervisor resets inherited data-partition state, stages
+`/data/config/foldops/supervisor-ca.pem`, and clears inherited GRUB
 one-shot boot state on target EFI partition
 ↓
-Supervisor stages SSH public keys on target EFI partition
+Supervisor stages SSH public keys and foldops-ingest-token on target EFI partition
 ↓
 Machine reboots into installed appliance
+↓
+Agent runs foldops acquire and foldops provision
 ↓
 Agent registers with supervisor and begins normal operation
 ```
@@ -178,6 +181,10 @@ path. First appliance boot imports SSH keys and the fleet FoldOps ingest token
 into persistent configuration per
 [ADR-0007](adr/0007-first-boot-administrator-and-ssh-provisioning.md) and
 [ADR-0019](adr/0019-foldops-supervisor-provisioning-and-tls.md).
+
+Supervisor direct flash also requires `--foldops-ingest-token` on
+`scripts/make-bootable-usb`. Network-provisioned agents receive the ingest token
+on EFI and the supervisor TLS CA on the data partition during network install.
 
 ---
 

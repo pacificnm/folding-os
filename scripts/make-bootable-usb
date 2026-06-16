@@ -9,6 +9,7 @@ EFI_PARTITION_OFFSET=1048576
 SKIP_CONFIRM=0
 SSH_PUBLIC_KEY=""
 INSTALLATION_ROLE=""
+FOLDOPS_INGEST_TOKEN=""
 DEVICE=""
 IMAGE=""
 
@@ -28,6 +29,10 @@ Options:
   --role ROLE           Stage the installation role at:
                         /boot/efi/foldingos/provision/installation-role
                         ROLE must be supervisor or agent
+  --foldops-ingest-token FILE
+                        Stage the fleet FoldOps ingest token at:
+                        /boot/efi/foldingos/provision/foldops-ingest-token
+                        FILE must contain one 64-character lowercase hex line
 
 Arguments:
   device                Whole-disk block device (for example /dev/sdb)
@@ -223,6 +228,36 @@ stage_ssh_public_key() {
     "${key_file}" ::/foldingos/provision/authorized_keys
 }
 
+validate_foldops_ingest_token_file() {
+  local token_file="$1"
+
+  if [ ! -f "${token_file}" ]; then
+    echo "ERROR: FoldOps ingest token file does not exist: ${token_file}" >&2
+    exit 1
+  fi
+
+  if ! grep -Eq '^[0-9a-f]{64}$' "${token_file}"; then
+    echo "ERROR: FoldOps ingest token file must contain exactly one 64-character lowercase hex line: ${token_file}" >&2
+    exit 1
+  fi
+}
+
+stage_foldops_ingest_token() {
+  local device="$1"
+  local token_file="$2"
+  local efi_target
+  local temp_file
+
+  validate_foldops_ingest_token_file "${token_file}"
+  efi_target="$(efi_mtools_target "${device}")"
+  temp_file="$(mktemp)"
+  tr -d '\n' <"${token_file}" >"${temp_file}"
+  printf '\n' >>"${temp_file}"
+  "${MCOPY}" -o -i "${efi_target}" \
+    "${temp_file}" ::/foldingos/provision/foldops-ingest-token
+  rm -f "${temp_file}"
+}
+
 validate_installation_role() {
   local role="$1"
 
@@ -271,6 +306,14 @@ while [ "$#" -gt 0 ]; do
         exit 2
       fi
       INSTALLATION_ROLE="$2"
+      shift 2
+      ;;
+    --foldops-ingest-token)
+      if [ "$#" -lt 2 ]; then
+        usage >&2
+        exit 2
+      fi
+      FOLDOPS_INGEST_TOKEN="$2"
       shift 2
       ;;
     -h|--help)
@@ -380,6 +423,10 @@ if [ -n "${INSTALLATION_ROLE}" ]; then
   echo "Installation role: ${INSTALLATION_ROLE}"
   echo
 fi
+if [ -n "${FOLDOPS_INGEST_TOKEN}" ]; then
+  echo "FoldOps ingest token: ${FOLDOPS_INGEST_TOKEN}"
+  echo
+fi
 echo "WARNING: This will destroy all existing data on ${DEVICE}."
 echo
 
@@ -419,6 +466,11 @@ fi
 if [ -n "${INSTALLATION_ROLE}" ]; then
   echo "Staging installation role"
   stage_installation_role "${DEVICE}" "${INSTALLATION_ROLE}"
+fi
+
+if [ -n "${FOLDOPS_INGEST_TOKEN}" ]; then
+  echo "Staging FoldOps ingest token"
+  stage_foldops_ingest_token "${DEVICE}" "${FOLDOPS_INGEST_TOKEN}"
 fi
 
 efi_partition="$(partition_path "${DEVICE}" 1)"

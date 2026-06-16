@@ -100,6 +100,21 @@ ln -snf \
   /usr/lib/systemd/system/foldingos-fah-acquire.timer \
   "${TARGET_DIR}/etc/systemd/system/timers.target.wants/foldingos-fah-acquire.timer"
 ln -snf \
+  /usr/lib/systemd/system/foldingos-foldops-acquire.timer \
+  "${TARGET_DIR}/etc/systemd/system/timers.target.wants/foldingos-foldops-acquire.timer"
+ln -snf \
+  /usr/lib/systemd/system/foldingos-foldops-provision.service \
+  "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/foldingos-foldops-provision.service"
+ln -snf \
+  /usr/lib/systemd/system/foldingos-foldops-serve-https.service \
+  "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/foldingos-foldops-serve-https.service"
+ln -snf \
+  /usr/lib/systemd/system/foldingos-foldops-supervisor.service \
+  "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/foldingos-foldops-supervisor.service"
+ln -snf \
+  /usr/lib/systemd/system/foldingos-foldops-agent.service \
+  "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/foldingos-foldops-agent.service"
+ln -snf \
   /usr/lib/systemd/system/foldingos-registry-poll.timer \
   "${TARGET_DIR}/etc/systemd/system/timers.target.wants/foldingos-registry-poll.timer"
 ln -snf \

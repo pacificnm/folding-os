@@ -38,6 +38,10 @@ FAH_RUNTIME_UNITS = {
 FOLDOPS_RUNTIME_UNITS = {
     "foldingos-foldops-acquire.service",
     "foldingos-foldops-acquire.timer",
+    "foldingos-foldops-provision.service",
+    "foldingos-foldops-serve-https.service",
+    "foldingos-foldops-supervisor.service",
+    "foldingos-foldops-agent.service",
 }
 APPROVED_FOLDOPS_UNIT_NAMES = FOLDOPS_RUNTIME_UNITS
 REQUIRED_LINKS = {
@@ -75,6 +79,14 @@ REQUIRED_LINKS = {
         "/usr/lib/systemd/system/foldingos-boot-status.service",
     "etc/systemd/system/multi-user.target.wants/foldingos-fah-prepare.service":
         "/usr/lib/systemd/system/foldingos-fah-prepare.service",
+    "etc/systemd/system/multi-user.target.wants/foldingos-foldops-provision.service":
+        "/usr/lib/systemd/system/foldingos-foldops-provision.service",
+    "etc/systemd/system/multi-user.target.wants/foldingos-foldops-serve-https.service":
+        "/usr/lib/systemd/system/foldingos-foldops-serve-https.service",
+    "etc/systemd/system/multi-user.target.wants/foldingos-foldops-supervisor.service":
+        "/usr/lib/systemd/system/foldingos-foldops-supervisor.service",
+    "etc/systemd/system/multi-user.target.wants/foldingos-foldops-agent.service":
+        "/usr/lib/systemd/system/foldingos-foldops-agent.service",
     "etc/systemd/system/multi-user.target.wants/folding-at-home.service":
         "/usr/lib/systemd/system/folding-at-home.service",
     "etc/systemd/system/multi-user.target.wants/sshd.service":
@@ -169,7 +181,10 @@ UNIT_REQUIREMENTS = {
     },
     "foldingos-registry-bootstrap.service": {
         ("Unit", "Requires"): {"foldingos-installation-role.service"},
-        ("Unit", "After"): {"foldingos-installation-role.service"},
+        ("Unit", "After"): {
+            "foldingos-installation-role.service",
+            "foldingos-foldops-provision.service",
+        },
         ("Unit", "ConditionPathExists"): {"/data/config/installation-role"},
         ("Service", "ExecCondition"): {"/bin/sh -c 'grep -qx supervisor /data/config/installation-role'"},
     },
@@ -195,6 +210,7 @@ UNIT_REQUIREMENTS = {
         },
         ("Unit", "After"): {
             "foldingos-installation-role.service",
+            "foldingos-foldops-provision.service",
             "network-online.target",
         },
         ("Unit", "Wants"): {"network-online.target"},
@@ -333,6 +349,68 @@ UNIT_REQUIREMENTS = {
         ("Timer", "OnUnitInactiveSec"): {"1min"},
         ("Timer", "AccuracySec"): {"1s"},
         ("Timer", "Persistent"): {"true"},
+    },
+    "foldingos-foldops-provision.service": {
+        ("Unit", "After"): {
+            "foldingos-installation-role.service",
+            "network-online.target",
+            "systemd-time-wait-sync.service",
+            "data.mount",
+        },
+        ("Unit", "Wants"): {"network-online.target"},
+        ("Unit", "ConditionPathExists"): {
+            "/data/config/installation-role",
+            "/data/apps/foldops/current",
+        },
+        ("Service", "Type"): {"oneshot"},
+        ("Service", "RemainAfterExit"): {"yes"},
+    },
+    "foldingos-foldops-serve-https.service": {
+        ("Unit", "After"): {
+            "foldingos-foldops-provision.service",
+            "network-online.target",
+        },
+        ("Unit", "Wants"): {"network-online.target"},
+        ("Unit", "ConditionPathExists"): {
+            "/data/config/installation-role",
+            "/data/state/foldops/provisioned.json",
+        },
+        ("Service", "ExecCondition"): {"/bin/sh -c 'grep -qx supervisor /data/config/installation-role'"},
+        ("Service", "Type"): {"simple"},
+        ("Service", "Restart"): {"on-failure"},
+    },
+    "foldingos-foldops-supervisor.service": {
+        ("Unit", "After"): {
+            "foldingos-foldops-provision.service",
+            "network-online.target",
+        },
+        ("Unit", "Wants"): {"network-online.target"},
+        ("Unit", "ConditionPathExists"): {
+            "/data/config/installation-role",
+            "/data/state/foldops/provisioned.json",
+        },
+        ("Service", "ExecCondition"): {"/bin/sh -c 'grep -qx supervisor /data/config/installation-role'"},
+        ("Service", "User"): {"foldops"},
+        ("Service", "Group"): {"foldops"},
+        ("Service", "WorkingDirectory"): {"/data/foldops"},
+        ("Service", "EnvironmentFile"): {"/data/config/foldops/supervisor.env"},
+        ("Service", "Type"): {"simple"},
+        ("Service", "Restart"): {"on-failure"},
+    },
+    "foldingos-foldops-agent.service": {
+        ("Unit", "After"): {
+            "foldingos-foldops-provision.service",
+            "network-online.target",
+            "folding-at-home.service",
+        },
+        ("Unit", "Wants"): {"network-online.target"},
+        ("Unit", "ConditionPathExists"): {
+            "/data/config/installation-role",
+            "/data/state/foldops/provisioned.json",
+        },
+        ("Service", "EnvironmentFile"): {"/data/config/foldops/agent.env"},
+        ("Service", "Type"): {"simple"},
+        ("Service", "Restart"): {"on-failure"},
     },
 }
 FAILURE_ISOLATION_FORBIDDEN_REQUIRES = {

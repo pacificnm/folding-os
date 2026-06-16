@@ -205,7 +205,7 @@ FoldingOS maps Debian `/etc/foldops/*.env` paths to persistent data:
 | `/etc/foldops/supervisor.env` | `/data/config/foldops/supervisor.env` |
 | `/etc/foldops/agent.env` | `/data/config/foldops/agent.env` |
 | `/var/lib/foldops/foldops.db` | `/data/foldops/foldops.db` |
-| `/usr/share/foldops/web` | under `/data/apps/foldops/current/` after acquisition |
+| `/usr/share/foldops/web` | `/data/apps/foldops/current/foldops-web/usr/share/foldops/web` after acquisition |
 
 Systemd units use `EnvironmentFile=` pointing at the `/data/config/foldops/`
 paths. Symlinks from `/etc/foldops/` are not required.
@@ -217,7 +217,7 @@ HOST=127.0.0.1
 PORT=3000
 INGEST_TOKEN=<imported-secret>
 DB_PATH=/data/foldops/foldops.db
-WEB_ROOT=/data/apps/foldops/current/web
+WEB_ROOT=/data/apps/foldops/current/foldops-web/usr/share/foldops/web
 ```
 
 Agent env minimum after provision (paths adjusted for FoldingOS FAH layout):
@@ -315,11 +315,16 @@ so operators do not maintain a second hostname source.
 
 ## Required follow-up
 
-- Implement `foldops acquire` ([ADR-0018](0018-foldops-package-acquisition-and-update-model.md))
-- Implement `foldops provision` and HTTPS front end
-- Extend network install EFI staging for `foldops-ingest-token`
-- Extend `scripts/make-bootable-usb` with optional `--foldops-ingest-token`
+FoldingOS (Issue #62):
+
+- `foldops provision`, `foldops serve-https`, network-install ingest-token and
+  CA staging, and `make-bootable-usb --foldops-ingest-token` are implemented in
+  `foldingosctl` and the Milestone 3 systemd graph.
+
+Upstream FoldOps:
+
 - Coordinate `SUPERVISOR_TLS_CA` support in [pacificnm/foldops](https://github.com/pacificnm/foldops) if needed
+  ([foldops#2](https://github.com/pacificnm/foldops/issues/2))
 
 ---
 

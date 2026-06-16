@@ -274,7 +274,12 @@ func provisionInstall(args []string) error {
 	if err := relocateProvisionGPT(target.Path, target.SizeBytes, authorization.ImageSizeBytes); err != nil {
 		return err
 	}
-	if err := stageProvisionBootFiles(target.Path, authorization.InstallationRole, []byte(authorization.AuthorizedKeys)); err != nil {
+	if err := stageProvisionBootFiles(
+		target.Path,
+		authorization.InstallationRole,
+		[]byte(authorization.AuthorizedKeys),
+		authorization.FoldOpsIngestToken,
+	); err != nil {
 		return err
 	}
 	if err := stageProvisionPersistentConfig(
@@ -282,6 +287,7 @@ func provisionInstall(args []string) error {
 		authorization.InstallationRole,
 		supervisorURL,
 		enrollmentToken,
+		[]byte(authorization.FoldOpsSupervisorCAPEM),
 	); err != nil {
 		return err
 	}
@@ -324,7 +330,7 @@ func relocateProvisionGPTOnDisk(disk string, deviceSize, imageSize int64) error 
 	return run("sync")
 }
 
-func stageProvisionBootFilesOnDisk(disk, role string, authorizedKeys []byte) error {
+func stageProvisionBootFilesOnDisk(disk, role string, authorizedKeys []byte, foldOpsIngestToken string) error {
 	if strings.TrimSpace(role) == "" {
 		return errors.New("installation role is required")
 	}
@@ -359,6 +365,11 @@ func stageProvisionBootFilesOnDisk(disk, role string, authorizedKeys []byte) err
 	if err := os.WriteFile(filepath.Join(provisionDir, "authorized_keys"), authorizedKeys, 0644); err != nil {
 		return err
 	}
+	if role == "agent" {
+		if err := stageFoldOpsIngestTokenOnEFI(provisionDir, foldOpsIngestToken); err != nil {
+			return err
+		}
+	}
 	if err := clearGrubNextEntry(filepath.Join(mountPoint, "EFI", "BOOT", "grubenv")); err != nil {
 		return err
 	}
@@ -369,7 +380,7 @@ func stageProvisionBootFilesOnDisk(disk, role string, authorizedKeys []byte) err
 	return nil
 }
 
-func stageProvisionPersistentConfigOnDisk(disk, role, supervisorURL, enrollmentToken string) error {
+func stageProvisionPersistentConfigOnDisk(disk, role, supervisorURL, enrollmentToken string, foldOpsSupervisorCAPEM []byte) error {
 	role = strings.TrimSpace(role)
 	if role == "" {
 		return errors.New("installation role is required")
@@ -407,7 +418,13 @@ func stageProvisionPersistentConfigOnDisk(disk, role, supervisorURL, enrollmentT
 		_ = run("umount", mountPoint)
 	}()
 
-	if err := writeProvisionPersistentFiles(mountPoint, role, supervisorURL, enrollmentToken); err != nil {
+	if err := writeProvisionPersistentFiles(
+		mountPoint,
+		role,
+		supervisorURL,
+		enrollmentToken,
+		foldOpsSupervisorCAPEM,
+	); err != nil {
 		return err
 	}
 	if err := run("sync"); err != nil {
@@ -417,7 +434,7 @@ func stageProvisionPersistentConfigOnDisk(disk, role, supervisorURL, enrollmentT
 	return nil
 }
 
-func writeProvisionPersistentFiles(root, role, supervisorURL, enrollmentToken string) error {
+func writeProvisionPersistentFiles(root, role, supervisorURL, enrollmentToken string, foldOpsSupervisorCAPEM []byte) error {
 	role = strings.TrimSpace(role)
 	if role == "" {
 		return errors.New("installation role is required")
@@ -448,7 +465,31 @@ func writeProvisionPersistentFiles(root, role, supervisorURL, enrollmentToken st
 	); err != nil {
 		return err
 	}
+	if role == "agent" {
+		if err := stageFoldOpsSupervisorCAOnDataPartition(root, foldOpsSupervisorCAPEM); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+func stageFoldOpsIngestTokenOnEFI(provisionDir, token string) error {
+	token, err := parseFoldOpsIngestToken(token)
+	if err != nil {
+		return fmt.Errorf("supervisor ingest token is invalid: %w", err)
+	}
+	return os.WriteFile(filepath.Join(provisionDir, "foldops-ingest-token"), []byte(token+"\n"), 0644)
+}
+
+func stageFoldOpsSupervisorCAOnDataPartition(root string, caBytes []byte) error {
+	if len(bytes.TrimSpace(caBytes)) == 0 {
+		return errors.New("supervisor TLS CA material is empty")
+	}
+	foldopsConfigDir := filepath.Join(root, "config", "foldops")
+	if err := os.MkdirAll(foldopsConfigDir, 0755); err != nil {
+		return err
+	}
+	return atomicWrite(filepath.Join(foldopsConfigDir, "supervisor-ca.pem"), caBytes, 0644)
 }
 
 func provisionScratchDir() string {
