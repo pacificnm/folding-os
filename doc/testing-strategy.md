@@ -227,6 +227,27 @@ targets before provisioning support is claimed for them.
 
 ---
 
+# FoldOps Integration Validation
+
+Releases that claim full FoldOps integration on FoldingOS appliances should
+validate:
+
+- `foldingosctl inspect … --format json` succeeds for the `foldops` user on
+  agent and supervisor roles
+- FoldOps agent ingest on FoldingOS is produced from `foldingosctl` delegation,
+  not direct OS inspection
+- ingest payloads include FoldingOS `node_id` and `installation_role`
+- FoldOps supervisor reads fleet state through local `foldingosctl provision` and
+  `registry` JSON commands on the supervisor role
+- desired-version assignment initiated from FoldOps updates supervisor enrollment
+  state through `foldingosctl provision assign`
+- approved remote configuration workflow uses `foldingosctl config activate`
+- FoldOps agent or supervisor failure does not stop Folding@home runtime
+
+See [milestone/4-engineering-spec.md](milestone/4-engineering-spec.md).
+
+---
+
 # Folding@home Acquisition Validation
 
 Folding@home workload acquisition testing should verify:

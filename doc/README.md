@@ -44,6 +44,10 @@ This index groups the project's documentation by purpose.
   runtime completion status and validation evidence
 - [Milestone 3 readiness review](milestone/3-readiness-review.md) - network fleet
   provisioning completion status and validation evidence
+- [Milestone 4 implementation specification](milestone/4-implementation-spec.md) -
+  proposed scope for FoldOps integration through foldingosctl delegation
+- [Milestone 4 engineering specification](milestone/4-engineering-spec.md) -
+  proposed concrete contract for inspect commands, JSON output, and FoldOps wiring
 - [Deployment and provisioning](installer.md) - supervisor bootstrap and network
   fleet provisioning
 - [Milestone 3 engineering specification](milestone/3-engineering-spec.md) -

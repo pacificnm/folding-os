@@ -66,15 +66,24 @@ The superseded combined-image USB installer is recorded in
 
 ## Milestone 4: FoldOps Integration
 
-- Define node registration workflow (beyond M3 provisioning enrollment)
-- Define metrics reporting API
-- Support remote configuration from FoldOps
-- Report node health and FAH status to FoldOps management plane
+Status: **In planning** (2026-06-14)
 
-FoldOps package acquisition, role-specific service activation, and supervisor
-administrator/TLS provisioning are Milestone 3 scope per
-[ADR-0018](doc/adr/0018-foldops-package-acquisition-and-update-model.md) and
-[Milestone 3 engineering spec](doc/milestone/3-engineering-spec.md).
+- Delegate node-local operations to `foldingosctl` instead of duplicating OS logic in FoldOps
+- Add machine-readable `foldingosctl inspect` and `--format json` automation output
+- Refactor FoldOps agent ingest to collect inventory, health, FAH, and update state via `foldingosctl`
+- Correlate FoldOps ingest with FoldingOS `node-id` and installation role
+- Integrate FoldOps supervisor with local `foldingosctl provision` and `registry` fleet commands
+- Support approved remote configuration workflows (starting with Folding@home policy)
+- Validate integrated management on QEMU and physical hardware
+
+See [ADR-0020](doc/adr/0020-foldops-delegates-node-operations-to-foldingosctl.md),
+[ADR-0021](doc/adr/0021-machine-readable-foldingosctl-automation-interface.md),
+[doc/milestone/4-implementation-spec.md](doc/milestone/4-implementation-spec.md), and
+[doc/milestone/4-engineering-spec.md](doc/milestone/4-engineering-spec.md).
+
+Package acquisition, role-specific service activation, and supervisor TLS
+provisioning remain Milestone 3 scope per
+[ADR-0018](doc/adr/0018-foldops-package-acquisition-and-update-model.md).
 
 ## Milestone 5: Update System
 

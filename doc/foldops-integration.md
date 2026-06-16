@@ -113,6 +113,11 @@ FoldOps packages are **not** embedded in the FoldingOS release image. The image
 contains a pinned acquisition manifest and the official archive keyring; see
 [ADR-0018](adr/0018-foldops-package-acquisition-and-update-model.md).
 
+Milestone 4 integration strategy: FoldOps services on FoldingOS appliances
+**delegate node-local operations to `foldingosctl`** rather than reimplementing
+appliance inspection. See [ADR-0020](adr/0020-foldops-delegates-node-operations-to-foldingosctl.md)
+and [milestone/4-engineering-spec.md](milestone/4-engineering-spec.md).
+
 ## On FoldingOS appliances
 
 After role validation and network availability:
@@ -198,19 +203,13 @@ without increasing unnecessary complexity on individual nodes.
 
 # Node Identity
 
-Each FoldingOS installation should possess a unique identity.
+Each FoldingOS installation possesses a persistent identity at
+`/data/config/node-id`, created by `foldingosctl identity ensure`.
 
-Future implementation details remain subject to ADR approval.
-
-Potential identity sources include:
-
-- generated UUID
-
-- TPM identity
-
-- hardware identity
-
-- cryptographic key pairs
+Milestone 4 requires FoldOps ingest to include this `node_id` so dashboard
+inventory matches provisioning enrollment and update state. FoldOps must obtain
+identity through `foldingosctl inspect node --format json`, not by generating a
+separate identifier on FoldingOS appliances.
 
 ---
 
