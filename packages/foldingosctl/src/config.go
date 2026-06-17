@@ -37,25 +37,119 @@ type configValue struct {
 type domainConfig map[string]configValue
 
 func validateConfig(domain string) error {
+	if err := requireAutomationConfigReadAccess(); err != nil {
+		return err
+	}
 	if domain == "--all" {
-		for _, name := range domains {
-			if _, err := effectiveConfig(name, true); err != nil {
-				return err
+		results, err := validateAllConfigDomains()
+		if err != nil {
+			return err
+		}
+		valid := true
+		for _, result := range results {
+			if !result.Valid {
+				valid = false
+				break
 			}
 		}
-		return nil
+		return automationOrHumanSuccess(map[string]any{
+			"valid":   valid,
+			"domains": results,
+		}, func() error {
+			if !valid {
+				return errors.New("one or more configuration domains are invalid")
+			}
+			return nil
+		})
 	}
-	_, err := effectiveConfig(domain, true)
-	return err
+	if _, err := effectiveConfig(domain, true); err != nil {
+		return err
+	}
+	return automationOrHumanSuccess(map[string]any{
+		"domain": domain,
+		"valid":  true,
+	}, func() error {
+		return nil
+	})
+}
+
+type configValidationResult struct {
+	Domain  string  `json:"domain"`
+	Valid   bool    `json:"valid"`
+	Message *string `json:"message,omitempty"`
+}
+
+func validateAllConfigDomains() ([]configValidationResult, error) {
+	results := make([]configValidationResult, 0, len(domains))
+	for _, name := range domains {
+		if _, err := effectiveConfig(name, true); err != nil {
+			message := err.Error()
+			results = append(results, configValidationResult{
+				Domain:  name,
+				Valid:   false,
+				Message: &message,
+			})
+			continue
+		}
+		results = append(results, configValidationResult{
+			Domain: name,
+			Valid:  true,
+		})
+	}
+	return results, nil
 }
 
 func printEffectiveConfig(domain string) error {
-	content, err := effectiveConfig(domain, true)
+	if err := requireAutomationConfigReadAccess(); err != nil {
+		return err
+	}
+	merged, err := loadEffectiveConfigForDomain(domain)
 	if err != nil {
 		return err
 	}
-	fmt.Print(content)
-	return nil
+	return automationOrHumanSuccess(map[string]any{
+		"domain": domain,
+		"config": domainConfigToMap(merged),
+	}, func() error {
+		content, err := effectiveConfig(domain, true)
+		if err != nil {
+			return err
+		}
+		fmt.Print(content)
+		return nil
+	})
+}
+
+func loadEffectiveConfigForDomain(domain string) (domainConfig, error) {
+	if !validDomain(domain) {
+		return nil, fmt.Errorf("unknown configuration domain %q", domain)
+	}
+	merged, err := loadEffective(domain, filepath.Join(configDir, domain+".toml"), true)
+	if err != nil {
+		merged, err = loadEffective(domain, filepath.Join(configDir, "last-good", domain+".toml"), false)
+	}
+	if err != nil {
+		merged, err = loadEffective(domain, "", false)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return merged, nil
+}
+
+func domainConfigToMap(config domainConfig) map[string]any {
+	result := make(map[string]any, len(config))
+	for key, value := range config {
+		switch value.kind {
+		case "int":
+			result[key] = value.ival
+		case "bool":
+			result[key] = value.bval
+		default:
+			result[key] = value.text
+		}
+	}
+	return result
 }
 
 func effectiveConfig(domain string, write bool) (string, error) {

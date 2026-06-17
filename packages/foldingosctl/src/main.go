@@ -33,12 +33,23 @@ func main() {
 		if errors.Is(err, errApplyUpdateNotSchedulable) {
 			os.Exit(1)
 		}
+		if automationJSONEnabled() {
+			_ = writeAutomationFailure(err)
+			os.Exit(1)
+		}
 		fmt.Fprintf(os.Stderr, "foldingosctl: %v\n", err)
 		os.Exit(1)
 	}
 }
 
 func dispatch(args []string) error {
+	args, format := stripFormatFlag(args)
+	automationCtx.format = format
+
+	if len(args) >= 2 && args[0] == "inspect" {
+		setAutomationCommand(formatAutomationCommand("inspect", args[1]))
+		return inspectCommand(args[1], args[2:])
+	}
 	if len(args) == 2 && args[0] == "storage" && args[1] == "expand-data" {
 		return expandData()
 	}
@@ -67,9 +78,11 @@ func dispatch(args []string) error {
 		return provisionApplyUpdate(args[2:])
 	}
 	if len(args) == 2 && args[0] == "provision" && args[1] == "list-enrollments" {
+		setAutomationCommand("provision list-enrollments")
 		return provisionListEnrollments()
 	}
 	if len(args) >= 3 && args[0] == "provision" && args[1] == "assign" {
+		setAutomationCommand(formatAutomationCommand("provision", "assign"))
 		return provisionAssign(args[2:])
 	}
 	if len(args) == 2 && args[0] == "provision" && args[1] == "boot" {
@@ -100,9 +113,11 @@ func dispatch(args []string) error {
 		return registryPoll()
 	}
 	if len(args) == 2 && args[0] == "registry" && args[1] == "list" {
+		setAutomationCommand("registry list")
 		return listRegistry()
 	}
 	if len(args) == 3 && args[0] == "registry" && args[1] == "show" {
+		setAutomationCommand("registry show")
 		return showRegistry(args[2])
 	}
 	if len(args) == 2 && args[0] == "boot" && args[1] == "status" {
@@ -142,16 +157,18 @@ func dispatch(args []string) error {
 		return fahRun()
 	}
 	if len(args) == 3 && args[0] == "config" && args[1] == "validate" {
+		setAutomationCommand(formatAutomationCommand("config", "validate", args[2]))
 		return validateConfig(args[2])
 	}
 	if len(args) == 3 && args[0] == "config" && args[1] == "effective" {
+		setAutomationCommand(formatAutomationCommand("config", "effective", args[2]))
 		return printEffectiveConfig(args[2])
 	}
 	if len(args) == 4 && args[0] == "config" && args[1] == "activate" {
 		return activateConfig(args[2], args[3])
 	}
 
-	fmt.Fprintln(os.Stderr, "usage: foldingosctl <boot|config|fah|foldops|identity|provision|registry|storage|tools> <command> [arguments]")
+	fmt.Fprintln(os.Stderr, "usage: foldingosctl <boot|config|fah|foldops|identity|inspect|provision|registry|storage|tools> <command> [arguments]")
 	os.Exit(2)
 	return nil
 }

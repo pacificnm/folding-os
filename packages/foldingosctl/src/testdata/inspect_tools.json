@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "ok": true,
+  "command": "inspect tools",
+  "data": {
+    "bootstrap_tools_version": "0.1.0",
+    "assigned_tools_version": "0.2.0",
+    "effective_tools_version": "0.2.0",
+    "verified": false,
+    "binary": {
+      "path": "/usr/bin/foldingosctl",
+      "size_bytes": 19,
+      "mod_time_unix": 1704067200
+    }
+  }
+}
