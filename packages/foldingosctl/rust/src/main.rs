@@ -1,5 +1,11 @@
 mod automation;
+mod auth;
 mod cli;
+mod config_host;
+mod identity;
+mod inspect;
+mod paths;
+mod role;
 
 use cli::{dispatch, exit_code_for_error, print_human_error};
 

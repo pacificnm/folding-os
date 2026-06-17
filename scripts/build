@@ -182,9 +182,9 @@ if [ ! -x "${FOLDINGOSCTL_RUST_BINARY}" ]; then
   echo "${FOLDINGOSCTL_RUST_BINARY}"
   exit 1
 fi
-if ! grep -aFq "FOLDINGOSCTL_RUST_PHASE_1" "${FOLDINGOSCTL_RUST_BINARY}"; then
+if ! grep -aFq "FOLDINGOSCTL_RUST_PHASE_2" "${FOLDINGOSCTL_RUST_BINARY}"; then
   echo "ERROR: Built foldingosctl-rust binary is stale."
-  echo "Expected Rust migration phase 1 marker was not found."
+  echo "Expected Rust migration phase 2 marker was not found."
   exit 1
 fi
 
