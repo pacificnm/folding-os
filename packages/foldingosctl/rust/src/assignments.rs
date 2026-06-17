@@ -1,5 +1,7 @@
 use std::fs;
 
+use serde::Deserialize;
+
 use crate::enrollment::EnrollmentRecord;
 use crate::fs_atomic::atomic_write;
 use crate::identity::read_node_id;
@@ -112,6 +114,49 @@ pub fn apply_supervisor_local_assignments_if_needed(
 ) -> Result<(), String> {
     if should_apply_local_supervisor_assignments(paths, scope, target_node_id)? {
         apply_local_software_assignments(paths, record)?;
+    }
+    Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+struct DesiredVersionApiResponse {
+    #[serde(default)]
+    desired_foldops_manifest: String,
+    #[serde(default)]
+    desired_tools_assignment: Option<ToolsAssignment>,
+}
+
+pub fn sync_local_software_assignments_from_supervisor(
+    paths: &AppliancePaths,
+    supervisor_url: &str,
+    node_id: &str,
+    token: &str,
+) -> Result<(), String> {
+    let endpoint = crate::provision::util::join_supervisor_url(
+        supervisor_url,
+        &format!("/v1/agents/desired-version?node_id={node_id}"),
+    )?;
+    let (status, body) = crate::provision::util::http_get_json(
+        &endpoint,
+        &[("X-FoldingOS-Enrollment-Token", token)],
+    )?;
+    if status != 200 {
+        return Err(format!(
+            "desired-version query failed with status {status}: {}",
+            body.trim()
+        ));
+    }
+    let response: DesiredVersionApiResponse =
+        serde_json::from_str(&body).map_err(|error| error.to_string())?;
+    if !response.desired_foldops_manifest.trim().is_empty() {
+        write_assigned_foldops_manifest(paths, response.desired_foldops_manifest.trim())?;
+    } else {
+        clear_assigned_foldops_manifest(paths)?;
+    }
+    if let Some(assignment) = response.desired_tools_assignment {
+        write_assigned_tools_version(paths, &assignment)?;
+    } else {
+        clear_assigned_tools_version(paths)?;
     }
     Ok(())
 }

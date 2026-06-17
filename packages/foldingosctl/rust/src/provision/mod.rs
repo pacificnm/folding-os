@@ -1,5 +1,20 @@
 mod assign;
+mod authorize;
 mod boot;
+mod enroll;
+mod enrollment_api;
+mod grub_env;
+mod http_server;
+mod install;
+mod network_boot;
+mod release_image;
+mod role_cmd;
+mod serve;
+mod ssh;
+mod staged_lock;
+mod targets;
+mod update;
+pub(crate) mod util;
 
 use crate::paths::AppliancePaths;
 
@@ -9,6 +24,15 @@ pub fn run(paths: &AppliancePaths, subcommand: &str, args: &[String]) -> Result<
         "assign" => assign::assign(paths, args),
         "list-allow-boot" => boot::list_allow_boot(paths),
         "allow-boot" => boot::allow_boot(paths, args),
+        "ssh" => ssh::provision_ssh(paths),
+        "role" => role_cmd::provision_role(paths),
+        "serve" => serve::provision_serve(paths),
+        "enroll" => enroll::provision_enroll(paths),
+        "check-version" => update::provision_check_version_and_stage(paths),
+        "report-update-status" => update::provision_report_update_status(paths, args),
+        "apply-update" => update::provision_apply_update(paths, args),
+        "boot" => network_boot::provision_boot(paths),
+        "install" => install::provision_install(paths, args),
         other => Err(format!("unknown provision subcommand {other:?}")),
     }
 }

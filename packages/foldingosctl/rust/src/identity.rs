@@ -3,11 +3,15 @@ use std::net::IpAddr;
 use std::process::Command;
 use std::str::FromStr;
 
+use getrandom::getrandom;
 use regex::Regex;
 use std::sync::LazyLock;
 
+use crate::config::{effective_config, parse_domain, HOSTNAME_PATTERN};
 use crate::config_host::read_hostname;
+use crate::fs_atomic::atomic_write;
 use crate::paths::AppliancePaths;
+use crate::process::run_command;
 
 static UUID_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
@@ -18,6 +22,74 @@ pub fn read_node_id(paths: &AppliancePaths) -> Result<String, String> {
     let content = fs::read(paths.node_id_path())
         .map_err(|error| format!("read node id: {error}"))?;
     parse_node_id_file(&content)
+}
+
+pub fn ensure_identity(paths: &AppliancePaths) -> Result<(), String> {
+    let node_id = ensure_node_id_file(paths)?;
+    let system = effective_config(paths, "system", false)?;
+    let values = parse_domain("system", &system, true)?;
+    let mut hostname = values
+        .get("identity.hostname")
+        .map(|value| value.text.clone())
+        .unwrap_or_default();
+    if hostname.is_empty() {
+        let compact: String = node_id.replace('-', "");
+        hostname = format!("folding-{}", &compact[..compact.len().min(6)]);
+        let generated = format!(
+            "schema_version = 1\n\n[identity]\nhostname = {hostname:?}\n"
+        );
+        atomic_write(&paths.system_config_path(), generated.as_bytes(), 0o644)?;
+        effective_config(paths, "system", true)?;
+    }
+    if !HOSTNAME_PATTERN.is_match(&hostname) {
+        return Err("effective hostname is invalid".into());
+    }
+    run_command("hostnamectl", &["set-hostname", "--static", &hostname])
+}
+
+fn ensure_node_id_file(paths: &AppliancePaths) -> Result<String, String> {
+    let node_id_path = paths.node_id_path();
+    match fs::read(&node_id_path) {
+        Ok(content) => match parse_node_id_file(&content) {
+            Ok(node_id) => {
+                if String::from_utf8_lossy(&content).trim() != node_id {
+                    atomic_write(
+                        &node_id_path,
+                        format!("{node_id}\n").as_bytes(),
+                        0o644,
+                    )?;
+                }
+                Ok(node_id)
+            }
+            Err(_) => {
+                let node_id = new_uuid()?;
+                atomic_write(
+                    &node_id_path,
+                    format!("{node_id}\n").as_bytes(),
+                    0o644,
+                )?;
+                Ok(node_id)
+            }
+        },
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            let node_id = new_uuid()?;
+            atomic_write(
+                &node_id_path,
+                format!("{node_id}\n").as_bytes(),
+                0o644,
+            )?;
+            Ok(node_id)
+        }
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+fn new_uuid() -> Result<String, String> {
+    let mut value = [0u8; 16];
+    getrandom(&mut value).map_err(|error| error.to_string())?;
+    value[6] = (value[6] & 0x0f) | 0x40;
+    value[8] = (value[8] & 0x3f) | 0x80;
+    Ok(format_uuid_bytes(&value))
 }
 
 fn parse_node_id_file(content: &[u8]) -> Result<String, String> {

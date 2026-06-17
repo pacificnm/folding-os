@@ -1,8 +1,15 @@
 use std::fs;
+use std::io::Read;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
+use crate::fs_atomic::{atomic_write, contains_string};
 use crate::paths::AppliancePaths;
+
+pub const RELEASE_IMAGE_SIZE_BYTES: i64 = 4_294_967_296;
 
 const VALID_ROLLOUT_STATES: &[&str] = &["staged", "ready", "retired"];
 
@@ -21,10 +28,10 @@ pub struct RegistryEntry {
     pub local_image_path: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-struct RegistryIndex {
-    schema_version: i32,
-    versions: Vec<String>,
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct RegistryIndex {
+    pub schema_version: i32,
+    pub versions: Vec<String>,
 }
 
 pub fn list_registry(paths: &AppliancePaths) -> Result<serde_json::Value, String> {
@@ -115,6 +122,111 @@ fn validate_registry_entry(mut entry: RegistryEntry) -> Result<RegistryEntry, St
         ));
     }
     Ok(entry)
+}
+
+pub fn registry_image_path(paths: &AppliancePaths, version: &str) -> PathBuf {
+    paths
+        .registry_images_dir
+        .join(format!("foldingos-x86_64-{version}.img"))
+}
+
+pub fn read_embedded_build_revision(paths: &AppliancePaths) -> String {
+    match fs::read_to_string(&paths.embedded_build_revision) {
+        Ok(content) => {
+            let revision = content.trim();
+            if revision.is_empty() {
+                "unknown".into()
+            } else {
+                revision.to_string()
+            }
+        }
+        Err(_) => "unknown".into(),
+    }
+}
+
+pub fn read_upstream_releases_url(paths: &AppliancePaths) -> Result<Option<String>, String> {
+    match fs::read_to_string(&paths.upstream_releases_url) {
+        Ok(content) => {
+            let url = content.trim();
+            if url.is_empty() {
+                return Ok(None);
+            }
+            if !url.starts_with("https://") {
+                return Err(format!("upstream releases URL must use HTTPS: {url:?}"));
+            }
+            Ok(Some(url.to_string()))
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(format!("read upstream releases URL: {error}")),
+    }
+}
+
+pub fn save_registry_entry(paths: &AppliancePaths, mut entry: RegistryEntry) -> Result<(), String> {
+    if entry.import_timestamp.is_empty() {
+        entry.import_timestamp = current_import_timestamp();
+    }
+    let validated = validate_registry_entry(entry)?;
+    let content = serde_json::to_string_pretty(&validated)
+        .map_err(|error| error.to_string())?;
+    atomic_write(
+        &paths.registry_entry_path(&validated.foldingos_version),
+        format!("{content}\n").as_bytes(),
+        0o644,
+    )?;
+    let mut index = load_registry_index(paths)?;
+    if !contains_string(&index.versions, &validated.foldingos_version) {
+        index.versions.push(validated.foldingos_version);
+    }
+    save_registry_index(paths, &index)
+}
+
+fn save_registry_index(paths: &AppliancePaths, index: &RegistryIndex) -> Result<(), String> {
+    let mut index = index.clone();
+    index.schema_version = 1;
+    index.versions.sort();
+    let content = serde_json::to_string_pretty(&index)
+        .map_err(|error| error.to_string())?;
+    atomic_write(&paths.registry_index, format!("{content}\n").as_bytes(), 0o644)
+}
+
+pub fn verify_registry_image_file(
+    path: &Path,
+    expected_digest: &str,
+    expected_size: i64,
+) -> Result<(), String> {
+    let metadata = fs::metadata(path).map_err(|error| error.to_string())?;
+    if metadata.len() as i64 != expected_size {
+        return Err(format!(
+            "image size {} does not match expected {expected_size}",
+            metadata.len()
+        ));
+    }
+    let mut file = fs::File::open(path).map_err(|error| error.to_string())?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0_u8; 8192];
+    loop {
+        let read = file.read(&mut buffer).map_err(|error| error.to_string())?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    let actual = format!("{:x}", hasher.finalize());
+    if actual != expected_digest {
+        return Err("image SHA-256 does not match registry metadata".into());
+    }
+    Ok(())
+}
+
+pub fn current_import_timestamp() -> String {
+    Command::new("date")
+        .args(["-u", "+%Y-%m-%dT%H:%M:%SZ"])
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "1970-01-01T00:00:00Z".into())
 }
 
 #[derive(Debug, Deserialize)]

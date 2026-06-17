@@ -2,7 +2,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 pub const SCHEMA_VERSION: i32 = 1;
-pub const MIGRATION_MARKER: &str = "FOLDINGOSCTL_RUST_PHASE_3";
+pub const MIGRATION_MARKER: &str = "FOLDINGOSCTL_RUST_PHASE_4";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputFormat {

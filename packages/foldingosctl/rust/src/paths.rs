@@ -29,10 +29,34 @@ pub struct AppliancePaths {
     pub automation_policy: PathBuf,
     pub registry_index: PathBuf,
     pub registry_entries_dir: PathBuf,
+    pub registry_images_dir: PathBuf,
+    pub upstream_releases_url: PathBuf,
+    pub embedded_build_revision: PathBuf,
     pub foldops_registry_index: PathBuf,
     pub foldops_registry_releases_dir: PathBuf,
     pub tools_registry_index: PathBuf,
     pub tools_registry_releases_dir: PathBuf,
+    pub provisioned_ssh_keys: PathBuf,
+    pub active_ssh_keys: PathBuf,
+    pub ssh_host_key: PathBuf,
+    pub provisioned_installation_role: PathBuf,
+    pub agent_enrollment_state: PathBuf,
+    pub provision_listen_url: PathBuf,
+    pub provision_sessions_dir: PathBuf,
+    pub staged_update_image: PathBuf,
+    pub staged_update_partial: PathBuf,
+    pub staged_update_lock: PathBuf,
+    pub provision_boot_tftp_root: PathBuf,
+    pub provision_boot_interface: PathBuf,
+    pub provision_boot_dnsmasq_config: PathBuf,
+    pub provision_boot_isolated_network: PathBuf,
+    pub provision_boot_assets_dir: PathBuf,
+    pub update_grub_env: PathBuf,
+    pub update_boot_assets_dir: PathBuf,
+    pub shared_update_vmlinuz: PathBuf,
+    pub shared_update_initramfs: PathBuf,
+    pub foldops_ingest_token: PathBuf,
+    pub foldops_tls_dir: PathBuf,
 }
 
 impl Default for AppliancePaths {
@@ -65,10 +89,40 @@ impl Default for AppliancePaths {
             automation_policy: PathBuf::from("/usr/share/foldingos/foldops-supervisor-automation.toml"),
             registry_index: PathBuf::from("/data/registry/index.json"),
             registry_entries_dir: PathBuf::from("/data/registry/entries"),
+            registry_images_dir: PathBuf::from("/data/registry/images"),
+            upstream_releases_url: PathBuf::from("/data/config/provision/upstream-releases.url"),
+            embedded_build_revision: PathBuf::from("/usr/share/foldingos/build-revision"),
             foldops_registry_index: PathBuf::from("/data/registry/foldops/index.json"),
             foldops_registry_releases_dir: PathBuf::from("/data/registry/foldops/releases"),
             tools_registry_index: PathBuf::from("/data/registry/tools/index.json"),
             tools_registry_releases_dir: PathBuf::from("/data/registry/tools/releases"),
+            provisioned_ssh_keys: PathBuf::from("/boot/efi/foldingos/provision/authorized_keys"),
+            active_ssh_keys: PathBuf::from("/data/config/ssh/authorized_keys"),
+            ssh_host_key: PathBuf::from("/data/config/ssh/host-keys/ssh_host_ed25519_key"),
+            provisioned_installation_role: PathBuf::from(
+                "/boot/efi/foldingos/provision/installation-role",
+            ),
+            agent_enrollment_state: PathBuf::from("/data/state/provision/enrolled"),
+            provision_listen_url: PathBuf::from("/data/config/provision/listen.url"),
+            provision_sessions_dir: PathBuf::from("/data/provision/sessions"),
+            staged_update_image: PathBuf::from("/data/state/provision/staged-update.img"),
+            staged_update_partial: PathBuf::from("/data/state/provision/staged-update.partial"),
+            staged_update_lock: PathBuf::from("/data/state/provision/staged-update.lock"),
+            provision_boot_tftp_root: PathBuf::from("/data/provision/boot/tftp"),
+            provision_boot_interface: PathBuf::from("/data/config/provision/boot.interface"),
+            provision_boot_dnsmasq_config: PathBuf::from("/data/config/provision/dnsmasq.conf"),
+            provision_boot_isolated_network: PathBuf::from(
+                "/data/config/provision/boot-isolated-network",
+            ),
+            provision_boot_assets_dir: PathBuf::from("/usr/share/foldingos/boot"),
+            update_grub_env: PathBuf::from("/boot/efi/EFI/BOOT/grubenv"),
+            update_boot_assets_dir: PathBuf::from("/boot/efi/foldingos/update"),
+            shared_update_vmlinuz: PathBuf::from("/usr/share/foldingos/boot/vmlinuz"),
+            shared_update_initramfs: PathBuf::from(
+                "/usr/share/foldingos/boot/install-initramfs.cpio.gz",
+            ),
+            foldops_ingest_token: PathBuf::from("/data/config/foldops/ingest-token"),
+            foldops_tls_dir: PathBuf::from("/data/foldops/tls"),
         }
     }
 }
@@ -116,5 +170,50 @@ impl AppliancePaths {
 
     pub fn tools_registry_entry_path(&self, version: &str) -> PathBuf {
         self.tools_registry_releases_dir.join(format!("{version}.json"))
+    }
+
+    pub fn install_session_path(&self, session_id: &str) -> PathBuf {
+        self.provision_sessions_dir.join(format!("{session_id}.json"))
+    }
+
+    pub fn update_session_path(&self, session_id: &str) -> PathBuf {
+        self.provision_sessions_dir
+            .join(format!("update-{session_id}.json"))
+    }
+
+    pub fn ssh_host_key_pub(&self) -> PathBuf {
+        PathBuf::from(format!("{}.pub", self.ssh_host_key.display()))
+    }
+
+    pub fn foldops_supervisor_ca_pem(&self) -> PathBuf {
+        self.foldops_tls_dir.join("ca.pem")
+    }
+
+    pub fn domain_active_path(&self, domain: &str) -> PathBuf {
+        self.config_dir.join(format!("{domain}.toml"))
+    }
+
+    pub fn domain_defaults_path(&self, domain: &str) -> PathBuf {
+        self.defaults_dir.join(format!("{domain}.toml"))
+    }
+
+    pub fn domain_overrides_path(&self, domain: &str) -> PathBuf {
+        self.config_dir.join(format!("overrides/{domain}.toml"))
+    }
+
+    pub fn domain_effective_path(&self, domain: &str) -> PathBuf {
+        self.effective_dir.join(format!("{domain}.toml"))
+    }
+
+    pub fn domain_last_good_path(&self, domain: &str) -> PathBuf {
+        self.config_dir.join(format!("last-good/{domain}.toml"))
+    }
+
+    pub fn domain_lock_path(&self, domain: &str) -> PathBuf {
+        PathBuf::from(format!("/run/lock/foldingos-config-{domain}.lock"))
+    }
+
+    pub fn secrets_dir(&self) -> PathBuf {
+        self.config_dir.join("secrets")
     }
 }

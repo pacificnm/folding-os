@@ -5,7 +5,7 @@ mod system;
 mod tools;
 mod update;
 
-pub use tools::ToolsAssignment;
+pub use tools::{hash_file_at_path, validate_tools_assignment_public, ToolsAssignment};
 
 use crate::automation_policy::require_inspectable_role;
 use crate::identity::read_node_identity;

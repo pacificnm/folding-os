@@ -142,7 +142,11 @@ fn tools_installation_verified(paths: &AppliancePaths, assignment: &ToolsAssignm
         .is_some_and(|digest| digest == assignment.sha256)
 }
 
-fn hash_file_at_path(path: &std::path::Path, expected_size: i64) -> Result<String, String> {
+pub fn validate_tools_assignment_public(assignment: &ToolsAssignment) -> Result<(), String> {
+    validate_tools_assignment(assignment)
+}
+
+pub fn hash_file_at_path(path: &std::path::Path, expected_size: i64) -> Result<String, String> {
     let mut file = fs::File::open(path).map_err(|error| error.to_string())?;
     let mut hasher = Sha256::new();
     let mut buffer = [0_u8; 8192];

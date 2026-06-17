@@ -2,19 +2,31 @@ use crate::automation::{
     format_automation_command, write_failure, write_success, AutomationContext, MIGRATION_MARKER,
     OutputFormat,
 };
+use crate::boot_cmd::boot_status;
+use crate::config_cmd::{self, ConfigCommandOutput};
+use crate::identity::ensure_identity;
 use crate::inspect;
 use crate::paths::AppliancePaths;
 use crate::provision;
-use crate::registry_cmd;
+use crate::registry_cmd::{self, RegistryOutput};
+use crate::storage::expand_data;
 
 const USAGE: &str =
     "usage: foldingosctl <boot|config|fah|foldops|identity|inspect|provision|registry|storage|tools> <command> [arguments]";
+
+const PROVISION_JSON_COMMANDS: &[&str] = &[
+    "list-enrollments",
+    "assign",
+    "list-allow-boot",
+    "allow-boot",
+];
 
 #[derive(Debug)]
 pub enum CliError {
     Usage,
     Failed(String),
     AlreadyReported,
+    Exit(i32),
 }
 
 impl CliError {
@@ -23,6 +35,7 @@ impl CliError {
             Self::Usage => USAGE.to_string(),
             Self::Failed(message) => message.clone(),
             Self::AlreadyReported => String::new(),
+            Self::Exit(_) => String::new(),
         }
     }
 }
@@ -42,17 +55,14 @@ pub fn dispatch(mut args: Vec<String>) -> Result<(), CliError> {
     let paths = AppliancePaths::default();
 
     if args[0] == "inspect" {
-        if args.len() < 2 {
-            return Err(CliError::Usage);
-        }
-        let subcommand = args[1].clone();
-        let extra = args[2..].to_vec();
-        let command = format_automation_command(&["inspect", &subcommand]);
-        let ctx = AutomationContext::new(format, command);
-        return match inspect::run(&paths, &subcommand, &extra) {
-            Ok(data) => publish_success(&ctx, data, &subcommand),
-            Err(message) => publish_failure(&ctx, message),
-        };
+        return dispatch_json_group(
+            format,
+            &["inspect", &args.get(1).cloned().unwrap_or_default()],
+            args.get(1).cloned().ok_or(CliError::Usage)?,
+            args.get(2..).unwrap_or(&[]).to_vec(),
+            |paths, subcommand, extra| inspect::run(paths, subcommand, extra),
+            &paths,
+        );
     }
 
     if args[0] == "provision" {
@@ -61,11 +71,20 @@ pub fn dispatch(mut args: Vec<String>) -> Result<(), CliError> {
         }
         let subcommand = args[1].clone();
         let extra = args[2..].to_vec();
-        let command = format_automation_command(&["provision", &subcommand]);
-        let ctx = AutomationContext::new(format, command);
+        if PROVISION_JSON_COMMANDS.contains(&subcommand.as_str()) {
+            let command = format_automation_command(&["provision", &subcommand]);
+            let ctx = AutomationContext::new(format, command);
+            return match provision::run(&paths, &subcommand, &extra) {
+                Ok(data) => publish_success(&ctx, data, &subcommand),
+                Err(message) => publish_failure(&ctx, message),
+            };
+        }
         return match provision::run(&paths, &subcommand, &extra) {
-            Ok(data) => publish_success(&ctx, data, &subcommand),
-            Err(message) => publish_failure(&ctx, message),
+            Ok(_) => Ok(()),
+            Err(message) if subcommand == "apply-update" && message.contains("not schedulable") => {
+                Err(CliError::Exit(1))
+            }
+            Err(message) => Err(CliError::Failed(message)),
         };
     }
 
@@ -82,17 +101,79 @@ pub fn dispatch(mut args: Vec<String>) -> Result<(), CliError> {
         };
         let ctx = AutomationContext::new(format, command);
         return match registry_cmd::run(&paths, &subcommand, &extra) {
-            Ok(data) => publish_success(&ctx, data, &subcommand),
+            Ok(RegistryOutput::Json(data)) => publish_success(&ctx, data, &subcommand),
+            Ok(RegistryOutput::Silent) => Ok(()),
             Err(message) => publish_failure(&ctx, message),
         };
+    }
+
+    if args[0] == "config" {
+        if args.len() < 2 {
+            return Err(CliError::Usage);
+        }
+        let subcommand = args[1].clone();
+        let extra = args[2..].to_vec();
+        let command = match subcommand.as_str() {
+            "validate" | "effective" if !extra.is_empty() => {
+                format_automation_command(&["config", &subcommand, &extra[0]])
+            }
+            _ => format_automation_command(&["config", &subcommand]),
+        };
+        let ctx = AutomationContext::new(format, command);
+        return match config_cmd::run(&paths, &subcommand, &extra, format) {
+            Ok(ConfigCommandOutput::Json(data)) => publish_success(&ctx, data, &subcommand),
+            Ok(ConfigCommandOutput::EffectiveHuman(content)) => {
+                print!("{content}");
+                Ok(())
+            }
+            Ok(ConfigCommandOutput::Silent) => Ok(()),
+            Err(message) => publish_failure(&ctx, message),
+        };
+    }
+
+    if args.len() == 2 && args[0] == "identity" && args[1] == "ensure" {
+        return ensure_identity(&paths).map_err(CliError::Failed);
+    }
+
+    if args.len() == 2 && args[0] == "storage" && args[1] == "expand-data" {
+        return expand_data(&paths).map_err(CliError::Failed);
+    }
+
+    if args.len() == 2 && args[0] == "boot" && args[1] == "status" {
+        return boot_status(&paths).map_err(CliError::Failed);
     }
 
     let command = infer_command_name(&args);
     let ctx = AutomationContext::new(format, command);
     publish_failure(
         &ctx,
-        format!("command {} is not implemented in the Rust foldingosctl migration yet", ctx.command),
+        format!(
+            "command {} is not implemented in the Rust foldingosctl migration yet",
+            ctx.command
+        ),
     )
+}
+
+fn dispatch_json_group(
+    format: OutputFormat,
+    command_parts: &[&str],
+    subcommand: String,
+    extra: Vec<String>,
+    run: fn(&AppliancePaths, &str, &[String]) -> Result<serde_json::Value, String>,
+    paths: &AppliancePaths,
+) -> Result<(), CliError> {
+    if subcommand.is_empty() {
+        return Err(CliError::Usage);
+    }
+    if !extra.is_empty() {
+        return Err(CliError::Failed(format!("unknown inspect option {:?}", extra[0])));
+    }
+    let command = format_automation_command(command_parts);
+    let ctx = AutomationContext::new(format, command);
+    match run(paths, &subcommand, &extra) {
+        Ok(data) => publish_success(&ctx, data, &subcommand),
+        Err(message) => publish_failure(&ctx, message),
+    }
 }
 
 fn publish_success(
@@ -126,14 +207,14 @@ fn publish_failure(ctx: &AutomationContext, message: String) -> Result<(), CliEr
 fn print_migration_status(format: OutputFormat) -> Result<(), CliError> {
     match format {
         OutputFormat::Human => {
-            println!("foldingosctl Rust migration: phase 3");
+            println!("foldingosctl Rust migration: phase 4");
             println!("marker: {MIGRATION_MARKER}");
             Ok(())
         }
         OutputFormat::Json => {
             let ctx = AutomationContext::new(OutputFormat::Json, "migration status");
             let data = serde_json::json!({
-                "phase": 3,
+                "phase": 4,
                 "marker": MIGRATION_MARKER,
                 "implementation": "rust",
             });
@@ -155,7 +236,9 @@ fn print_human_summary(data: &serde_json::Value, subcommand: &str) {
         println!(
             "node_id={} hostname={} role={} foldingos_version={} kernel={}",
             node_id,
-            data.get("hostname").and_then(|value| value.as_str()).unwrap_or("-"),
+            data.get("hostname")
+                .and_then(|value| value.as_str())
+                .unwrap_or("-"),
             data.get("installation_role")
                 .and_then(|value| value.as_str())
                 .unwrap_or("-"),
@@ -191,11 +274,19 @@ fn print_human_summary(data: &serde_json::Value, subcommand: &str) {
             return;
         }
     }
-    println!("{}", serde_json::to_string_pretty(data).unwrap_or_else(|_| "{}".into()));
+    if subcommand == "validate" || subcommand == "effective" {
+        if data.get("valid").and_then(|value| value.as_bool()) == Some(true) {
+            return;
+        }
+    }
+    println!(
+        "{}",
+        serde_json::to_string_pretty(data).unwrap_or_else(|_| "{}".into())
+    );
 }
 
 pub fn print_human_error(error: &CliError) {
-    if matches!(error, CliError::AlreadyReported) {
+    if matches!(error, CliError::AlreadyReported | CliError::Exit(_)) {
         return;
     }
     eprintln!("foldingosctl: {}", error.message());
@@ -204,6 +295,7 @@ pub fn print_human_error(error: &CliError) {
 pub fn exit_code_for_error(error: &CliError) -> i32 {
     match error {
         CliError::Usage => 2,
+        CliError::Exit(code) => *code,
         _ => 1,
     }
 }

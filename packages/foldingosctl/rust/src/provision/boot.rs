@@ -108,7 +108,7 @@ fn collect_boot_allow_devices(paths: &AppliancePaths) -> Result<Vec<serde_json::
         .collect())
 }
 
-fn read_boot_allowlist_entries(paths: &AppliancePaths) -> Result<Vec<String>, String> {
+pub(crate) fn read_boot_allowlist_entries(paths: &AppliancePaths) -> Result<Vec<String>, String> {
     let content = match fs::read_to_string(&paths.boot_allowlist) {
         Ok(content) => content,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
@@ -133,6 +133,17 @@ fn save_boot_allowlist(paths: &AppliancePaths, allowed: &[String]) -> Result<(),
         content.push('\n');
     }
     atomic_write(&paths.boot_allowlist, content.as_bytes(), 0o644)
+}
+
+pub(crate) fn boot_install_disk_for_mac(paths: &AppliancePaths, mac: &str) -> String {
+    let mac = normalize_mac(mac);
+    if mac.is_empty() {
+        return String::new();
+    }
+    read_boot_install_disk_allowlist_entries(paths)
+        .ok()
+        .and_then(|mappings| mappings.get(&mac).cloned())
+        .unwrap_or_default()
 }
 
 fn read_boot_install_disk_allowlist_entries(
@@ -186,7 +197,7 @@ fn parse_mac_address(value: &str) -> Result<String, String> {
     Ok(mac)
 }
 
-fn normalize_mac(value: &str) -> String {
+pub(crate) fn normalize_mac(value: &str) -> String {
     value.trim().to_ascii_lowercase().replace('-', ":")
 }
 

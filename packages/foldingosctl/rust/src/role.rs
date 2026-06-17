@@ -11,6 +11,10 @@ pub fn require_supervisor_role(paths: &AppliancePaths) -> Result<(), String> {
     require_installation_role(paths, "supervisor")
 }
 
+pub fn require_agent_role(paths: &AppliancePaths) -> Result<(), String> {
+    require_installation_role(paths, "agent")
+}
+
 pub fn require_installation_role(paths: &AppliancePaths, expected: &str) -> Result<(), String> {
     let role = read_active_installation_role(paths)?;
     if role != expected {

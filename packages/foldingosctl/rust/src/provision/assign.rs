@@ -9,7 +9,7 @@ use crate::registry_image::{
 };
 use crate::role::require_supervisor_role;
 
-#[derive(Default)]
+#[derive(Debug, Default, Clone)]
 pub struct AssignmentUpdate {
     pub image_version: Option<String>,
     pub foldops_manifest_release: Option<String>,
@@ -117,7 +117,7 @@ fn parse_assign_args(args: &[String]) -> Result<ParsedAssign, String> {
     })
 }
 
-fn assign_software_versions(
+pub(crate) fn assign_software_versions(
     paths: &AppliancePaths,
     scope: &str,
     node_id: &str,
