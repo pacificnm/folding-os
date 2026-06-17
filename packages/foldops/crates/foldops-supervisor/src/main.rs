@@ -93,9 +93,14 @@ async fn main() {
         tracing::info!(port = config.agent_http_port, "[deploy] agent push enabled");
     }
     if config.control_enabled {
-        tracing::info!(port = config.agent_http_port, "[control] remote node control enabled");
+        tracing::info!(
+            port = config.agent_http_port,
+            "[control] remote node control enabled"
+        );
     }
 
-    let listener = tokio::net::TcpListener::bind(addr).await.expect("bind failed");
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .expect("bind failed");
     axum::serve(listener, app).await.expect("server error");
 }

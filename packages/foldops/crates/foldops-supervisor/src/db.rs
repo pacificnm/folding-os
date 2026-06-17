@@ -146,16 +146,19 @@ pub fn ingest_snapshot(conn: &Connection, payload: &IngestPayload) -> rusqlite::
             payload.system.cpuTemp,
             payload.system.chassisTemp,
             payload.maintenance.aptUpdatesAvailable,
-            if payload.maintenance.rebootRequired { 1 } else { 0 },
+            if payload.maintenance.rebootRequired {
+                1
+            } else {
+                0
+            },
         ],
     )?;
     tx.commit()
 }
 
 pub fn list_machines(conn: &Connection) -> rusqlite::Result<Vec<MachineRow>> {
-    let mut stmt = conn.prepare(
-        "SELECT hostname, first_seen, last_seen FROM machines ORDER BY hostname",
-    )?;
+    let mut stmt =
+        conn.prepare("SELECT hostname, first_seen, last_seen FROM machines ORDER BY hostname")?;
     let rows = stmt
         .query_map([], |row| {
             Ok(MachineRow {
@@ -170,9 +173,8 @@ pub fn list_machines(conn: &Connection) -> rusqlite::Result<Vec<MachineRow>> {
 }
 
 pub fn get_machine(conn: &Connection, hostname: &str) -> rusqlite::Result<Option<MachineRow>> {
-    let mut stmt = conn.prepare(
-        "SELECT hostname, first_seen, last_seen FROM machines WHERE hostname = ?1",
-    )?;
+    let mut stmt =
+        conn.prepare("SELECT hostname, first_seen, last_seen FROM machines WHERE hostname = ?1")?;
     let mut rows = stmt.query(params![hostname])?;
     if let Some(row) = rows.next()? {
         return Ok(Some(MachineRow {
@@ -207,7 +209,10 @@ fn map_snapshot(row: &rusqlite::Row<'_>) -> rusqlite::Result<SnapshotRow> {
     })
 }
 
-pub fn get_latest_snapshot(conn: &Connection, hostname: &str) -> rusqlite::Result<Option<SnapshotRow>> {
+pub fn get_latest_snapshot(
+    conn: &Connection,
+    hostname: &str,
+) -> rusqlite::Result<Option<SnapshotRow>> {
     let mut stmt = conn.prepare(
         "SELECT id, hostname, created_at, payload, fah_status, project, run, clone, gen,
                 progress, ppd, cpu_usage, memory_percent, disk_percent, cpu_temp, chassis_temp,

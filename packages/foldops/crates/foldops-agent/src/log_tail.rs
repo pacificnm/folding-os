@@ -7,11 +7,7 @@ pub struct LogTail {
     pub path: String,
 }
 
-pub async fn read_log_tail(
-    log_path: &Path,
-    max_lines: usize,
-    max_bytes: usize,
-) -> Option<LogTail> {
+pub async fn read_log_tail(log_path: &Path, max_lines: usize, max_bytes: usize) -> Option<LogTail> {
     let mut content = tokio::fs::read_to_string(log_path).await.ok()?;
 
     if content.len() > max_bytes {

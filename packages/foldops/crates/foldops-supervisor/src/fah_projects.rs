@@ -25,7 +25,8 @@ pub struct FahProjectPublic {
 }
 
 fn html_to_plain(html: &str) -> String {
-    static BR: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"(?i)<br\s*/?>").unwrap());
+    static BR: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"(?i)<br\s*/?>").unwrap());
     static P: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"(?i)</p>").unwrap());
     static TAGS: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"<[^>]+>").unwrap());
     static NL3: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"\n{3,}").unwrap());
@@ -33,7 +34,11 @@ fn html_to_plain(html: &str) -> String {
     let s = BR.replace_all(html, "\n");
     let s = P.replace_all(&s, "\n\n");
     let s = TAGS.replace_all(&s, "");
-    let s = s.replace("&#39;", "'").replace("&quot;", "\"").replace("&amp;", "&").replace("&nbsp;", " ");
+    let s = s
+        .replace("&#39;", "'")
+        .replace("&quot;", "\"")
+        .replace("&amp;", "&")
+        .replace("&nbsp;", " ");
     NL3.replace_all(&s, "\n\n").trim().to_string()
 }
 

@@ -81,7 +81,11 @@ fn pick_best_unit(units: &[WsUnit]) -> Option<FahLogState> {
 
     for raw in units {
         let parsed = unit_to_state(raw)?;
-        let status = raw.state.as_ref().and_then(|s| s.state.as_deref()).unwrap_or("");
+        let status = raw
+            .state
+            .as_ref()
+            .and_then(|s| s.state.as_deref())
+            .unwrap_or("");
         let mut score = parsed.progress.unwrap_or(0.0);
         if parsed.ppd.is_some() {
             score += 200.0;

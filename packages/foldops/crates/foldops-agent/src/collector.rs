@@ -76,15 +76,13 @@ pub async fn collect_snapshot(paths: CollectPaths<'_>) -> IngestPayload {
             .await
             .unwrap_or((0, 0, 0, 0.0, [0.0; 3], 0.0));
 
-    let (disk_total, disk_used, disk_free) =
-        tokio::task::spawn_blocking(collect_disk_metrics)
-            .await
-            .unwrap_or((0, 0, 0));
+    let (disk_total, disk_used, disk_free) = tokio::task::spawn_blocking(collect_disk_metrics)
+        .await
+        .unwrap_or((0, 0, 0));
 
-    let (rx_bytes, tx_bytes, rx_sec, tx_sec) =
-        tokio::task::spawn_blocking(collect_network_rates)
-            .await
-            .unwrap_or((0, 0, None, None));
+    let (rx_bytes, tx_bytes, rx_sec, tx_sec) = tokio::task::spawn_blocking(collect_network_rates)
+        .await
+        .unwrap_or((0, 0, None, None));
 
     let apt_updates = get_apt_updates_available().await;
     let reboot_required = tokio::fs::metadata("/var/run/reboot-required")
@@ -144,8 +142,14 @@ pub async fn collect_snapshot(paths: CollectPaths<'_>) -> IngestPayload {
             rebootRequired: reboot_required,
         },
         logs: Some(NodeLogs {
-            fah: fah_tail.as_ref().map(|t| t.lines.clone()).unwrap_or_default(),
-            work: work_tail.as_ref().map(|t| t.lines.clone()).unwrap_or_default(),
+            fah: fah_tail
+                .as_ref()
+                .map(|t| t.lines.clone())
+                .unwrap_or_default(),
+            work: work_tail
+                .as_ref()
+                .map(|t| t.lines.clone())
+                .unwrap_or_default(),
             fahPath: fah_tail.map(|t| t.path),
             workPath: work_tail.map(|t| t.path),
         }),
@@ -180,7 +184,14 @@ fn collect_system_metrics() -> (u64, u64, u64, f64, [f64; 3], f64) {
     let cpu_usage = ((sys.global_cpu_usage() as f64) * 10.0).round() / 10.0;
     let uptime = SysInfo::uptime() as f64;
 
-    (sys.total_memory(), sys.used_memory(), sys.free_memory(), cpu_usage, load_avg, uptime)
+    (
+        sys.total_memory(),
+        sys.used_memory(),
+        sys.free_memory(),
+        cpu_usage,
+        load_avg,
+        uptime,
+    )
 }
 
 fn collect_disk_metrics() -> (u64, u64, u64) {

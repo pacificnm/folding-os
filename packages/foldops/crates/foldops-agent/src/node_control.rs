@@ -55,10 +55,7 @@ async fn run_systemctl(action: &str, unit: &str) -> Result<(String, String), Str
     ))
 }
 
-pub async fn execute_control_action(
-    action: ControlAction,
-    ctx: &ControlContext,
-) -> ControlResult {
+pub async fn execute_control_action(action: ControlAction, ctx: &ControlContext) -> ControlResult {
     let action_str = action.as_str().to_string();
 
     let fail = |message: String, stdout: String, stderr: String| ControlResult {
@@ -137,26 +134,30 @@ pub async fn execute_control_action(
             },
             Err(msg) => fail(msg.clone(), String::new(), msg),
         },
-        ControlAction::FahResume => match send_fah_resume(&ctx.fah_ws_host, ctx.fah_ws_port).await {
-            Ok(()) => ControlResult {
-                ok: true,
-                action: action_str,
-                message: "FAH folding resumed".into(),
-                stdout: String::new(),
-                stderr: String::new(),
-            },
-            Err(msg) => fail(msg.clone(), String::new(), msg),
-        },
-        ControlAction::FahFinish => match send_fah_finish(&ctx.fah_ws_host, ctx.fah_ws_port).await {
-            Ok(()) => ControlResult {
-                ok: true,
-                action: action_str,
-                message: "FAH finish command sent (completes WU then pauses)".into(),
-                stdout: String::new(),
-                stderr: String::new(),
-            },
-            Err(msg) => fail(msg.clone(), String::new(), msg),
-        },
+        ControlAction::FahResume => {
+            match send_fah_resume(&ctx.fah_ws_host, ctx.fah_ws_port).await {
+                Ok(()) => ControlResult {
+                    ok: true,
+                    action: action_str,
+                    message: "FAH folding resumed".into(),
+                    stdout: String::new(),
+                    stderr: String::new(),
+                },
+                Err(msg) => fail(msg.clone(), String::new(), msg),
+            }
+        }
+        ControlAction::FahFinish => {
+            match send_fah_finish(&ctx.fah_ws_host, ctx.fah_ws_port).await {
+                Ok(()) => ControlResult {
+                    ok: true,
+                    action: action_str,
+                    message: "FAH finish command sent (completes WU then pauses)".into(),
+                    stdout: String::new(),
+                    stderr: String::new(),
+                },
+                Err(msg) => fail(msg.clone(), String::new(), msg),
+            }
+        }
         ControlAction::HostReboot => {
             if !ctx.allow_reboot {
                 return fail(

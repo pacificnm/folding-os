@@ -24,7 +24,13 @@ impl IngestClient {
 
     pub async fn probe_supervisor(&self) {
         let url = format!("{}/api/machines", self.config.supervisor_base());
-        match self.http.get(&url).timeout(Duration::from_secs(5)).send().await {
+        match self
+            .http
+            .get(&url)
+            .timeout(Duration::from_secs(5))
+            .send()
+            .await
+        {
             Ok(res) if res.status().is_success() => {}
             Ok(res) => {
                 tracing::warn!(status = %res.status(), "supervisor reachable but returned error status");
@@ -44,7 +50,10 @@ impl IngestClient {
         let res = self
             .http
             .post(&url)
-            .header("Authorization", format!("Bearer {}", self.config.agent_token))
+            .header(
+                "Authorization",
+                format!("Bearer {}", self.config.agent_token),
+            )
             .json(payload)
             .send()
             .await

@@ -7,8 +7,10 @@ use std::sync::LazyLock;
 use super::state::FahLogState;
 
 static PROJECT_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)Project:\s*(\d+)\s*\(\s*Run\s*(\d+)\s*,\s*Clone\s*(\d+)\s*,\s*Gen\s*(\d+)\s*\)")
-        .unwrap()
+    Regex::new(
+        r"(?i)Project:\s*(\d+)\s*\(\s*Run\s*(\d+)\s*,\s*Clone\s*(\d+)\s*,\s*Gen\s*(\d+)\s*\)",
+    )
+    .unwrap()
 });
 static STEPS_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"Completed\s+(\d+)\s+out\s+of\s+(\d+)\s+steps\s+\(([\d.]+)%\)").unwrap()

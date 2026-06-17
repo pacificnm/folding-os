@@ -173,7 +173,9 @@ async fn get_machine(State(state): State<AppState>, Path(name): Path<String>) ->
         )
             .into_response();
     };
-    let latest = db::get_latest_snapshot(&conn, &machine.hostname).ok().flatten();
+    let latest = db::get_latest_snapshot(&conn, &machine.hostname)
+        .ok()
+        .flatten();
     Json(json!({
         "hostname": machine.hostname,
         "first_seen": machine.first_seen,
@@ -226,7 +228,9 @@ async fn machine_logs(
                 .into_response();
         };
 
-        let latest = db::get_latest_snapshot(&conn, &machine.hostname).ok().flatten();
+        let latest = db::get_latest_snapshot(&conn, &machine.hostname)
+            .ok()
+            .flatten();
         let payload = latest.as_ref().and_then(parse_payload);
         let (cached_lines, cached_path) = match source {
             LogSource::Fah => (
@@ -281,7 +285,9 @@ async fn machine_logs(
             }
             Err(live_error) => {
                 tracing::warn!(hostname = %ctx.hostname, source = source_str, error = %live_error, "live log fetch failed");
-                let slice = ctx.cached_lines[ctx.cached_lines.len().saturating_sub(lines as usize)..].to_vec();
+                let slice = ctx.cached_lines
+                    [ctx.cached_lines.len().saturating_sub(lines as usize)..]
+                    .to_vec();
                 return Json(json!({
                     "hostname": ctx.hostname,
                     "source": source_str,
@@ -352,11 +358,7 @@ async fn control_status(State(state): State<AppState>, Path(name): Path<String>)
             "fah_client": status.fah_client,
         }))
         .into_response(),
-        Err(msg) => (
-            StatusCode::BAD_GATEWAY,
-            Json(json!({ "error": msg })),
-        )
-            .into_response(),
+        Err(msg) => (StatusCode::BAD_GATEWAY, Json(json!({ "error": msg }))).into_response(),
     }
 }
 
@@ -437,11 +439,7 @@ async fn control_action(
                 }))
                 .into_response()
             } else {
-                (
-                    StatusCode::BAD_GATEWAY,
-                    Json(json!({ "error": msg })),
-                )
-                    .into_response()
+                (StatusCode::BAD_GATEWAY, Json(json!({ "error": msg }))).into_response()
             }
         }
     }
@@ -494,11 +492,7 @@ async fn deploy_agents(State(state): State<AppState>, Json(body): Json<DeployBod
             Json(json!({ "run_id": run_id, "status": "running" })),
         )
             .into_response(),
-        Err(msg) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "error": msg })),
-        )
-            .into_response(),
+        Err(msg) => (StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))).into_response(),
     }
 }
 
@@ -530,11 +524,7 @@ async fn alerts_test(State(state): State<AppState>) -> Response {
             "status": alerts_status_json(cfg),
         }))
         .into_response(),
-        Err(msg) => (
-            StatusCode::BAD_GATEWAY,
-            Json(json!({ "error": msg })),
-        )
-            .into_response(),
+        Err(msg) => (StatusCode::BAD_GATEWAY, Json(json!({ "error": msg }))).into_response(),
     }
 }
 
@@ -545,7 +535,10 @@ struct HistoryQuery {
     hostname: Option<String>,
 }
 
-async fn alerts_history(State(state): State<AppState>, Query(q): Query<HistoryQuery>) -> Json<Value> {
+async fn alerts_history(
+    State(state): State<AppState>,
+    Query(q): Query<HistoryQuery>,
+) -> Json<Value> {
     let status_param = q.status.as_deref().unwrap_or("all");
     let status = match status_param {
         "active" | "resolved" | "all" => status_param,
@@ -557,12 +550,7 @@ async fn alerts_history(State(state): State<AppState>, Query(q): Query<HistoryQu
         .as_ref()
         .map(|s| s.trim())
         .filter(|s| !s.is_empty());
-    Json(list_alert_history_json(
-        &state.db,
-        limit,
-        status,
-        hostname,
-    ))
+    Json(list_alert_history_json(&state.db, limit, status, hostname))
 }
 
 async fn alerts_active(State(state): State<AppState>) -> Json<Value> {

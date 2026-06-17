@@ -22,11 +22,11 @@ pub struct Config {
 
 impl Config {
     pub fn from_env() -> Result<Self, String> {
-        let agent_token = std::env::var("AGENT_TOKEN").map_err(|_| "AGENT_TOKEN is required".to_string())?;
+        let agent_token =
+            std::env::var("AGENT_TOKEN").map_err(|_| "AGENT_TOKEN is required".to_string())?;
 
-        let foldops_root = PathBuf::from(
-            std::env::var("FOLDOPS_ROOT").unwrap_or_else(|_| "/opt/foldops".into()),
-        );
+        let foldops_root =
+            PathBuf::from(std::env::var("FOLDOPS_ROOT").unwrap_or_else(|_| "/opt/foldops".into()));
         let update_script = std::env::var("UPDATE_SCRIPT")
             .map(PathBuf::from)
             .unwrap_or_else(|_| foldops_root.join("scripts/update-agent.sh"));
@@ -40,10 +40,12 @@ impl Config {
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(60_000),
             fah_log_path: PathBuf::from(
-                std::env::var("FAH_LOG_PATH").unwrap_or_else(|_| "/var/log/fah-client/log.txt".into()),
+                std::env::var("FAH_LOG_PATH")
+                    .unwrap_or_else(|_| "/var/log/fah-client/log.txt".into()),
             ),
             fah_db_path: PathBuf::from(
-                std::env::var("FAH_DB_PATH").unwrap_or_else(|_| "/var/lib/fah-client/client.db".into()),
+                std::env::var("FAH_DB_PATH")
+                    .unwrap_or_else(|_| "/var/lib/fah-client/client.db".into()),
             ),
             fah_work_dir: PathBuf::from(
                 std::env::var("FAH_WORK_DIR").unwrap_or_else(|_| "/var/lib/fah-client/work".into()),

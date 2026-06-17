@@ -110,13 +110,19 @@ pub fn update_deploy_run(
     };
     conn.execute(
         "UPDATE deploy_runs SET status = ?2, results = ?3 WHERE id = ?1",
-        params![id, status_str, serde_json::to_string(results).unwrap_or_default()],
+        params![
+            id,
+            status_str,
+            serde_json::to_string(results).unwrap_or_default()
+        ],
     )?;
     Ok(())
 }
 
 pub fn get_deploy_run(conn: &Connection, id: &str) -> rusqlite::Result<Option<DeployRun>> {
-    let mut stmt = conn.prepare("SELECT id, created_at, status, hostnames, results FROM deploy_runs WHERE id = ?1")?;
+    let mut stmt = conn.prepare(
+        "SELECT id, created_at, status, hostnames, results FROM deploy_runs WHERE id = ?1",
+    )?;
     let mut rows = stmt.query(params![id])?;
     if let Some(row) = rows.next()? {
         return Ok(Some(parse_run(row)?));

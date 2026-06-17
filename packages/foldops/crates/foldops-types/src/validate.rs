@@ -67,9 +67,7 @@ pub enum IngestJsonError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ingest::{
-        Disk, Fah, FahSystemdStatus, Maintenance, Memory, Network, System,
-    };
+    use crate::ingest::{Disk, Fah, FahSystemdStatus, Maintenance, Memory, Network, System};
 
     fn sample_payload() -> IngestPayload {
         IngestPayload {

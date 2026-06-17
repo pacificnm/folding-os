@@ -10,7 +10,14 @@ fn alert_id(hostname: &str, kind: AlertKind) -> String {
 }
 
 fn errors_fingerprint(errors: &[String]) -> String {
-    errors.iter().rev().take(5).rev().cloned().collect::<Vec<_>>().join("\n")
+    errors
+        .iter()
+        .rev()
+        .take(5)
+        .rev()
+        .cloned()
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn parse_payload(row: &SnapshotRow) -> Option<IngestPayload> {

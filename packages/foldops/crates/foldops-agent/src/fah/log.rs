@@ -5,8 +5,10 @@ use regex::Regex;
 use super::state::FahLogState;
 
 static PROJECT_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)Project:\s*(\d+)\s*\(\s*Run\s*(\d+)\s*,\s*Clone\s*(\d+)\s*,\s*Gen\s*(\d+)\s*\)")
-        .unwrap()
+    Regex::new(
+        r"(?i)Project:\s*(\d+)\s*\(\s*Run\s*(\d+)\s*,\s*Clone\s*(\d+)\s*,\s*Gen\s*(\d+)\s*\)",
+    )
+    .unwrap()
 });
 static PROGRESS_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)Progress:\s*([\d.]+)\s*%").unwrap());
@@ -48,7 +50,10 @@ pub async fn parse_fah_log(log_path: &std::path::Path) -> FahLogState {
             state.progress = caps.get(3).and_then(|m| m.as_str().parse().ok());
         }
         if let Some(caps) = PPD_RE.captures(line) {
-            let raw = caps.get(1).map(|m| m.as_str().replace(',', "")).unwrap_or_default();
+            let raw = caps
+                .get(1)
+                .map(|m| m.as_str().replace(',', ""))
+                .unwrap_or_default();
             state.ppd = raw.parse().ok();
         }
         if let Some(caps) = TPF_RE.captures(line) {
@@ -89,7 +94,10 @@ mod tests {
                 state.run = caps.get(2).and_then(|m| m.as_str().parse().ok());
             }
             if let Some(caps) = PPD_RE.captures(line) {
-                let raw = caps.get(1).map(|m| m.as_str().replace(',', "")).unwrap_or_default();
+                let raw = caps
+                    .get(1)
+                    .map(|m| m.as_str().replace(',', ""))
+                    .unwrap_or_default();
                 state.ppd = raw.parse().ok();
             }
             if let Some(caps) = PROGRESS_RE.captures(line) {

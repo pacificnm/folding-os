@@ -78,25 +78,22 @@ fn parse_unit_state(v: &Value) -> Option<FahUnitState> {
     let project = extract_project(v);
 
     Some(FahUnitState {
-        state: obj.get("state").and_then(|s| s.as_str()).map(str::to_string),
+        state: obj
+            .get("state")
+            .and_then(|s| s.as_str())
+            .map(str::to_string),
         progress: json_num_opt(obj.get("progress")),
         wu_progress: json_num_opt(obj.get("wu_progress")),
         ppd: json_num_opt(obj.get("ppd")),
         eta: obj.get("eta").and_then(|e| e.as_str()).map(str::to_string),
         run_time: json_num_opt(obj.get("run_time")),
         project,
-        run: obj
-            .get("wu")
-            .and_then(|w| w.get("run"))
-            .and_then(json_num),
+        run: obj.get("wu").and_then(|w| w.get("run")).and_then(json_num),
         clone: obj
             .get("wu")
             .and_then(|w| w.get("clone"))
             .and_then(json_num),
-        gen: obj
-            .get("wu")
-            .and_then(|w| w.get("gen"))
-            .and_then(json_num),
+        gen: obj.get("wu").and_then(|w| w.get("gen")).and_then(json_num),
     })
 }
 
@@ -173,10 +170,7 @@ fn unit_to_state(unit: &FahUnitState) -> Option<FahLogState> {
         .as_ref()
         .filter(|e| !e.trim().is_empty())
         .cloned()
-        .or_else(|| {
-            unit.run_time
-                .and_then(|rt| format_tpf(rt, wu_progress))
-        });
+        .or_else(|| unit.run_time.and_then(|rt| format_tpf(rt, wu_progress)));
 
     Some(FahLogState {
         project: unit.project.clone(),
@@ -280,7 +274,11 @@ async fn load_units_via_sqlite3_cli(db_path: &Path) -> Option<Vec<FahUnitState>>
     let output = tokio::time::timeout(
         Duration::from_secs(8),
         tokio::process::Command::new("sqlite3")
-            .args(["-json", &db_path.to_string_lossy(), "SELECT value FROM units"])
+            .args([
+                "-json",
+                &db_path.to_string_lossy(),
+                "SELECT value FROM units",
+            ])
             .output(),
     )
     .await

@@ -4,13 +4,15 @@ use regex::Regex;
 use std::sync::LazyLock;
 
 static CPU_LABEL: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)^(package id \d+|tctl|cpu|core 0|x86_pkg_temp|cpu-thermal|soc-thermal|k10temp)").unwrap()
+    Regex::new(
+        r"(?i)^(package id \d+|tctl|cpu|core 0|x86_pkg_temp|cpu-thermal|soc-thermal|k10temp)",
+    )
+    .unwrap()
 });
 static CHASSIS_LABEL: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)^(syst|system|chassis|mb|motherboard|board|tmpin0|ambient|composite|pch|chipset|nvme|acpitz)").unwrap()
 });
-static PACKAGE_ID_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?i)package id").unwrap());
+static PACKAGE_ID_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)package id").unwrap());
 static SYST_LABEL_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)^syst$").unwrap());
 static SYSTEM_TEMP_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)^system temperature$").unwrap());
@@ -112,7 +114,11 @@ async fn read_thermal_zone_temps() -> (Option<f64>, Option<f64>) {
     };
 
     while let Ok(Some(entry)) = entries.next_entry().await {
-        if !entry.file_name().to_string_lossy().starts_with("thermal_zone") {
+        if !entry
+            .file_name()
+            .to_string_lossy()
+            .starts_with("thermal_zone")
+        {
             continue;
         }
         let base = entry.path();
@@ -158,12 +164,20 @@ async fn read_sensors_json() -> (Option<f64>, Option<f64>) {
     };
 
     for chip in chips.values() {
-        let Some(chip_obj) = chip.as_object() else { continue };
+        let Some(chip_obj) = chip.as_object() else {
+            continue;
+        };
         for (sensor_name, sensor) in chip_obj {
-            let Some(readings) = sensor.as_object() else { continue };
+            let Some(readings) = sensor.as_object() else {
+                continue;
+            };
             for (key, val) in readings {
-                let Some(num) = val.as_f64().filter(|&n| n > 0.0) else { continue };
-                let Some(idx) = key.strip_prefix("temp").and_then(|rest| rest.strip_suffix("_input"))
+                let Some(num) = val.as_f64().filter(|&n| n > 0.0) else {
+                    continue;
+                };
+                let Some(idx) = key
+                    .strip_prefix("temp")
+                    .and_then(|rest| rest.strip_suffix("_input"))
                 else {
                     continue;
                 };

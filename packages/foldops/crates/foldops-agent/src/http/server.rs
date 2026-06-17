@@ -40,7 +40,9 @@ pub async fn start_agent_http(config: Arc<Config>) {
         return;
     }
 
-    let state = AppState { config: config.clone() };
+    let state = AppState {
+        config: config.clone(),
+    };
     let app = Router::new()
         .route("/logs/fah", get(logs_fah))
         .route("/logs/work", get(logs_work))
@@ -87,10 +89,7 @@ async fn auth_middleware(
     }
 }
 
-async fn logs_fah(
-    State(state): State<AppState>,
-    Query(q): Query<LogQuery>,
-) -> Response {
+async fn logs_fah(State(state): State<AppState>, Query(q): Query<LogQuery>) -> Response {
     let lines = clamp_lines(q.lines);
     match read_log_tail_default(&state.config.fah_log_path, lines).await {
         Some(tail) => Json(serde_json::json!({

@@ -3,11 +3,14 @@ use rusqlite::Connection;
 use crate::db::{self, Db};
 
 use super::db::{
-    count_alerts_by_status, get_alert, list_active_alerts, list_alert_history, record_recovery_alert,
-    resolve_alert, upsert_active_alert, AlertRowInput,
+    count_alerts_by_status, get_alert, list_active_alerts, list_alert_history,
+    record_recovery_alert, resolve_alert, upsert_active_alert, AlertRowInput,
 };
 use super::evaluate::evaluate_farm;
-use super::notify::{send_alert_notifications, send_test_notification, DiscordNotifyOptions, NotifyEvent, NotifyEventType};
+use super::notify::{
+    send_alert_notifications, send_test_notification, DiscordNotifyOptions, NotifyEvent,
+    NotifyEventType,
+};
 use super::types::{AlertConfig, AlertKind, AlertSeverity};
 
 pub async fn run_alert_evaluation(db: &Db, config: &AlertConfig) {
@@ -59,8 +62,7 @@ pub async fn run_alert_evaluation(db: &Db, config: &AlertConfig) {
                 continue;
             }
             if let Some(prev) = active_map.get(&c.id) {
-                if c.kind == AlertKind::FahErrors
-                    && c.details.as_deref() != prev.details.as_deref()
+                if c.kind == AlertKind::FahErrors && c.details.as_deref() != prev.details.as_deref()
                 {
                     to_fire.push(c);
                 }
@@ -128,11 +130,14 @@ pub async fn run_alert_evaluation(db: &Db, config: &AlertConfig) {
             let _ = resolve_alert(&conn, &row.id, &notified_at);
         }
 
-        let webhook_opts = config.webhook_url.as_ref().map(|webhook_url| DiscordNotifyOptions {
-            webhook_url: webhook_url.clone(),
-            username: config.discord_username.clone(),
-            dashboard_url: config.dashboard_url.clone(),
-        });
+        let webhook_opts = config
+            .webhook_url
+            .as_ref()
+            .map(|webhook_url| DiscordNotifyOptions {
+                webhook_url: webhook_url.clone(),
+                username: config.discord_username.clone(),
+                dashboard_url: config.dashboard_url.clone(),
+            });
         (notify_events, webhook_opts)
     };
 
@@ -146,7 +151,10 @@ pub async fn run_alert_evaluation(db: &Db, config: &AlertConfig) {
             Err(e) => tracing::error!(error = %e, "alert webhook failed"),
         }
     } else {
-        tracing::info!(count = notify_events.len(), "alert events (no webhook configured)");
+        tracing::info!(
+            count = notify_events.len(),
+            "alert events (no webhook configured)"
+        );
         for e in &notify_events {
             tracing::info!(message = %e.message, "alert event");
         }

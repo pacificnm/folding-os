@@ -23,14 +23,16 @@ fn ingest_minimal_fixture_parses_and_validates() {
     let json = load_fixture("ingest-minimal.json");
     let payload = parse_ingest_json(&json).expect("fixture should parse and validate");
     assert_eq!(payload.hostname, "fah-01");
-    assert_eq!(payload.fah.systemdStatus, foldops_types::FahSystemdStatus::Active);
+    assert_eq!(
+        payload.fah.systemdStatus,
+        foldops_types::FahSystemdStatus::Active
+    );
 }
 
 #[test]
 fn ingest_minimal_fixture_round_trips_json() {
     let json = load_fixture("ingest-minimal.json");
-    let payload: IngestPayload =
-        serde_json::from_str(&json).expect("fixture should deserialize");
+    let payload: IngestPayload = serde_json::from_str(&json).expect("fixture should deserialize");
     validate_ingest_payload(&payload).expect("fixture should validate");
 
     let again: IngestPayload =

@@ -134,10 +134,7 @@ pub fn count_alerts_by_status(conn: &Connection) -> rusqlite::Result<(i64, i64, 
     Ok((active, resolved, active + resolved))
 }
 
-pub fn upsert_active_alert(
-    conn: &Connection,
-    row: &AlertRowInput,
-) -> rusqlite::Result<()> {
+pub fn upsert_active_alert(conn: &Connection, row: &AlertRowInput) -> rusqlite::Result<()> {
     let now = chrono::Utc::now().to_rfc3339();
     let existing = get_alert(conn, &row.id)?;
     let fired_at = if existing.as_ref().is_some_and(|e| e.active == 1) {

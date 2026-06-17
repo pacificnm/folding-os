@@ -58,10 +58,14 @@ pub fn start_agent_deploy(
 
     let conn = db.lock();
     let machines = db::list_machines(&conn).map_err(|e| e.to_string())?;
-    let known: std::collections::HashSet<_> = machines.iter().map(|m| m.hostname.as_str()).collect();
+    let known: std::collections::HashSet<_> =
+        machines.iter().map(|m| m.hostname.as_str()).collect();
 
     let targets: Vec<String> = match hostnames {
-        Some(list) if !list.is_empty() => list.into_iter().filter(|h| known.contains(h.as_str())).collect(),
+        Some(list) if !list.is_empty() => list
+            .into_iter()
+            .filter(|h| known.contains(h.as_str()))
+            .collect(),
         _ => machines.iter().map(|m| m.hostname.clone()).collect(),
     };
 
@@ -212,7 +216,9 @@ async fn run_deploy_job(db: Arc<Db>, config: Arc<Config>, run_id: String, target
             .filter(|r| r.status != DeployHostStatus::Offline)
             .collect();
         let all_failed = !attempted.is_empty()
-            && attempted.iter().all(|r| r.status == DeployHostStatus::Failed);
+            && attempted
+                .iter()
+                .all(|r| r.status == DeployHostStatus::Failed);
         let status = if all_failed {
             DeployRunStatus::Failed
         } else {
