@@ -17,7 +17,10 @@ It implements [ADR-0020](../adr/0020-foldops-delegates-node-operations-to-foldin
 [ADR-0021](../adr/0021-machine-readable-foldingosctl-automation-interface.md),
 [ADR-0022](../adr/0022-foldops-rust-source-in-foldingos-monorepo.md),
 [ADR-0023](../adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md),
-and [ADR-0024](../adr/0024-foldops-supervisor-fleet-mutation-authorization.md).
+[ADR-0024](../adr/0024-foldops-supervisor-fleet-mutation-authorization.md),
+[ADR-0025](../adr/0025-implement-foldingosctl-in-rust.md),
+[ADR-0026](../adr/0026-foldops-dashboard-operator-authentication.md), and
+[ADR-0027](../adr/0027-foldops-remote-operator-api.md).
 
 See also [4-appliance-artifact-and-monorepo-plan.md](4-appliance-artifact-and-monorepo-plan.md).
 
@@ -289,7 +292,75 @@ General arbitrary shell or unrestricted TOML domains remain out of scope.
 
 ---
 
-# Cross-Repository Contract
+# Remote Operator API
+
+The browser uses only the supervisor HTTPS entry point per
+[ADR-0027](../adr/0027-foldops-remote-operator-api.md).
+
+| Execution path | When | Mechanism |
+| --- | --- | --- |
+| Supervisor-local | Fleet/registry/provisioning actions on the supervisor role | `foldops-supervisor` → `foldingosctl --format json` |
+| Agent-proxied | Logs, control, config push, and other per-node mutations | `foldops-supervisor` → `foldops-agent` HTTP → `foldingosctl --format json` |
+| Ingest-backed reads | Inventory and periodic health | agent `inspect` → ingest → supervisor DB |
+
+FoldOps must expose curated HTTP workflows only. Arbitrary remote `foldingosctl`
+passthrough is out of scope.
+
+---
+
+# Dashboard Operator Authentication
+
+Human operators authenticate to the dashboard and supervisor `/api/*` routes
+per [ADR-0026](../adr/0026-foldops-dashboard-operator-authentication.md).
+
+| Requirement | Mechanism |
+| --- | --- |
+| Primary operator path | HTTPS dashboard login on supervisor |
+| First boot | Known default dashboard credentials with mandatory password change |
+| Machine auth | `INGEST_TOKEN` generated during supervisor setup; separate from operator password |
+| SSH | Optional `foldingos-admin` public-key access per [ADR-0007](../adr/0007-first-boot-administrator-and-ssh-provisioning.md) |
+| Protected APIs | Valid operator session required for `/api/*` except login/first-run endpoints |
+
+Implementation may trail fleet delegation work but must be complete before
+Milestone 4 declares flash-and-manage supervisor distribution ready.
+
+---
+
+# foldingosctl Implementation Language
+
+The appliance control plane is implemented in Rust per
+[ADR-0025](../adr/0025-implement-foldingosctl-in-rust.md).
+
+| Requirement | Mechanism |
+| --- | --- |
+| Source location | `packages/foldingosctl/` Rust crate |
+| Installed binary | `/usr/bin/foldingosctl` |
+| CLI and JSON contract | Stable per [foldingosctl.md](../foldingosctl.md) and [ADR-0021](../adr/0021-machine-readable-foldingosctl-automation-interface.md) |
+| Build | Buildroot Rust package; Go toolchain removed after migration |
+| FoldOps boundary | Subprocess delegation unchanged |
+
+### Transitional layout (ADR-0025 phases 1–5)
+
+Until Go removal in phase 6:
+
+| Path | Role |
+| --- | --- |
+| `packages/foldingosctl/src/` | Current Go implementation (`/usr/bin/foldingosctl`) |
+| `packages/foldingosctl/rust/` | Rust crate under migration |
+| `packages/foldingosctl-rust/` | Buildroot `cargo-package` wiring |
+| `/usr/bin/foldingosctl-rust` | Rust binary installed during migration for build and acceptance checks |
+
+FoldOps and operators continue to invoke `/usr/bin/foldingosctl` until the Rust
+crate reaches parity and replaces the Go package in the image build.
+
+The Rust crate vendors dependencies under `packages/foldingosctl/rust/VENDOR/` for
+offline Buildroot `cargo-package` builds. Regenerate with
+`cargo vendor --locked VENDOR` in that directory when `Cargo.lock` changes.
+
+Until Go removal is complete, documentation and tests treat the CLI contract as
+authoritative regardless of implementation language.
+
+---
 
 Changes that require coordination:
 
@@ -418,4 +489,7 @@ See [4-implementation-spec.md](4-implementation-spec.md).
 - [ADR-0022](../adr/0022-foldops-rust-source-in-foldingos-monorepo.md)
 - [ADR-0023](../adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md)
 - [ADR-0024](../adr/0024-foldops-supervisor-fleet-mutation-authorization.md)
+- [ADR-0025](../adr/0025-implement-foldingosctl-in-rust.md)
+- [ADR-0026](../adr/0026-foldops-dashboard-operator-authentication.md)
+- [ADR-0027](../adr/0027-foldops-remote-operator-api.md)
 - [4-appliance-artifact-and-monorepo-plan.md](4-appliance-artifact-and-monorepo-plan.md)

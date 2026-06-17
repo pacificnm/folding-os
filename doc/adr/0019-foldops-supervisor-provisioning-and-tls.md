@@ -20,7 +20,9 @@
 [ADR-0023](0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md)
 (supervisor assignment of desired FoldOps and tools versions extends provisioning APIs),
 [ADR-0024](0024-foldops-supervisor-fleet-mutation-authorization.md)
-(FoldOps dashboard fleet mutations delegate through `foldops-supervisor`)
+(FoldOps dashboard fleet mutations delegate through `foldops-supervisor`),
+[ADR-0026](0026-foldops-dashboard-operator-authentication.md)
+(dashboard operator login supersedes Milestone 3 “no web login” for human operators)
 
 ---
 

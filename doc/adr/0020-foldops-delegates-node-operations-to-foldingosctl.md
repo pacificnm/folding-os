@@ -10,6 +10,7 @@
 [ADR-0019](0019-foldops-supervisor-provisioning-and-tls.md)
 
 **Related:** [ADR-0022](0022-foldops-rust-source-in-foldingos-monorepo.md),
+[ADR-0027](0027-foldops-remote-operator-api.md),
 [ADR-0023](0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md)
 
 ---

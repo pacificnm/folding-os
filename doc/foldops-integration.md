@@ -167,22 +167,33 @@ sudo apt install foldops-supervisor         # supervisor node
 Both paths may consume the same release artifacts; Debian hosts use `.deb`,
 FoldingOS appliances use layout bundles.
 
-## Ingest token and TLS (supervisor bootstrap)
+## Ingest token, TLS, and operator bootstrap (supervisor)
 
-Fleet-wide FoldOps authentication uses a shared ingest secret (`INGEST_TOKEN` /
-`AGENT_TOKEN`), not a separate web login. See
-[ADR-0019](adr/0019-foldops-supervisor-provisioning-and-tls.md).
+Fleet machine authentication uses a shared ingest secret (`INGEST_TOKEN` /
+`AGENT_TOKEN`). Human dashboard access uses a separate operator account per
+[ADR-0026](adr/0026-foldops-dashboard-operator-authentication.md).
+
+**Milestone 4 target:** flash a generic supervisor image, complete first-run
+dashboard login (default credentials with mandatory password change), and let
+supervisor setup generate the fleet ingest token and TLS material.
+
+**Current and transitional path:** operators may still pre-stage EFI secrets at
+flash time. See [ADR-0019](adr/0019-foldops-supervisor-provisioning-and-tls.md).
 
 | Step | Supervisor | Agent |
 | --- | --- | --- |
-| EFI staging | Operator writes `/foldingos/provision/foldops-ingest-token` at flash time | Supervisor writes token to target EFI during network install |
+| Operator access | Dashboard login per [ADR-0026](adr/0026-foldops-dashboard-operator-authentication.md); optional SSH keys via EFI | SSH keys staged by supervisor during network install when configured |
+| Fleet token | Generated during first-run setup or imported from EFI | Supervisor writes token to target EFI during network install |
 | CA trust | Generates `/data/foldops/tls/ca.pem` at provision | Receives `/data/config/foldops/supervisor-ca.pem` on data partition during network install |
 | Provision | `foldingosctl foldops provision` → TLS + env | `foldingosctl foldops provision` → `agent.env`; `SUPERVISOR_URL` derived from `supervisor.url` host + `:3443` |
 | Remote access | `foldingosctl foldops serve-https` on `:3443` | POST ingest to `https://<supervisor-host>:3443` |
 
-Generate token: `openssl rand -hex 32`
+Remote operator actions from the dashboard use the supervisor API model in
+[ADR-0027](adr/0027-foldops-remote-operator-api.md).
 
-Supervisor USB preparation:
+Generate token manually when pre-staging EFI: `openssl rand -hex 32`
+
+Supervisor USB preparation (optional EFI pre-staging):
 
 ```bash
 sudo ./scripts/make-bootable-usb \

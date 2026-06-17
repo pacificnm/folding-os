@@ -209,12 +209,22 @@ Milestone 3 shipped `.deb` extract from `deb.folding-os.com`; Milestone 4 target
 supervisor-assigned manifests. Agent and supervisor roles use the same FoldingOS
 release image; FoldOps binaries are not embedded in the image.
 
-The web interface is enabled by default for the supervisor role but must not
-become remotely available until initial administrator and TLS provisioning
-succeeds. Milestone 3 exposes the dashboard through
+The web interface is the **primary operator path** for routine fleet management.
+Operators authenticate to the dashboard per
+[ADR-0026](adr/0026-foldops-dashboard-operator-authentication.md). Remote
+actions invoke `foldingosctl` through the supervisor API and, when required,
+agent HTTP proxying per
+[ADR-0027](adr/0027-foldops-remote-operator-api.md).
+
+The web interface must not become remotely useful until TLS and operator
+bootstrap succeed. Milestone 3 exposes the dashboard through
 `foldingosctl foldops serve-https` on `:3443`, which terminates TLS and
 reverse-proxies to loopback `foldops-supervisor` on `:3000` per
 [ADR-0019](adr/0019-foldops-supervisor-provisioning-and-tls.md).
+
+SSH with operator-provided keys remains available for break-glass access per
+[ADR-0007](adr/0007-first-boot-administrator-and-ssh-provisioning.md) but is not
+required for routine operation.
 
 Whether supervisor-role installations also run the Folding@home workload
 remains unresolved.

@@ -8,6 +8,7 @@ WORK_DIR="${PROJECT_ROOT}/build/work"
 BUILDROOT_DIR="${WORK_DIR}/buildroot-${BUILDROOT_VERSION}"
 DEFCONFIG="${PROJECT_ROOT}/configs/foldingos_x86_64_defconfig"
 FOLDINGOSCTL_PACKAGE="${PROJECT_ROOT}/packages/foldingosctl"
+FOLDINGOSCTL_RUST_PACKAGE="${PROJECT_ROOT}/packages/foldingosctl-rust"
 BUILDROOT_ASSETS=(
   "../../../overlay"
   "../../../board/foldingos/x86_64/post-build.sh"
@@ -16,6 +17,13 @@ BUILDROOT_ASSETS=(
   "../../../configs/linux-x86_64.config"
   "../../../packages/foldingosctl/Config.in"
   "../../../packages/foldingosctl/foldingosctl.mk"
+  "../../../packages/foldingosctl-rust/Config.in"
+  "../../../packages/foldingosctl-rust/foldingosctl-rust.mk"
+  "../../../packages/foldingosctl/rust/Cargo.toml"
+  "../../../packages/foldingosctl/rust/Cargo.lock"
+  "../../../packages/foldingosctl/rust/.cargo/config.toml"
+  "../../../packages/foldingosctl/rust/VENDOR/serde/Cargo.toml"
+  "../../../packages/foldingosctl/rust/src/main.rs"
   "../../../packages/foldingosctl/src/go.mod"
   "../../../packages/foldingosctl/src/go.sum"
   "../../../packages/foldingosctl/src/config.go"
@@ -123,6 +131,13 @@ if ! grep -Fq 'source "package/foldingosctl/Config.in"' "${BUILDROOT_DIR}/packag
     '/menu "Target packages"/a\	source "package/foldingosctl/Config.in"' \
     "${BUILDROOT_DIR}/package/Config.in"
 fi
+rm -rf "${BUILDROOT_DIR}/package/foldingosctl-rust"
+cp -a "${FOLDINGOSCTL_RUST_PACKAGE}" "${BUILDROOT_DIR}/package/foldingosctl-rust"
+if ! grep -Fq 'source "package/foldingosctl-rust/Config.in"' "${BUILDROOT_DIR}/package/Config.in"; then
+  sed -i \
+    '/menu "Target packages"/a\	source "package/foldingosctl-rust/Config.in"' \
+    "${BUILDROOT_DIR}/package/Config.in"
+fi
 
 echo "Applying FoldingOS defconfig"
 make \
@@ -137,6 +152,9 @@ echo "Invalidating repository-local foldingosctl build"
 make \
   O="${PROJECT_ROOT}/build/output" \
   foldingosctl-dirclean
+make \
+  O="${PROJECT_ROOT}/build/output" \
+  foldingosctl-rust-dirclean
 
 echo "Building FoldingOS"
 make O="${PROJECT_ROOT}/build/output"
@@ -155,6 +173,18 @@ fi
 if ! grep -aFq ".ssh_host_ed25519_key.tmp-" "${FOLDINGOSCTL_BINARY}"; then
   echo "ERROR: Built foldingosctl binary is stale."
   echo "Expected current SSH-provisioning behavior was not found."
+  exit 1
+fi
+
+FOLDINGOSCTL_RUST_BINARY="${PROJECT_ROOT}/build/output/target/usr/bin/foldingosctl-rust"
+if [ ! -x "${FOLDINGOSCTL_RUST_BINARY}" ]; then
+  echo "ERROR: Built foldingosctl-rust binary is missing:"
+  echo "${FOLDINGOSCTL_RUST_BINARY}"
+  exit 1
+fi
+if ! grep -aFq "FOLDINGOSCTL_RUST_PHASE_1" "${FOLDINGOSCTL_RUST_BINARY}"; then
+  echo "ERROR: Built foldingosctl-rust binary is stale."
+  echo "Expected Rust migration phase 1 marker was not found."
   exit 1
 fi
 

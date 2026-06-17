@@ -49,21 +49,36 @@ A default FoldingOS installation should:
 
 # Remote Management
 
-Primary remote administration:
+Primary operator interface (Milestone 4 target):
 
-- SSH
+- FoldOps supervisor HTTPS dashboard and `/api/*` routes per
+  [ADR-0027](adr/0027-foldops-remote-operator-api.md)
+- dashboard operator login with mandatory password change on first use per
+  [ADR-0026](adr/0026-foldops-dashboard-operator-authentication.md)
+
+Break-glass and development administration:
+
+- SSH public-key access for `foldingos-admin` per
+  [ADR-0007](adr/0007-first-boot-administrator-and-ssh-provisioning.md)
 
 Requirements:
 
-- encrypted communication
-- authenticated access
-- public-key authentication by default
+- encrypted communication for remote management
+- authenticated access for dashboard and machine ingest
+- public-key authentication for SSH by default
 - no direct root SSH login
 - no SSH password authentication for v0.1.0
+- no release-image embedded administrator SSH keys
 - future MFA support through external systems where appropriate
 
-Initial administrator provisioning is defined by
-[ADR-0007](adr/0007-first-boot-administrator-and-ssh-provisioning.md).
+Machine-to-machine fleet authentication uses `INGEST_TOKEN` / `AGENT_TOKEN` per
+[ADR-0019](adr/0019-foldops-supervisor-provisioning-and-tls.md). Human operator
+sessions are separate from ingest secrets per
+[ADR-0026](adr/0026-foldops-dashboard-operator-authentication.md).
+
+Initial SSH key provisioning is defined by
+[ADR-0007](adr/0007-first-boot-administrator-and-ssh-provisioning.md). SSH is
+optional for operators who manage the fleet primarily through the web UI.
 
 Network fleet provisioning exposes destructive installation only through
 authenticated supervisor-approved requests. Provisioning must reject
@@ -72,9 +87,10 @@ target as defined by
 [ADR-0016](adr/0016-network-provisioning-via-supervisor.md).
 
 Supervisor-role installations enable the FoldOps web interface by default, but
-it must not become remotely available until ingest-token and self-signed TLS
-provisioning succeeds per
-[ADR-0019](adr/0019-foldops-supervisor-provisioning-and-tls.md).
+it must not become remotely available until TLS provisioning succeeds and
+operator authentication is configured per
+[ADR-0019](adr/0019-foldops-supervisor-provisioning-and-tls.md) and
+[ADR-0026](adr/0026-foldops-dashboard-operator-authentication.md).
 
 ---
 
