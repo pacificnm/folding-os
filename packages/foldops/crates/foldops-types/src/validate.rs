@@ -73,6 +73,9 @@ mod tests {
         IngestPayload {
             hostname: "fah-01".into(),
             timestamp: "2026-06-11T12:00:00Z".into(),
+            nodeId: None,
+            installationRole: None,
+            foldingosVersion: None,
             system: System {
                 uptime: 86400.0,
                 loadAvg: [0.5, 0.4, 0.3],

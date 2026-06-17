@@ -88,5 +88,11 @@ pub struct IngestPayload {
     pub fah: Fah,
     pub maintenance: Maintenance,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nodeId: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub installationRole: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub foldingosVersion: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub logs: Option<NodeLogs>,
 }

@@ -1,6 +1,7 @@
 mod collector;
 mod config;
 mod fah;
+mod foldingos;
 mod http;
 mod ingest;
 mod log_tail;

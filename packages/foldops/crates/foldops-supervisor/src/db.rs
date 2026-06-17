@@ -27,6 +27,9 @@ pub struct MachineRow {
     pub hostname: String,
     pub first_seen: String,
     pub last_seen: String,
+    pub node_id: Option<String>,
+    pub installation_role: Option<String>,
+    pub foldingos_version: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -58,7 +61,10 @@ fn init_schema(conn: &Connection) -> rusqlite::Result<()> {
         CREATE TABLE IF NOT EXISTS machines (
             hostname TEXT PRIMARY KEY,
             first_seen TEXT NOT NULL,
-            last_seen TEXT NOT NULL
+            last_seen TEXT NOT NULL,
+            node_id TEXT,
+            installation_role TEXT,
+            foldingos_version TEXT
         );
 
         CREATE TABLE IF NOT EXISTS snapshots (
@@ -103,6 +109,19 @@ fn migrate_schema(conn: &Connection) -> rusqlite::Result<()> {
     if !names.iter().any(|n| n == "chassis_temp") {
         conn.execute_batch("ALTER TABLE snapshots ADD COLUMN chassis_temp REAL")?;
     }
+
+    let mut machine_stmt = conn.prepare("PRAGMA table_info(machines)")?;
+    let machine_names: Vec<String> = machine_stmt
+        .query_map([], |row| row.get(1))?
+        .filter_map(|r| r.ok())
+        .collect();
+    if !machine_names.iter().any(|n| n == "node_id") {
+        conn.execute_batch(
+            "ALTER TABLE machines ADD COLUMN node_id TEXT;
+             ALTER TABLE machines ADD COLUMN installation_role TEXT;
+             ALTER TABLE machines ADD COLUMN foldingos_version TEXT;",
+        )?;
+    }
     Ok(())
 }
 
@@ -119,9 +138,20 @@ pub fn ingest_snapshot(conn: &Connection, payload: &IngestPayload) -> rusqlite::
     let now = payload.timestamp.clone();
     let tx = conn.unchecked_transaction()?;
     tx.execute(
-        "INSERT INTO machines (hostname, first_seen, last_seen) VALUES (?1, ?2, ?2)
-         ON CONFLICT(hostname) DO UPDATE SET last_seen = ?2",
-        params![payload.hostname, now],
+        "INSERT INTO machines (hostname, first_seen, last_seen, node_id, installation_role, foldingos_version)
+         VALUES (?1, ?2, ?2, ?3, ?4, ?5)
+         ON CONFLICT(hostname) DO UPDATE SET
+            last_seen = ?2,
+            node_id = COALESCE(excluded.node_id, machines.node_id),
+            installation_role = COALESCE(excluded.installation_role, machines.installation_role),
+            foldingos_version = COALESCE(excluded.foldingos_version, machines.foldingos_version)",
+        params![
+            payload.hostname,
+            now,
+            payload.nodeId,
+            payload.installationRole,
+            payload.foldingosVersion,
+        ],
     )?;
     tx.execute(
         "INSERT INTO snapshots (
@@ -158,13 +188,16 @@ pub fn ingest_snapshot(conn: &Connection, payload: &IngestPayload) -> rusqlite::
 
 pub fn list_machines(conn: &Connection) -> rusqlite::Result<Vec<MachineRow>> {
     let mut stmt =
-        conn.prepare("SELECT hostname, first_seen, last_seen FROM machines ORDER BY hostname")?;
+        conn.prepare("SELECT hostname, first_seen, last_seen, node_id, installation_role, foldingos_version FROM machines ORDER BY hostname")?;
     let rows = stmt
         .query_map([], |row| {
             Ok(MachineRow {
                 hostname: row.get(0)?,
                 first_seen: row.get(1)?,
                 last_seen: row.get(2)?,
+                node_id: row.get(3)?,
+                installation_role: row.get(4)?,
+                foldingos_version: row.get(5)?,
             })
         })?
         .filter_map(|r| r.ok())
@@ -173,14 +206,18 @@ pub fn list_machines(conn: &Connection) -> rusqlite::Result<Vec<MachineRow>> {
 }
 
 pub fn get_machine(conn: &Connection, hostname: &str) -> rusqlite::Result<Option<MachineRow>> {
-    let mut stmt =
-        conn.prepare("SELECT hostname, first_seen, last_seen FROM machines WHERE hostname = ?1")?;
+    let mut stmt = conn.prepare(
+        "SELECT hostname, first_seen, last_seen, node_id, installation_role, foldingos_version FROM machines WHERE hostname = ?1",
+    )?;
     let mut rows = stmt.query(params![hostname])?;
     if let Some(row) = rows.next()? {
         return Ok(Some(MachineRow {
             hostname: row.get(0)?,
             first_seen: row.get(1)?,
             last_seen: row.get(2)?,
+            node_id: row.get(3)?,
+            installation_role: row.get(4)?,
+            foldingos_version: row.get(5)?,
         }));
     }
     Ok(None)
