@@ -55,7 +55,7 @@ func foldOpsProvision() error {
 		return startFoldOpsRuntimeServices()
 	}
 
-	manifest, err := loadFoldOpsManifest(embeddedFoldOpsManifestPath)
+	manifest, err := resolveEffectiveFoldOpsManifest()
 	if err != nil {
 		return err
 	}

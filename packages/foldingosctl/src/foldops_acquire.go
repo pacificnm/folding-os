@@ -21,7 +21,7 @@ var (
 )
 
 func foldOpsAcquire() error {
-	manifest, err := loadFoldOpsManifest(embeddedFoldOpsManifestPath)
+	manifest, err := resolveEffectiveFoldOpsManifest()
 	if err != nil {
 		return err
 	}
@@ -66,10 +66,10 @@ func foldOpsAcquire() error {
 	if err := foldOpsCheckAcquisitionPrerequisites(); err != nil {
 		return recordFoldOpsAcquisitionFailure(err)
 	}
-	if err := downloadAndStageFoldOpsPackages(packages); err != nil {
+	if err := downloadAndStageFoldOpsPackages(manifest.ArtifactFormat, packages); err != nil {
 		return recordFoldOpsAcquisitionFailure(err)
 	}
-	releaseDir, err := extractAndInstallFoldOpsPackages(manifest.ManifestRelease, packages)
+	releaseDir, err := extractAndInstallFoldOpsPackages(manifest.ManifestRelease, manifest.ArtifactFormat, packages)
 	if err != nil {
 		return recordFoldOpsAcquisitionFailure(err)
 	}
@@ -143,28 +143,36 @@ func foldOpsInstallationVerified(release, role string, packages []foldOpsPackage
 	return true
 }
 
-func downloadAndStageFoldOpsPackages(packages []foldOpsPackage) error {
+func downloadAndStageFoldOpsPackages(artifactFormat string, packages []foldOpsPackage) error {
 	if err := os.MkdirAll(foldOpsDownloadsDir, 0755); err != nil {
 		return fmt.Errorf("create downloads directory: %w", err)
 	}
 	for _, pkg := range packages {
-		if err := downloadAndStageFoldOpsPackage(pkg); err != nil {
+		if err := downloadAndStageFoldOpsPackage(artifactFormat, pkg); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func foldOpsStagedDebPath(pkg foldOpsPackage) string {
-	return filepath.Join(foldOpsDownloadsDir, pkg.Name+"_"+pkg.Version+".deb")
+func foldOpsStagedArtifactPath(artifactFormat string, pkg foldOpsPackage) string {
+	suffix := ".deb"
+	if artifactFormat == foldOpsManifestArtifactFormatLayout {
+		suffix = ".tar.zst"
+	}
+	return filepath.Join(foldOpsDownloadsDir, pkg.Name+"_"+pkg.Version+suffix)
 }
 
-func downloadAndStageFoldOpsPackage(pkg foldOpsPackage) error {
+func foldOpsStagedDebPath(pkg foldOpsPackage) string {
+	return foldOpsStagedArtifactPath(foldOpsManifestArtifactFormatDeb, pkg)
+}
+
+func downloadAndStageFoldOpsPackage(artifactFormat string, pkg foldOpsPackage) error {
 	if err := os.MkdirAll(foldOpsDownloadsDir, 0755); err != nil {
 		return fmt.Errorf("create downloads directory: %w", err)
 	}
-	partialPath := foldOpsStagedDebPath(pkg) + ".partial"
-	stagedPath := foldOpsStagedDebPath(pkg)
+	partialPath := foldOpsStagedArtifactPath(artifactFormat, pkg) + ".partial"
+	stagedPath := foldOpsStagedArtifactPath(artifactFormat, pkg)
 
 	if err := os.Remove(partialPath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("remove stale partial download: %w", err)
@@ -268,7 +276,7 @@ func verifyFoldOpsArtifactFile(path string, pkg foldOpsPackage) error {
 	return nil
 }
 
-func extractAndInstallFoldOpsPackages(release string, packages []foldOpsPackage) (string, error) {
+func extractAndInstallFoldOpsPackages(release, artifactFormat string, packages []foldOpsPackage) (string, error) {
 	role, err := readActiveInstallationRole()
 	if err != nil {
 		return "", err
@@ -296,7 +304,7 @@ func extractAndInstallFoldOpsPackages(release string, packages []foldOpsPackage)
 	}
 
 	for _, pkg := range packages {
-		if err := extractFoldOpsPackage(stagingRoot, pkg); err != nil {
+		if err := extractFoldOpsPackage(stagingRoot, artifactFormat, pkg); err != nil {
 			_ = removeFAHPath(stagingRoot)
 			return "", err
 		}
@@ -318,17 +326,34 @@ func extractAndInstallFoldOpsPackages(release string, packages []foldOpsPackage)
 	return releaseDir, nil
 }
 
-func extractFoldOpsPackage(stagingRoot string, pkg foldOpsPackage) error {
-	stagedDeb := foldOpsStagedDebPath(pkg)
-	if _, err := os.Stat(stagedDeb); err != nil {
-		return fmt.Errorf("staged deb artifact is missing: %w", err)
-	}
-	packageRoot := filepath.Join(stagingRoot, pkg.Name)
-	if err := foldOpsExtractDebData(stagedDeb, packageRoot); err != nil {
-		return fmt.Errorf("extract %s: %w", pkg.Name, err)
-	}
-	if err := normalizeFAHInstallTree(packageRoot); err != nil {
-		return fmt.Errorf("normalize %s install tree: %w", pkg.Name, err)
+func extractFoldOpsPackage(stagingRoot, artifactFormat string, pkg foldOpsPackage) error {
+	switch artifactFormat {
+	case foldOpsManifestArtifactFormatDeb:
+		stagedArtifact := foldOpsStagedArtifactPath(artifactFormat, pkg)
+		if _, err := os.Stat(stagedArtifact); err != nil {
+			return fmt.Errorf("staged deb artifact is missing: %w", err)
+		}
+		packageRoot := filepath.Join(stagingRoot, pkg.Name)
+		if err := foldOpsExtractDebData(stagedArtifact, packageRoot); err != nil {
+			return fmt.Errorf("extract %s: %w", pkg.Name, err)
+		}
+		if err := normalizeFAHInstallTree(packageRoot); err != nil {
+			return fmt.Errorf("normalize %s install tree: %w", pkg.Name, err)
+		}
+	case foldOpsManifestArtifactFormatLayout:
+		stagedArtifact := foldOpsStagedArtifactPath(artifactFormat, pkg)
+		if _, err := os.Stat(stagedArtifact); err != nil {
+			return fmt.Errorf("staged layout bundle is missing: %w", err)
+		}
+		installPrefix := pkg.InstallPrefix
+		if installPrefix == "" {
+			installPrefix = pkg.Name
+		}
+		if err := extractFoldOpsLayoutBundle(stagedArtifact, stagingRoot, installPrefix); err != nil {
+			return fmt.Errorf("extract %s: %w", pkg.Name, err)
+		}
+	default:
+		return fmt.Errorf("unsupported artifact_format %q", artifactFormat)
 	}
 	return verifyFoldOpsPackageTreeAtRoot(stagingRoot, pkg)
 }

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -35,6 +37,43 @@ version = "0.1.0"
 roles = ["supervisor"]
 artifact_url = "https://deb.folding-os.com/pool/main/f/foldops-web/foldops-web_0.1.0_all.deb"
 artifact_size = 174466
+sha256 = "e560956f0aa6f77677af9bbac464a71ebcf0ff1da19877070f6f8dc05f738ecf"
+verification_path = "/data/apps/foldops/current/foldops-web/usr/share/foldops/web/index.html"
+`
+
+const validFoldOpsManifestV2 = `schema_version = 2
+manifest_release = "0.2.0-1"
+architecture = "x86_64"
+artifact_format = "layout-tar-zst"
+minimum_foldingos_version = "0.1.0"
+
+[[packages]]
+name = "foldops-agent"
+version = "0.1.0"
+roles = ["agent", "supervisor"]
+install_prefix = "foldops-agent"
+artifact_url = "https://packages.folding-os.com/foldops/0.2.0-1/foldops-agent-x86_64.tar.zst"
+artifact_size = 3740000
+sha256 = "9022c393630e11d5cec5794ac77281671c7b0d634d630c92d95ad6de22d2151a"
+verification_path = "/data/apps/foldops/current/foldops-agent/usr/bin/foldops-agent"
+
+[[packages]]
+name = "foldops-supervisor"
+version = "0.1.0"
+roles = ["supervisor"]
+install_prefix = "foldops-supervisor"
+artifact_url = "https://packages.folding-os.com/foldops/0.2.0-1/foldops-supervisor-x86_64.tar.zst"
+artifact_size = 3720000
+sha256 = "a8b91ec03803259ade0bc3595218d74408390f6ac4e0f077cc47ba85edaaa8d5"
+verification_path = "/data/apps/foldops/current/foldops-supervisor/usr/bin/foldops-supervisor"
+
+[[packages]]
+name = "foldops-web"
+version = "0.1.0"
+roles = ["supervisor"]
+install_prefix = "foldops-web"
+artifact_url = "https://packages.folding-os.com/foldops/0.2.0-1/foldops-web-x86_64.tar.zst"
+artifact_size = 174000
 sha256 = "e560956f0aa6f77677af9bbac464a71ebcf0ff1da19877070f6f8dc05f738ecf"
 verification_path = "/data/apps/foldops/current/foldops-web/usr/share/foldops/web/index.html"
 `
@@ -130,8 +169,66 @@ func TestRejectVerificationPathOutsideCurrent(t *testing.T) {
 }
 
 func TestRejectExternalFoldOpsManifestPath(t *testing.T) {
-	if _, err := loadFoldOpsManifest("/tmp/foldops.toml"); err == nil {
+	if _, err := loadFoldOpsManifestFromFile("/tmp/foldops.toml"); err == nil {
 		t.Fatal("external manifest path was accepted")
+	}
+}
+
+func TestParseSchemaV2LayoutManifest(t *testing.T) {
+	manifest, err := parseFoldOpsManifest(validFoldOpsManifestV2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateFoldOpsManifest(manifest); err != nil {
+		t.Fatal(err)
+	}
+	if manifest.SchemaVersion != 2 || manifest.ArtifactFormat != "layout-tar-zst" {
+		t.Fatalf("unexpected manifest header: %+v", manifest)
+	}
+	if manifest.Packages[0].InstallPrefix != "foldops-agent" {
+		t.Fatalf("unexpected install_prefix: %+v", manifest.Packages[0])
+	}
+}
+
+func TestRejectSchemaV2LayoutMissingInstallPrefix(t *testing.T) {
+	content := strings.Replace(
+		validFoldOpsManifestV2,
+		"install_prefix = \"foldops-agent\"\n",
+		"",
+		1,
+	)
+	manifest, err := parseFoldOpsManifest(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateFoldOpsManifest(manifest); err == nil {
+		t.Fatal("layout manifest without install_prefix was accepted")
+	}
+}
+
+func TestResolveEffectiveFoldOpsManifestPrefersAssigned(t *testing.T) {
+	root := t.TempDir()
+	bootstrapPath := filepath.Join(root, "bootstrap.toml")
+	assignedPath := filepath.Join(root, "assigned.toml")
+	if err := os.WriteFile(bootstrapPath, []byte(validFoldOpsManifest), 0644); err != nil {
+		t.Fatal(err)
+	}
+	assigned := validFoldOpsManifestV2
+	if err := os.WriteFile(assignedPath, []byte(assigned), 0644); err != nil {
+		t.Fatal(err)
+	}
+	restore := setFoldOpsManifestPaths(bootstrapPath, assignedPath)
+	defer restore()
+
+	manifest, err := resolveEffectiveFoldOpsManifest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if manifest.ManifestRelease != "0.2.0-1" {
+		t.Fatalf("expected assigned manifest release, got %q", manifest.ManifestRelease)
+	}
+	if manifest.ArtifactFormat != "layout-tar-zst" {
+		t.Fatalf("expected layout manifest, got %q", manifest.ArtifactFormat)
 	}
 }
 

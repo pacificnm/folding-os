@@ -12,14 +12,23 @@ import (
 )
 
 const (
-	embeddedFoldOpsManifestPath      = "/usr/share/foldingos/manifests/foldops.toml"
-	foldOpsVerifiedMarkerName        = ".foldingos-verified"
-	foldOpsApprovedArtifactOrigin    = "deb.folding-os.com"
-	foldOpsManifestSchemaVersion     = 1
-	foldOpsManifestArchitecture      = "x86_64"
-	foldOpsManifestArtifactFormat    = "deb"
-	foldOpsManifestMinimumVersion    = "0.1.0"
-	foldOpsVerificationPathPrefix    = "/data/apps/foldops/current/"
+	embeddedFoldOpsManifestPathDefault = "/usr/share/foldingos/manifests/foldops.toml"
+	assignedFoldOpsManifestPathDefault = "/data/config/foldops/assigned-manifest.toml"
+	foldOpsVerifiedMarkerName          = ".foldingos-verified"
+	foldOpsApprovedDebOrigin           = "deb.folding-os.com"
+	foldOpsApprovedPackagesOrigin      = "packages.folding-os.com"
+	foldOpsManifestSchemaVersionV1     = 1
+	foldOpsManifestSchemaVersionV2     = 2
+	foldOpsManifestArtifactFormatDeb   = "deb"
+	foldOpsManifestArtifactFormatLayout = "layout-tar-zst"
+	foldOpsManifestArchitecture        = "x86_64"
+	foldOpsManifestMinimumVersion      = "0.1.0"
+	foldOpsVerificationPathPrefix      = "/data/apps/foldops/current/"
+)
+
+var (
+	foldOpsEmbeddedManifestPath = embeddedFoldOpsManifestPathDefault
+	foldOpsAssignedManifestPath = assignedFoldOpsManifestPathDefault
 )
 
 var (
@@ -34,13 +43,14 @@ var foldOpsRequiredPackageRoles = map[string][]string{
 }
 
 type foldOpsPackage struct {
-	Name              string
-	Version           string
-	Roles             []string
-	ArtifactURL       string
-	ArtifactSize      int64
-	SHA256            string
-	VerificationPath  string
+	Name             string
+	Version          string
+	Roles            []string
+	InstallPrefix    string
+	ArtifactURL      string
+	ArtifactSize     int64
+	SHA256           string
+	VerificationPath string
 }
 
 type foldOpsManifest struct {
@@ -53,7 +63,7 @@ type foldOpsManifest struct {
 }
 
 func validateFoldOpsManifestEmbedded() error {
-	manifest, err := loadFoldOpsManifest(embeddedFoldOpsManifestPath)
+	manifest, err := loadFoldOpsManifestFromFile(foldOpsEmbeddedManifestPath)
 	if err != nil {
 		return err
 	}
@@ -61,16 +71,49 @@ func validateFoldOpsManifestEmbedded() error {
 		return err
 	}
 	fmt.Printf(
-		"Approved FoldOps manifest %s is valid for FoldingOS %s.\n",
+		"Approved FoldOps bootstrap manifest %s is valid for FoldingOS %s.\n",
 		manifest.ManifestRelease,
 		manifest.MinimumFoldingOSVersion,
 	)
+	if _, err := os.Stat(foldOpsAssignedManifestPath); err == nil {
+		assigned, err := loadFoldOpsManifestFromFile(foldOpsAssignedManifestPath)
+		if err != nil {
+			return fmt.Errorf("assigned manifest: %w", err)
+		}
+		if err := validateFoldingOSCompatibility(assigned.MinimumFoldingOSVersion); err != nil {
+			return fmt.Errorf("assigned manifest: %w", err)
+		}
+		fmt.Printf(
+			"Supervisor-assigned FoldOps manifest %s is valid for FoldingOS %s.\n",
+			assigned.ManifestRelease,
+			assigned.MinimumFoldingOSVersion,
+		)
+	} else if !os.IsNotExist(err) {
+		return err
+	}
 	return nil
 }
 
-func loadFoldOpsManifest(path string) (foldOpsManifest, error) {
-	if path != embeddedFoldOpsManifestPath {
-		return foldOpsManifest{}, errors.New("v0.1.0 accepts only the embedded approved manifest")
+func resolveEffectiveFoldOpsManifest() (foldOpsManifest, error) {
+	if _, err := os.Stat(foldOpsAssignedManifestPath); err == nil {
+		manifest, err := loadFoldOpsManifestFromFile(foldOpsAssignedManifestPath)
+		if err != nil {
+			return foldOpsManifest{}, fmt.Errorf("assigned manifest: %w", err)
+		}
+		return manifest, nil
+	} else if !os.IsNotExist(err) {
+		return foldOpsManifest{}, err
+	}
+	return loadFoldOpsManifestFromFile(foldOpsEmbeddedManifestPath)
+}
+
+func loadFoldOpsManifest(_ string) (foldOpsManifest, error) {
+	return resolveEffectiveFoldOpsManifest()
+}
+
+func loadFoldOpsManifestFromFile(path string) (foldOpsManifest, error) {
+	if path != foldOpsEmbeddedManifestPath && path != foldOpsAssignedManifestPath {
+		return foldOpsManifest{}, errors.New("manifest path is not allowed")
 	}
 	content, err := os.ReadFile(path)
 	if err != nil {
@@ -98,13 +141,14 @@ func parseFoldOpsManifest(content string) (foldOpsManifest, error) {
 		"minimum_foldingos_version": true,
 	}
 	allowedPackageKeys := map[string]bool{
-		"name":               true,
-		"version":            true,
-		"roles":              true,
-		"artifact_url":       true,
-		"artifact_size":      true,
-		"sha256":             true,
-		"verification_path":  true,
+		"name":              true,
+		"version":           true,
+		"roles":             true,
+		"install_prefix":    true,
+		"artifact_url":      true,
+		"artifact_size":     true,
+		"sha256":            true,
+		"verification_path": true,
 	}
 
 	manifest := foldOpsManifest{}
@@ -119,7 +163,9 @@ func parseFoldOpsManifest(content string) (foldOpsManifest, error) {
 		if !inPackage {
 			return nil
 		}
-		for key := range allowedPackageKeys {
+		for _, key := range []string{
+			"name", "version", "roles", "artifact_url", "artifact_size", "sha256", "verification_path",
+		} {
 			if !packageSeen[key] {
 				return fmt.Errorf("line %d: package is missing required key %q", lineNumber, key)
 			}
@@ -216,7 +262,7 @@ func parseFoldOpsManifest(content string) (foldOpsManifest, error) {
 					return foldOpsManifest{}, fmt.Errorf("line %d: artifact_size must be a positive integer", number+1)
 				}
 				current.ArtifactSize = parsed
-			case "name", "version", "artifact_url", "sha256", "verification_path":
+			case "name", "version", "artifact_url", "sha256", "verification_path", "install_prefix":
 				parsed, err := parseQuotedString(value)
 				if err != nil {
 					return foldOpsManifest{}, fmt.Errorf("line %d: %q must be a quoted string", number+1, key)
@@ -232,6 +278,8 @@ func parseFoldOpsManifest(content string) (foldOpsManifest, error) {
 					current.SHA256 = parsed
 				case "verification_path":
 					current.VerificationPath = parsed
+				case "install_prefix":
+					current.InstallPrefix = parsed
 				}
 			}
 			continue
@@ -314,14 +362,25 @@ func parseFoldOpsRoles(arrayLiteral string) ([]string, error) {
 }
 
 func validateFoldOpsManifest(manifest foldOpsManifest) error {
-	if manifest.SchemaVersion != foldOpsManifestSchemaVersion {
-		return errors.New("manifest schema_version must be 1")
+	switch manifest.SchemaVersion {
+	case foldOpsManifestSchemaVersionV1:
+		if manifest.ArtifactFormat != foldOpsManifestArtifactFormatDeb {
+			return errors.New("manifest schema_version 1 requires artifact_format deb")
+		}
+	case foldOpsManifestSchemaVersionV2:
+		if manifest.ArtifactFormat != foldOpsManifestArtifactFormatLayout &&
+			manifest.ArtifactFormat != foldOpsManifestArtifactFormatDeb {
+			return fmt.Errorf(
+				"manifest schema_version 2 requires artifact_format %q or %q",
+				foldOpsManifestArtifactFormatLayout,
+				foldOpsManifestArtifactFormatDeb,
+			)
+		}
+	default:
+		return errors.New("manifest schema_version must be 1 or 2")
 	}
 	if manifest.Architecture != foldOpsManifestArchitecture {
 		return errors.New("manifest architecture must be x86_64")
-	}
-	if manifest.ArtifactFormat != foldOpsManifestArtifactFormat {
-		return errors.New("manifest artifact_format must be deb")
 	}
 	if manifest.MinimumFoldingOSVersion != foldOpsManifestMinimumVersion {
 		return errors.New("manifest minimum_foldingos_version must be 0.1.0")
@@ -335,7 +394,7 @@ func validateFoldOpsManifest(manifest foldOpsManifest) error {
 
 	seenNames := make(map[string]struct{})
 	for _, pkg := range manifest.Packages {
-		if err := validateFoldOpsPackage(pkg); err != nil {
+		if err := validateFoldOpsPackage(manifest, pkg); err != nil {
 			return err
 		}
 		if _, exists := seenNames[pkg.Name]; exists {
@@ -351,7 +410,7 @@ func validateFoldOpsManifest(manifest foldOpsManifest) error {
 	return nil
 }
 
-func validateFoldOpsPackage(pkg foldOpsPackage) error {
+func validateFoldOpsPackage(manifest foldOpsManifest, pkg foldOpsPackage) error {
 	expectedRoles, ok := foldOpsRequiredPackageRoles[pkg.Name]
 	if !ok {
 		return fmt.Errorf("unexpected package name in manifest: %s", pkg.Name)
@@ -374,24 +433,67 @@ func validateFoldOpsPackage(pkg foldOpsPackage) error {
 		return fmt.Errorf("package %s artifact_size must be positive", pkg.Name)
 	}
 
+	installPrefix := strings.TrimSpace(pkg.InstallPrefix)
+	if manifest.SchemaVersion == foldOpsManifestSchemaVersionV2 &&
+		manifest.ArtifactFormat == foldOpsManifestArtifactFormatLayout {
+		if installPrefix == "" {
+			return fmt.Errorf("package %s install_prefix is required for layout-tar-zst manifests", pkg.Name)
+		}
+		if installPrefix != pkg.Name {
+			return fmt.Errorf("package %s install_prefix must match package name %q", pkg.Name, pkg.Name)
+		}
+	} else if installPrefix != "" && installPrefix != pkg.Name {
+		return fmt.Errorf("package %s install_prefix must match package name when present", pkg.Name)
+	}
+
 	artifactURL, err := url.Parse(pkg.ArtifactURL)
-	if err != nil || artifactURL.Scheme != "https" || artifactURL.Host != foldOpsApprovedArtifactOrigin {
+	if err != nil {
+		return fmt.Errorf("package %s artifact_url is invalid: %w", pkg.Name, err)
+	}
+	if artifactURL.Scheme != "https" {
+		return fmt.Errorf("package %s artifact_url must use HTTPS", pkg.Name)
+	}
+	expectedOrigin := foldOpsApprovedArtifactOrigin(manifest.ArtifactFormat)
+	if artifactURL.Host != expectedOrigin {
 		return fmt.Errorf(
 			"package %s artifact_url must use HTTPS from the approved official origin: %s",
 			pkg.Name,
-			foldOpsApprovedArtifactOrigin,
+			expectedOrigin,
 		)
 	}
 	if strings.HasSuffix(artifactURL.Path, "/latest.deb") || strings.HasSuffix(artifactURL.Path, "latest.deb") {
 		return fmt.Errorf("package %s artifact_url must not reference an unpinned latest artifact", pkg.Name)
 	}
-	if !strings.Contains(artifactURL.Path, "/"+pkg.Name+"/") {
-		return fmt.Errorf("package %s artifact_url must reference the %s pool artifact", pkg.Name, pkg.Name)
+	if err := validateFoldOpsArtifactURLPath(manifest.ArtifactFormat, artifactURL.Path, pkg.Name); err != nil {
+		return fmt.Errorf("package %s: %w", pkg.Name, err)
 	}
 
 	expectedPrefix := foldOpsVerificationPathPrefix + pkg.Name + "/"
 	if err := validateFoldOpsVerificationPath(pkg.VerificationPath, expectedPrefix); err != nil {
 		return fmt.Errorf("package %s: %w", pkg.Name, err)
+	}
+	return nil
+}
+
+func foldOpsApprovedArtifactOrigin(artifactFormat string) string {
+	if artifactFormat == foldOpsManifestArtifactFormatLayout {
+		return foldOpsApprovedPackagesOrigin
+	}
+	return foldOpsApprovedDebOrigin
+}
+
+func validateFoldOpsArtifactURLPath(artifactFormat, path, packageName string) error {
+	switch artifactFormat {
+	case foldOpsManifestArtifactFormatDeb:
+		if !strings.Contains(path, "/"+packageName+"/") {
+			return fmt.Errorf("artifact_url must reference the %s pool artifact", packageName)
+		}
+	case foldOpsManifestArtifactFormatLayout:
+		if !strings.Contains(path, packageName) {
+			return fmt.Errorf("artifact_url must reference the %s layout bundle", packageName)
+		}
+	default:
+		return fmt.Errorf("unsupported artifact_format %q", artifactFormat)
 	}
 	return nil
 }
