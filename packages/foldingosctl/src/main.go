@@ -105,6 +105,9 @@ func dispatch(args []string) error {
 	if len(args) == 2 && args[0] == "foldops" && args[1] == "acquire" {
 		return foldOpsAcquire()
 	}
+	if len(args) == 2 && args[0] == "tools" && args[1] == "acquire" {
+		return toolsAcquire()
+	}
 	if len(args) == 2 && args[0] == "foldops" && args[1] == "provision" {
 		return foldOpsProvision()
 	}
@@ -136,7 +139,7 @@ func dispatch(args []string) error {
 		return activateConfig(args[2], args[3])
 	}
 
-	fmt.Fprintln(os.Stderr, "usage: foldingosctl <boot|config|fah|foldops|identity|provision|registry|storage> <command> [arguments]")
+	fmt.Fprintln(os.Stderr, "usage: foldingosctl <boot|config|fah|foldops|identity|provision|registry|storage|tools> <command> [arguments]")
 	os.Exit(2)
 	return nil
 }

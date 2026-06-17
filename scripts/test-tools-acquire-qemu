@@ -1,0 +1,158 @@
+#!/usr/bin/env bash
+# QEMU acceptance check for foldingosctl tools acquire (issue #85).
+#
+# Validates bootstrap behavior on a running appliance without OS reimage:
+#   - tools acquire succeeds when no supervisor assignment is present
+#   - /usr/bin/foldingosctl remains available afterward
+#
+# Full replacement validation requires a rebuilt release image that includes
+# this tools acquire implementation and a reachable packages.folding-os.com
+# tools publication matching assigned-version.json.
+set -euo pipefail
+export LC_ALL=C
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+IMAGES_DIR="${PROJECT_ROOT}/build/output/images"
+HOST_DIR="${PROJECT_ROOT}/build/output/host"
+TEST_DIR="${PROJECT_ROOT}/build/test-tools-acquire-qemu"
+RELEASE_IMAGE="${1:-${IMAGES_DIR}/foldingos-x86_64-0.1.0.img}"
+GUEST_IMAGE="${TEST_DIR}/tools-acquire.img"
+SERIAL_LOG="${TEST_DIR}/serial.log"
+SSH_KEY="${TEST_DIR}/foldingos-test-key"
+SSH_PORT=2223
+BOOT_TIMEOUT=360
+SSH_READY_TIMEOUT=120
+
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") [release-image]
+
+Boot a release image in QEMU and validate foldingosctl tools acquire bootstrap
+behavior without OS reimage.
+
+Requires:
+  - completed ./scripts/build (image must include tools acquire command)
+  - OVMF 4M firmware
+  - openssh-client and qemu-system-x86_64
+
+EOF
+}
+
+if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+  usage
+  exit 0
+fi
+
+if [ ! -f "${RELEASE_IMAGE}" ]; then
+  echo "ERROR: release image not found: ${RELEASE_IMAGE}" >&2
+  echo "Run ./scripts/build first." >&2
+  exit 1
+fi
+
+mkdir -p "${TEST_DIR}"
+cp -f "${RELEASE_IMAGE}" "${GUEST_IMAGE}"
+
+if [ ! -f "${SSH_KEY}" ]; then
+  ssh-keygen -t ed25519 -N "" -f "${SSH_KEY}" >/dev/null
+fi
+
+find_tool() {
+  local name="$1"
+  local candidate
+  for candidate in \
+    "${HOST_DIR}/bin/${name}" \
+    "${HOST_DIR}/sbin/${name}" \
+    "/usr/sbin/${name}" \
+    "/sbin/${name}"
+  do
+    if [ -x "${candidate}" ]; then
+      printf '%s\n' "${candidate}"
+      return
+    fi
+  done
+  command -v "${name}"
+}
+
+find_ovmf_file() {
+  local name="$1"
+  local candidate
+  for candidate in \
+    "/usr/share/OVMF/${name}" \
+    "/usr/share/ovmf/${name}" \
+    "/usr/share/edk2/ovmf/${name}"
+  do
+    if [ -f "${candidate}" ]; then
+      printf '%s\n' "${candidate}"
+      return
+    fi
+  done
+  echo "ERROR: OVMF file not found: ${name}" >&2
+  exit 1
+}
+
+QEMU="$(find_tool qemu-system-x86_64)"
+OVMF_CODE="$(find_ovmf_file OVMF_CODE_4M.fd)"
+OVMF_VARS="${TEST_DIR}/OVMF_VARS_4M.fd"
+if [ ! -f "${OVMF_VARS}" ]; then
+  cp "$(find_ovmf_file OVMF_VARS_4M.fd)" "${OVMF_VARS}"
+fi
+
+: >"${SERIAL_LOG}"
+"${QEMU}" \
+  -machine q35,accel=kvm:tcg \
+  -cpu max \
+  -m 2048 \
+  -drive "if=pflash,format=raw,unit=0,readonly=on,file=${OVMF_CODE}" \
+  -drive "if=pflash,format=raw,unit=1,file=${OVMF_VARS}" \
+  -drive "file=${GUEST_IMAGE},if=virtio,format=raw" \
+  -netdev "user,id=net0,hostfwd=tcp::${SSH_PORT}-:22" \
+  -device virtio-net-pci,netdev=net0 \
+  -serial "file:${SERIAL_LOG}" \
+  -display none \
+  -daemonize
+
+cleanup() {
+  pkill -f "file=${GUEST_IMAGE},if=virtio" 2>/dev/null || true
+}
+trap cleanup EXIT
+
+deadline=$((SECONDS + BOOT_TIMEOUT))
+until grep -Fq 'Started .*OpenSSH server daemon' "${SERIAL_LOG}"; do
+  if [ "${SECONDS}" -ge "${deadline}" ]; then
+    echo "ERROR: guest did not reach SSH within ${BOOT_TIMEOUT}s" >&2
+    exit 1
+  fi
+  sleep 2
+done
+
+ssh_guest() {
+  ssh \
+    -F /dev/null \
+    -i "${SSH_KEY}" \
+    -p "${SSH_PORT}" \
+    -o BatchMode=yes \
+    -o ConnectTimeout=2 \
+    -o LogLevel=ERROR \
+    -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile=/dev/null \
+    "foldingos-admin@127.0.0.1" "$@"
+}
+
+deadline=$((SECONDS + SSH_READY_TIMEOUT))
+until ssh_guest true >/dev/null 2>&1; do
+  if [ "${SECONDS}" -ge "${deadline}" ]; then
+    echo "ERROR: SSH did not become ready within ${SSH_READY_TIMEOUT}s" >&2
+    exit 1
+  fi
+  sleep 2
+done
+
+ssh_guest '
+  set -eux
+  test ! -f /data/config/tools/assigned-version.json
+  sudo foldingosctl tools acquire
+  command -v foldingosctl
+  foldingosctl fah validate-manifest
+'
+
+echo "tools acquire bootstrap QEMU validation passed."
