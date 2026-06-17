@@ -12,7 +12,7 @@ func foldOpsActivate(release string) error {
 	if err := validateFoldOpsReleaseLabel(release); err != nil {
 		return err
 	}
-	manifest, err := loadFoldOpsManifest(embeddedFoldOpsManifestPath)
+	manifest, err := resolveEffectiveFoldOpsManifest()
 	if err != nil {
 		return err
 	}

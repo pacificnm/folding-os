@@ -7,12 +7,55 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/ulikunitz/xz"
 )
 
 var foldOpsExtractDebData = extractFoldOpsDebData
+var foldOpsExtractLayoutBundle = extractFoldOpsLayoutBundle
+
+func extractFoldOpsLayoutBundle(bundlePath, stagingRoot, installPrefix string) error {
+	installPrefix = strings.TrimSpace(installPrefix)
+	if installPrefix == "" || strings.Contains(installPrefix, "..") || strings.ContainsAny(installPrefix, `/\`) {
+		return errors.New("install_prefix is invalid")
+	}
+	prefix := installPrefix + "/"
+
+	file, err := os.Open(bundlePath)
+	if err != nil {
+		return fmt.Errorf("open layout bundle: %w", err)
+	}
+	defer file.Close()
+
+	zstdReader, err := zstd.NewReader(file)
+	if err != nil {
+		return fmt.Errorf("open layout bundle zstd stream: %w", err)
+	}
+	defer zstdReader.Close()
+
+	tarReader := tar.NewReader(zstdReader)
+	for {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("read layout bundle entry: %w", err)
+		}
+		name := strings.TrimPrefix(header.Name, "./")
+		if name == "" || name == installPrefix {
+			continue
+		}
+		if name != installPrefix && !strings.HasPrefix(name, prefix) {
+			return fmt.Errorf("layout bundle entry %q is outside install_prefix %q", header.Name, installPrefix)
+		}
+		if err := extractFAHTarEntry(stagingRoot, header, tarReader); err != nil {
+			return err
+		}
+	}
+}
 
 func extractFoldOpsDebData(debPath, destination string) error {
 	if err := os.MkdirAll(destination, 0755); err != nil {
@@ -153,4 +196,12 @@ func buildTestTarZSTArchive(entries map[string][]byte) ([]byte, error) {
 
 func writeTestDebArtifact(path, memberName string, dataPayload []byte) error {
 	return os.WriteFile(path, buildTestDebArchiveWithDataMember(memberName, dataPayload), 0644)
+}
+
+func buildTestLayoutTarZSTArchive(installPrefix string, entries map[string][]byte) ([]byte, error) {
+	prefixed := make(map[string][]byte, len(entries))
+	for path, content := range entries {
+		prefixed[installPrefix+"/"+path] = content
+	}
+	return buildTestTarZSTArchive(prefixed)
 }
