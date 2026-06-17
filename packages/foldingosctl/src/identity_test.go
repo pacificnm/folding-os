@@ -6,6 +6,14 @@ import (
 	"testing"
 )
 
+func TestMain(m *testing.M) {
+	previous := setStaticHostname
+	setStaticHostname = func(string) error { return nil }
+	code := m.Run()
+	setStaticHostname = previous
+	os.Exit(code)
+}
+
 func TestParseNodeIDFileAcceptsTextUUID(t *testing.T) {
 	got, err := parseNodeIDFile([]byte("550e8400-e29b-41d4-a716-446655440000\n"))
 	if err != nil {
