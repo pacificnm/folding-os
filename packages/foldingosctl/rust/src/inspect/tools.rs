@@ -10,13 +10,13 @@ use crate::paths::AppliancePaths;
 static SHA256_PATTERN: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[0-9a-f]{64}$").expect("sha256 pattern compiles"));
 
-#[derive(Debug, Deserialize)]
-struct ToolsAssignment {
-    schema_version: i32,
-    tools_version: String,
-    artifact_url: String,
-    artifact_size: i64,
-    sha256: String,
+#[derive(Debug, Deserialize, Clone, serde::Serialize)]
+pub struct ToolsAssignment {
+    pub schema_version: i32,
+    pub tools_version: String,
+    pub artifact_url: String,
+    pub artifact_size: i64,
+    pub sha256: String,
 }
 
 #[derive(Debug, Deserialize)]

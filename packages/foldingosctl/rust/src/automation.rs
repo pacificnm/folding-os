@@ -2,7 +2,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 pub const SCHEMA_VERSION: i32 = 1;
-pub const MIGRATION_MARKER: &str = "FOLDINGOSCTL_RUST_PHASE_2";
+pub const MIGRATION_MARKER: &str = "FOLDINGOSCTL_RUST_PHASE_3";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputFormat {
@@ -180,5 +180,13 @@ mod tests {
     fn classifies_role_required() {
         let body = classify_automation_error("operation requires supervisor role, found \"agent\"");
         assert_eq!(body.code, "role_required");
+    }
+
+    #[test]
+    fn classifies_automation_denied() {
+        let body = classify_automation_error(
+            "automation policy does not authorize provision assign for the foldops user",
+        );
+        assert_eq!(body.code, "automation_denied");
     }
 }

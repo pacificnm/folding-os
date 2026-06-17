@@ -5,7 +5,9 @@ mod system;
 mod tools;
 mod update;
 
-use crate::auth::require_inspectable_role;
+pub use tools::ToolsAssignment;
+
+use crate::automation_policy::require_inspectable_role;
 use crate::identity::read_node_identity;
 use crate::paths::AppliancePaths;
 

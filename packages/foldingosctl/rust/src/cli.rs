@@ -4,6 +4,8 @@ use crate::automation::{
 };
 use crate::inspect;
 use crate::paths::AppliancePaths;
+use crate::provision;
+use crate::registry_cmd;
 
 const USAGE: &str =
     "usage: foldingosctl <boot|config|fah|foldops|identity|inspect|provision|registry|storage|tools> <command> [arguments]";
@@ -37,6 +39,8 @@ pub fn dispatch(mut args: Vec<String>) -> Result<(), CliError> {
         return print_migration_status(format);
     }
 
+    let paths = AppliancePaths::default();
+
     if args[0] == "inspect" {
         if args.len() < 2 {
             return Err(CliError::Usage);
@@ -45,9 +49,40 @@ pub fn dispatch(mut args: Vec<String>) -> Result<(), CliError> {
         let extra = args[2..].to_vec();
         let command = format_automation_command(&["inspect", &subcommand]);
         let ctx = AutomationContext::new(format, command);
-        let paths = AppliancePaths::default();
         return match inspect::run(&paths, &subcommand, &extra) {
-            Ok(data) => publish_success(&ctx, data),
+            Ok(data) => publish_success(&ctx, data, &subcommand),
+            Err(message) => publish_failure(&ctx, message),
+        };
+    }
+
+    if args[0] == "provision" {
+        if args.len() < 2 {
+            return Err(CliError::Usage);
+        }
+        let subcommand = args[1].clone();
+        let extra = args[2..].to_vec();
+        let command = format_automation_command(&["provision", &subcommand]);
+        let ctx = AutomationContext::new(format, command);
+        return match provision::run(&paths, &subcommand, &extra) {
+            Ok(data) => publish_success(&ctx, data, &subcommand),
+            Err(message) => publish_failure(&ctx, message),
+        };
+    }
+
+    if args[0] == "registry" {
+        if args.len() < 2 {
+            return Err(CliError::Usage);
+        }
+        let subcommand = args[1].clone();
+        let extra = args[2..].to_vec();
+        let command = if subcommand == "show" && !extra.is_empty() {
+            format_automation_command(&["registry", &subcommand, &extra[0]])
+        } else {
+            format_automation_command(&["registry", &subcommand])
+        };
+        let ctx = AutomationContext::new(format, command);
+        return match registry_cmd::run(&paths, &subcommand, &extra) {
+            Ok(data) => publish_success(&ctx, data, &subcommand),
             Err(message) => publish_failure(&ctx, message),
         };
     }
@@ -60,7 +95,11 @@ pub fn dispatch(mut args: Vec<String>) -> Result<(), CliError> {
     )
 }
 
-fn publish_success(ctx: &AutomationContext, data: serde_json::Value) -> Result<(), CliError> {
+fn publish_success(
+    ctx: &AutomationContext,
+    data: serde_json::Value,
+    subcommand: &str,
+) -> Result<(), CliError> {
     match ctx.format {
         OutputFormat::Json => {
             print!(
@@ -70,7 +109,7 @@ fn publish_success(ctx: &AutomationContext, data: serde_json::Value) -> Result<(
             Ok(())
         }
         OutputFormat::Human => {
-            print_human_inspect_summary(&data);
+            print_human_summary(&data, subcommand);
             Ok(())
         }
     }
@@ -87,18 +126,18 @@ fn publish_failure(ctx: &AutomationContext, message: String) -> Result<(), CliEr
 fn print_migration_status(format: OutputFormat) -> Result<(), CliError> {
     match format {
         OutputFormat::Human => {
-            println!("foldingosctl Rust migration: phase 2");
+            println!("foldingosctl Rust migration: phase 3");
             println!("marker: {MIGRATION_MARKER}");
             Ok(())
         }
         OutputFormat::Json => {
             let ctx = AutomationContext::new(OutputFormat::Json, "migration status");
             let data = serde_json::json!({
-                "phase": 2,
+                "phase": 3,
                 "marker": MIGRATION_MARKER,
                 "implementation": "rust",
             });
-            publish_success(&ctx, data)
+            publish_success(&ctx, data, "status")
         }
     }
 }
@@ -111,7 +150,7 @@ fn infer_command_name(args: &[String]) -> String {
     }
 }
 
-fn print_human_inspect_summary(data: &serde_json::Value) {
+fn print_human_summary(data: &serde_json::Value, subcommand: &str) {
     if let Some(node_id) = data.get("node_id").and_then(|value| value.as_str()) {
         println!(
             "node_id={} hostname={} role={} foldingos_version={} kernel={}",
@@ -139,6 +178,18 @@ fn print_human_inspect_summary(data: &serde_json::Value) {
             println!("mac_addresses={joined}");
         }
         return;
+    }
+    if subcommand == "assign" {
+        if let Some(count) = data.get("updated_count").and_then(|value| value.as_i64()) {
+            println!("Assigned updates to {count} enrolled agent(s).");
+            return;
+        }
+    }
+    if subcommand == "allow-boot" {
+        if let Some(mac) = data.get("mac_address").and_then(|value| value.as_str()) {
+            println!("Allowed MAC {mac} for network boot.");
+            return;
+        }
     }
     println!("{}", serde_json::to_string_pretty(data).unwrap_or_else(|_| "{}".into()));
 }

@@ -7,6 +7,18 @@ pub fn read_active_installation_role(paths: &AppliancePaths) -> Result<String, S
     parse_installation_role_file(&paths.active_installation_role)
 }
 
+pub fn require_supervisor_role(paths: &AppliancePaths) -> Result<(), String> {
+    require_installation_role(paths, "supervisor")
+}
+
+pub fn require_installation_role(paths: &AppliancePaths, expected: &str) -> Result<(), String> {
+    let role = read_active_installation_role(paths)?;
+    if role != expected {
+        return Err(format!("operation requires {expected} role, found \"{role}\""));
+    }
+    Ok(())
+}
+
 pub fn read_installation_role_for_display(paths: &AppliancePaths) -> String {
     read_active_installation_role(paths).unwrap_or_else(|_| "unknown".into())
 }

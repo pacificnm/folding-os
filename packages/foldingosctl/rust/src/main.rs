@@ -1,10 +1,16 @@
+mod assignments;
 mod automation;
-mod auth;
+mod automation_policy;
 mod cli;
 mod config_host;
+mod enrollment;
+mod fs_atomic;
 mod identity;
 mod inspect;
 mod paths;
+mod provision;
+mod registry_cmd;
+mod registry_image;
 mod role;
 
 use cli::{dispatch, exit_code_for_error, print_human_error};
