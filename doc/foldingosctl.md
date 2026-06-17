@@ -67,9 +67,10 @@ Role-specific commands fail closed when the active role does not match.
 | `provision` | `role` | any | `systemd` on first boot |
 | `provision` | `serve` | supervisor | `systemd` (long-running) |
 | `provision` | `boot` | supervisor | `systemd` (long-running) |
-| `provision` | `allow-boot` | supervisor | operator |
-| `provision` | `list-enrollments` | supervisor | operator |
-| `provision` | `assign` | supervisor | operator |
+| `provision` | `allow-boot` | supervisor | operator / foldops automation |
+| `provision` | `list-allow-boot` | supervisor | operator / automation |
+| `provision` | `list-enrollments` | supervisor | operator / automation |
+| `provision` | `assign` | supervisor | operator / foldops automation |
 | `provision` | `install` | install initramfs | network-install boot path |
 | `provision` | `enroll` | agent | `systemd` on first boot |
 | `provision` | `check-version` | agent | `systemd` on boot |
@@ -287,7 +288,29 @@ valid enrollment token is supplied in the iPXE URL.
 ```bash
 sudo foldingosctl provision allow-boot 00:be:43:e7:59:5e
 sudo foldingosctl provision allow-boot --disk /dev/sda 00:be:43:e7:59:5e
+foldingosctl provision allow-boot --format json 00:be:43:e7:59:5e
 ```
+
+FoldOps supervisor exposes the same operations at `GET/POST /api/fleet/allow-boot`
+when running on the supervisor role. The `foldops` service user may invoke this
+command only when authorized by
+`/usr/share/foldingos/foldops-supervisor-automation.toml`; see
+[ADR-0024](adr/0024-foldops-supervisor-fleet-mutation-authorization.md).
+without requiring CLI access from operators.
+
+## `provision list-allow-boot` (supervisor)
+
+Lists MAC addresses allowed for PXE/iPXE network install from
+`/data/config/provision/boot-allowlist`, including optional install-disk pins
+from `/data/config/provision/boot-install-disk-allowlist`.
+
+```bash
+foldingosctl provision list-allow-boot
+foldingosctl provision list-allow-boot --format json
+```
+
+Human output is one MAC per line; when a disk is pinned, the line is
+`mac<TAB>disk=/dev/sdX`.
 
 ## `provision list-enrollments` (supervisor)
 
@@ -305,6 +328,11 @@ foldingosctl provision assign --version 0.1.0 --all
 # one node
 foldingosctl provision assign --version 0.1.0 --node <node-uuid>
 ```
+
+FoldOps supervisor exposes assignment at `POST /api/fleet/assign`. The `foldops`
+service user may invoke this command only when authorized by
+`/usr/share/foldingos/foldops-supervisor-automation.toml`; see
+[ADR-0024](adr/0024-foldops-supervisor-fleet-mutation-authorization.md).
 
 ## `provision install` (install initramfs)
 
@@ -585,8 +613,9 @@ on supervisor role, and writes `/data/state/foldops/provisioned.json`. See
 `/data/apps/foldops/current` for the installation role.
 
 **Idempotency:** when `/data/state/foldops/provisioned.json` already exists and
-validates, the command prints an informational message and exits successfully
-without changes.
+validates, the command ensures supervisor fleet-automation permissions per
+[ADR-0024](adr/0024-foldops-supervisor-fleet-mutation-authorization.md), prints
+an informational message, and exits successfully without re-importing secrets.
 
 **Token import order:**
 
@@ -625,8 +654,11 @@ FILE` writes this path.
 5. write `/data/config/foldops/agent.env` for the co-located agent (hostname
    from effective `system` configuration, same token and CA paths as remote
    agents)
-6. write `/data/state/foldops/provisioned.json`
-7. remove EFI staging file when import came from EFI
+6. ensure supervisor fleet-automation state permissions for the `foldops` user
+   (enrollment store, boot allowlists, supervisor self-assignment files) per
+   [ADR-0024](adr/0024-foldops-supervisor-fleet-mutation-authorization.md)
+7. write `/data/state/foldops/provisioned.json`
+8. remove EFI staging file when import came from EFI
 
 **Agent role:**
 

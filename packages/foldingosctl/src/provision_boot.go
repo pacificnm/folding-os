@@ -309,8 +309,75 @@ func saveBootAllowlist(allowed []string) error {
 	return atomicWrite(provisionBootAllowlistPath, []byte(content), 0644)
 }
 
+type bootAllowDevice struct {
+	MACAddress  string `json:"mac_address"`
+	InstallDisk string `json:"install_disk,omitempty"`
+}
+
+func collectBootAllowDevices() ([]bootAllowDevice, error) {
+	macs, err := readBootAllowlistEntries()
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(macs)
+	diskMappings, err := readBootInstallDiskAllowlistEntries()
+	if err != nil {
+		return nil, err
+	}
+	devices := make([]bootAllowDevice, 0, len(macs))
+	for _, mac := range macs {
+		device := bootAllowDevice{MACAddress: mac}
+		if disk := diskMappings[mac]; disk != "" {
+			device.InstallDisk = disk
+		}
+		devices = append(devices, device)
+	}
+	return devices, nil
+}
+
+func provisionListAllowBoot() error {
+	if err := requireSupervisorRole(); err != nil {
+		return err
+	}
+	devices, err := collectBootAllowDevices()
+	if err != nil {
+		return err
+	}
+	if automationJSONEnabled() {
+		return writeAutomationSuccess(map[string]any{
+			"devices": devices,
+		})
+	}
+	if len(devices) == 0 {
+		fmt.Println("No allowed network-boot devices.")
+		return nil
+	}
+	for _, device := range devices {
+		if device.InstallDisk != "" {
+			fmt.Printf("%s\tdisk=%s\n", device.MACAddress, device.InstallDisk)
+			continue
+		}
+		fmt.Println(device.MACAddress)
+	}
+	return nil
+}
+
+func writeAllowBootAutomationSuccess(mac, installDisk string, alreadyAllowed bool) error {
+	result := map[string]any{
+		"mac_address":     mac,
+		"already_allowed": alreadyAllowed,
+	}
+	if installDisk != "" {
+		result["install_disk"] = installDisk
+	}
+	return writeAutomationSuccess(result)
+}
+
 func provisionAllowBoot(mac, installDisk string) error {
 	if err := requireSupervisorRole(); err != nil {
+		return err
+	}
+	if err := requireSupervisorAutomationMutation("provision", "allow-boot"); err != nil {
 		return err
 	}
 	mac, err := parseMACAddress(mac)
@@ -332,8 +399,14 @@ func provisionAllowBoot(mac, installDisk string) error {
 			if err := saveBootInstallDiskMapping(mac, installDisk); err != nil {
 				return err
 			}
+			if automationJSONEnabled() {
+				return writeAllowBootAutomationSuccess(mac, installDisk, true)
+			}
 			fmt.Printf("Pinned network install target disk %s for MAC %s.\n", installDisk, mac)
 			return nil
+		}
+		if automationJSONEnabled() {
+			return writeAllowBootAutomationSuccess(mac, "", true)
 		}
 		fmt.Printf("MAC %s is already allowed for network boot.\n", mac)
 		return nil
@@ -346,6 +419,9 @@ func provisionAllowBoot(mac, installDisk string) error {
 		if err := saveBootInstallDiskMapping(mac, installDisk); err != nil {
 			return err
 		}
+	}
+	if automationJSONEnabled() {
+		return writeAllowBootAutomationSuccess(mac, installDisk, false)
 	}
 	fmt.Printf("Allowed MAC %s for network boot.\n", mac)
 	if installDisk != "" {

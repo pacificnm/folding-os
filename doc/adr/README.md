@@ -61,6 +61,7 @@ design decisions years after they were originally made.
 - [ADR-0021: Machine-Readable foldingosctl Automation Interface](0021-machine-readable-foldingosctl-automation-interface.md) (proposed)
 - [ADR-0022: FoldOps Rust Source In FoldingOS Monorepo](0022-foldops-rust-source-in-foldingos-monorepo.md) (proposed)
 - [ADR-0023: Runtime FoldOps And foldingosctl Updates Without OS Reimage](0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md) (proposed)
+- [ADR-0024: FoldOps Supervisor Fleet Mutation Authorization](0024-foldops-supervisor-fleet-mutation-authorization.md) (proposed)
 
 ---
 

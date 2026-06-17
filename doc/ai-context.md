@@ -98,6 +98,7 @@ precedence or silently choose one statement.
   [ADR-0021](adr/0021-machine-readable-foldingosctl-automation-interface.md),
   [ADR-0022](adr/0022-foldops-rust-source-in-foldingos-monorepo.md),
   [ADR-0023](adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md), and
+  [ADR-0024](adr/0024-foldops-supervisor-fleet-mutation-authorization.md), and
   [milestone/4-engineering-spec.md](milestone/4-engineering-spec.md).
 - Operator build, deployment, recovery, and Folding@home runtime procedures are
   in [operations.md](operations.md).

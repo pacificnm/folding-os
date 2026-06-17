@@ -180,6 +180,63 @@ func TestProvisionListEnrollmentsJSON(t *testing.T) {
 	}
 }
 
+func TestProvisionAssignJSON(t *testing.T) {
+	root := t.TempDir()
+	restoreProvision := setProvisionPaths(root)
+	defer restoreProvision()
+	restoreRole := setInstallationRolePaths(
+		filepath.Join(root, "provision-role"),
+		filepath.Join(root, "config", "installation-role"),
+	)
+	defer restoreRole()
+	if err := os.MkdirAll(filepath.Join(root, "config"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "config", "installation-role"), []byte("supervisor"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	writeEnrollmentToken(t, root, "test-enrollment-token")
+	if _, err := registerAgent(sampleRegistrationRequest("test-enrollment-token")); err != nil {
+		t.Fatal(err)
+	}
+
+	automationCtx = automationContext{
+		format:  formatJSON,
+		command: "provision assign",
+	}
+	read, write, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := os.Stdout
+	os.Stdout = write
+	t.Cleanup(func() {
+		os.Stdout = previous
+	})
+	version := "current"
+	if err := provisionAssign([]string{"--node", testAgentNodeID, "--version", version}); err != nil {
+		t.Fatal(err)
+	}
+	write.Close()
+
+	var stdout bytes.Buffer
+	stdout.ReadFrom(read)
+	var document automationSuccessDocument
+	if err := json.Unmarshal(stdout.Bytes(), &document); err != nil {
+		t.Fatal(err)
+	}
+	if !document.OK {
+		t.Fatalf("document: %+v", document)
+	}
+	payload, ok := document.Data.(map[string]any)
+	if !ok {
+		t.Fatalf("data: %#v", document.Data)
+	}
+	if payload["updated_count"].(float64) != 1 {
+		t.Fatalf("updated_count: %#v", payload["updated_count"])
+	}
+}
+
 func setupInspectRuntimePaths(t *testing.T, root string) {
 	t.Helper()
 	restoreFoldOpsPaths := setFoldOpsManifestPaths(

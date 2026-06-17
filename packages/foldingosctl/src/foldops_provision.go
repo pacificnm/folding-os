@@ -51,6 +51,11 @@ func foldOpsProvision() error {
 	if provisioned, err := loadFoldOpsProvisionedMarker(); err != nil {
 		return err
 	} else if provisioned != nil {
+		if provisioned.Role == "supervisor" {
+			if err := ensureSupervisorFleetAutomationPermissions(); err != nil {
+				return err
+			}
+		}
 		fmt.Printf("FoldOps is already provisioned for role %s.\n", provisioned.Role)
 		return startFoldOpsRuntimeServices()
 	}
@@ -177,6 +182,9 @@ func parseFoldOpsIngestToken(content string) (string, error) {
 }
 
 func provisionFoldOpsSupervisor(manifestRelease, token string) error {
+	if err := ensureSupervisorFleetAutomationPermissions(); err != nil {
+		return err
+	}
 	if err := ensureFoldOpsTLSMaterial(); err != nil {
 		return err
 	}

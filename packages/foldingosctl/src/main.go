@@ -81,6 +81,10 @@ func dispatch(args []string) error {
 		setAutomationCommand("provision list-enrollments")
 		return provisionListEnrollments()
 	}
+	if len(args) == 2 && args[0] == "provision" && args[1] == "list-allow-boot" {
+		setAutomationCommand("provision list-allow-boot")
+		return provisionListAllowBoot()
+	}
 	if len(args) >= 3 && args[0] == "provision" && args[1] == "assign" {
 		setAutomationCommand(formatAutomationCommand("provision", "assign"))
 		return provisionAssign(args[2:])
@@ -89,6 +93,7 @@ func dispatch(args []string) error {
 		return provisionBoot()
 	}
 	if len(args) >= 3 && args[0] == "provision" && args[1] == "allow-boot" {
+		setAutomationCommand(formatAutomationCommand("provision", "allow-boot"))
 		return provisionAllowBootCommand(args[2:])
 	}
 	if len(args) >= 2 && args[0] == "provision" && args[1] == "install" {

@@ -5,6 +5,7 @@ mod config;
 mod db;
 mod deploy;
 mod fah_projects;
+mod foldingos;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -96,6 +97,12 @@ async fn main() {
         tracing::info!(
             port = config.agent_http_port,
             "[control] remote node control enabled"
+        );
+    }
+    if config.uses_supervisor_fleet_delegation() {
+        tracing::info!(
+            foldingosctl = %config.foldingosctl_path.display(),
+            "[fleet] FoldingOS fleet delegation enabled"
         );
     }
 

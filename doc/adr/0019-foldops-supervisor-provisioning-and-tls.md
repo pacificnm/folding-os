@@ -18,7 +18,9 @@
 
 **Amended by:** [ADR-0020](0020-foldops-delegates-node-operations-to-foldingosctl.md),
 [ADR-0023](0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md)
-(supervisor assignment of desired FoldOps and tools versions extends provisioning APIs)
+(supervisor assignment of desired FoldOps and tools versions extends provisioning APIs),
+[ADR-0024](0024-foldops-supervisor-fleet-mutation-authorization.md)
+(FoldOps dashboard fleet mutations delegate through `foldops-supervisor`)
 
 ---
 

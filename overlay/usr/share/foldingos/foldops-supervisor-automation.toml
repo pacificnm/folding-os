@@ -1,0 +1,14 @@
+# FoldOps supervisor automation policy.
+# See ADR-0024: doc/adr/0024-foldops-supervisor-fleet-mutation-authorization.md
+
+schema_version = 1
+service_user = "foldops"
+installation_role = "supervisor"
+
+[[commands]]
+group = "provision"
+name = "assign"
+
+[[commands]]
+group = "provision"
+name = "allow-boot"

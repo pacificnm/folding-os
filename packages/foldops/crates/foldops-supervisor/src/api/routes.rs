@@ -15,10 +15,11 @@ use crate::alerts::engine::{
     alerts_status_json, list_active_alerts_json, list_alert_history_json, run_test_alert,
 };
 use crate::config::Config;
-use crate::db::{self, Db, SnapshotRow};
+use crate::db::{self, Db, MachineRow, SnapshotRow};
 use crate::deploy::db::{get_deploy_run, list_deploy_runs};
 use crate::deploy::start_agent_deploy;
 use crate::fah_projects::fetch_fah_project;
+use crate::foldingos::{self, AllowBootRequest, AssignRequest, FleetCommandError, FleetDelegateConfig};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -43,6 +44,11 @@ pub fn router(state: AppState) -> Router {
         .route("/alerts", get(alerts_active))
         .route("/projects/{id}", get(project_detail))
         .route("/snapshots/{name}", get(snapshots))
+        .route("/fleet/enrollments", get(fleet_enrollments))
+        .route("/fleet/allow-boot", get(fleet_allow_boot).post(fleet_allow_boot_create))
+        .route("/fleet/registry", get(fleet_registry))
+        .route("/fleet/registry/{version}", get(fleet_registry_show))
+        .route("/fleet/assign", post(fleet_assign))
         .with_state(state)
 }
 
@@ -636,6 +642,293 @@ async fn snapshots(
         .collect();
 
     Json(json!({ "hostname": name, "snapshots": snapshots })).into_response()
+}
+
+fn fleet_delegation_unavailable() -> Response {
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(json!({
+            "error": "FoldingOS fleet delegation is unavailable on this host (requires supervisor role with foldingosctl)"
+        })),
+    )
+        .into_response()
+}
+
+fn fleet_command_error(error: FleetCommandError) -> Response {
+    let (status, code) = match &error {
+        FleetCommandError::CommandRejected { code, .. }
+            if code == "role_required" || code == "automation_denied" =>
+        {
+            (StatusCode::FORBIDDEN, code.as_str())
+        }
+        FleetCommandError::CommandRejected { code, .. } if code == "permission_denied" => {
+            (StatusCode::FORBIDDEN, code.as_str())
+        }
+        FleetCommandError::CommandRejected { code, .. }
+            if code == "invalid_input" || code == "not_found" =>
+        {
+            (StatusCode::BAD_REQUEST, code.as_str())
+        }
+        _ => (StatusCode::BAD_GATEWAY, "foldingosctl_error"),
+    };
+    (
+        status,
+        Json(json!({
+            "error": error.to_string(),
+            "code": code,
+        })),
+    )
+        .into_response()
+}
+
+fn machine_ingest_summary(
+    conn: &rusqlite::Connection,
+    machine: &MachineRow,
+    offline_threshold_ms: u64,
+) -> Value {
+    let latest = db::get_latest_snapshot(conn, &machine.hostname)
+        .ok()
+        .flatten();
+    json!({
+        "hostname": machine.hostname,
+        "node_id": machine.node_id,
+        "installation_role": machine.installation_role,
+        "foldingos_version": machine.foldingos_version,
+        "last_seen": machine.last_seen,
+        "online": db::is_online(&machine.last_seen, offline_threshold_ms),
+        "latest": snapshot_summary(latest.as_ref()),
+    })
+}
+
+async fn fleet_enrollments(State(state): State<AppState>) -> Response {
+    if !state.config.uses_supervisor_fleet_delegation() {
+        return fleet_delegation_unavailable();
+    }
+
+    let config = FleetDelegateConfig {
+        foldingosctl_path: &state.config.foldingosctl_path,
+    };
+
+    let enrollments = match foldingos::list_enrollments(config).await {
+        Ok(records) => records,
+        Err(error) => return fleet_command_error(error),
+    };
+
+    let conn = state.db.lock();
+    let correlated: Vec<Value> = enrollments
+        .into_iter()
+        .map(|record| {
+            let machine = db::get_machine_by_node_id(&conn, &record.node_id)
+                .ok()
+                .flatten()
+                .or_else(|| db::get_machine(&conn, &record.hostname).ok().flatten());
+            let ingest = machine
+                .as_ref()
+                .map(|machine| {
+                    machine_ingest_summary(&conn, machine, state.config.offline_threshold_ms)
+                })
+                .unwrap_or(Value::Null);
+            json!({
+                "node_id": record.node_id,
+                "installation_role": record.installation_role,
+                "hostname": record.hostname,
+                "current_image_version": record.current_image_version,
+                "desired_image_version": record.desired_image_version,
+                "desired_foldops_manifest_release": empty_as_null(&record.desired_foldops_manifest_release),
+                "desired_tools_version": empty_as_null(&record.desired_tools_version),
+                "foldingos_version": record.foldingos_version,
+                "last_update_status": empty_as_null(&record.last_update_status),
+                "registered_at": empty_as_null(&record.registered_at),
+                "last_seen_at": empty_as_null(&record.last_seen_at),
+                "ingest": ingest,
+            })
+        })
+        .collect();
+
+    Json(json!({ "enrollments": correlated })).into_response()
+}
+
+async fn fleet_allow_boot(State(state): State<AppState>) -> Response {
+    if !state.config.uses_supervisor_fleet_delegation() {
+        return fleet_delegation_unavailable();
+    }
+
+    let config = FleetDelegateConfig {
+        foldingosctl_path: &state.config.foldingosctl_path,
+    };
+
+    match foldingos::list_allow_boot(config).await {
+        Ok(devices) => Json(json!({ "devices": devices })).into_response(),
+        Err(error) => fleet_command_error(error),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct FleetAllowBootBody {
+    mac_address: Option<String>,
+    install_disk: Option<String>,
+}
+
+async fn fleet_allow_boot_create(
+    State(state): State<AppState>,
+    Json(body): Json<FleetAllowBootBody>,
+) -> Response {
+    if !state.config.uses_supervisor_fleet_delegation() {
+        return fleet_delegation_unavailable();
+    }
+
+    let mac_address = body
+        .mac_address
+        .as_ref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    let Some(mac_address) = mac_address else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "mac_address is required" })),
+        )
+            .into_response();
+    };
+
+    let config = FleetDelegateConfig {
+        foldingosctl_path: &state.config.foldingosctl_path,
+    };
+
+    match foldingos::provision_allow_boot(
+        config,
+        AllowBootRequest {
+            mac_address,
+            install_disk: trim_optional(body.install_disk),
+        },
+    )
+    .await
+    {
+        Ok(result) => Json(json!({ "ok": true, "result": result })).into_response(),
+        Err(error) => fleet_command_error(error),
+    }
+}
+
+async fn fleet_registry(State(state): State<AppState>) -> Response {
+    if !state.config.uses_supervisor_fleet_delegation() {
+        return fleet_delegation_unavailable();
+    }
+
+    let config = FleetDelegateConfig {
+        foldingosctl_path: &state.config.foldingosctl_path,
+    };
+
+    match foldingos::list_registry(config).await {
+        Ok(versions) => Json(json!({ "versions": versions })).into_response(),
+        Err(error) => fleet_command_error(error),
+    }
+}
+
+async fn fleet_registry_show(State(state): State<AppState>, Path(version): Path<String>) -> Response {
+    if !state.config.uses_supervisor_fleet_delegation() {
+        return fleet_delegation_unavailable();
+    }
+
+    let version = version.trim();
+    if version.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Registry version is required" })),
+        )
+            .into_response();
+    }
+
+    let config = FleetDelegateConfig {
+        foldingosctl_path: &state.config.foldingosctl_path,
+    };
+
+    match foldingos::show_registry(config, version).await {
+        Ok(entry) => Json(json!(entry)).into_response(),
+        Err(error) => fleet_command_error(error),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct FleetAssignBody {
+    node_id: Option<String>,
+    all: Option<bool>,
+    version: Option<String>,
+    foldops_manifest: Option<String>,
+    tools_version: Option<String>,
+}
+
+async fn fleet_assign(State(state): State<AppState>, Json(body): Json<FleetAssignBody>) -> Response {
+    if !state.config.uses_supervisor_fleet_delegation() {
+        return fleet_delegation_unavailable();
+    }
+
+    let all = body.all.unwrap_or(false);
+    let node_id = body
+        .node_id
+        .as_ref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+
+    if all && node_id.is_some() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Use either all=true or node_id, not both" })),
+        )
+            .into_response();
+    }
+    if !all && node_id.is_none() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Assignment requires all=true or node_id" })),
+        )
+            .into_response();
+    }
+
+    let image_version = trim_optional(body.version);
+    let foldops_manifest = trim_optional(body.foldops_manifest);
+    let tools_version = trim_optional(body.tools_version);
+    if image_version.is_none() && foldops_manifest.is_none() && tools_version.is_none() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Assignment requires at least one of version, foldops_manifest, or tools_version" })),
+        )
+            .into_response();
+    }
+
+    let config = FleetDelegateConfig {
+        foldingosctl_path: &state.config.foldingosctl_path,
+    };
+
+    match foldingos::provision_assign(
+        config,
+        AssignRequest {
+            node_id,
+            all,
+            image_version,
+            foldops_manifest_release: foldops_manifest,
+            tools_version,
+        },
+    )
+    .await
+    {
+        Ok(result) => Json(json!({ "ok": true, "result": result })).into_response(),
+        Err(error) => fleet_command_error(error),
+    }
+}
+
+fn trim_optional(value: Option<String>) -> Option<String> {
+    value
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn empty_as_null(value: &str) -> Value {
+    if value.trim().is_empty() {
+        Value::Null
+    } else {
+        Value::String(value.to_string())
+    }
 }
 
 pub fn spawn_alert_eval(state: AppState) {

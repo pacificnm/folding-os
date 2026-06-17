@@ -15,8 +15,9 @@ with FoldingOS appliances through `foldingosctl`.
 
 It implements [ADR-0020](../adr/0020-foldops-delegates-node-operations-to-foldingosctl.md),
 [ADR-0021](../adr/0021-machine-readable-foldingosctl-automation-interface.md),
-[ADR-0022](../adr/0022-foldops-rust-source-in-foldingos-monorepo.md), and
-[ADR-0023](../adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md).
+[ADR-0022](../adr/0022-foldops-rust-source-in-foldingos-monorepo.md),
+[ADR-0023](../adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md),
+and [ADR-0024](../adr/0024-foldops-supervisor-fleet-mutation-authorization.md).
 
 See also [4-appliance-artifact-and-monorepo-plan.md](4-appliance-artifact-and-monorepo-plan.md).
 
@@ -156,6 +157,8 @@ Returns:
 | --- | --- | --- |
 | `provision list-enrollments` | supervisor | required |
 | `provision assign --version … --all\|--node …` | supervisor | result summary |
+| `provision list-allow-boot` | supervisor | required |
+| `provision allow-boot [--disk …] <mac>` | supervisor | result summary |
 | `registry list` | supervisor | required |
 | `registry show <version>` | supervisor | required |
 | `config effective <domain>` | any | required for `foldinghome`, `system`, `network` |
@@ -215,6 +218,24 @@ or omitted with schema documentation in the foldops repository.
 - implementation may use file ACLs, dedicated helper subcommands, or minimal
   capability boundaries; it must not run the agent as root on FoldingOS
 
+## Supervisor privilege model
+
+On the `supervisor` role, `foldops-supervisor` runs as the `foldops` user and
+delegates fleet mutations to `foldingosctl` per
+[ADR-0024](../adr/0024-foldops-supervisor-fleet-mutation-authorization.md).
+
+| Requirement | Mechanism |
+| --- | --- |
+| Approved mutators only | `/usr/share/foldingos/foldops-supervisor-automation.toml` |
+| Enrollment assignment writes | `/data/provision/enrollments/` group `foldops`, mode `2775` |
+| Boot allowlist writes | `/data/config/provision/boot-allowlist` and `boot-install-disk-allowlist` owned `root:foldops` `0664` |
+| Supervisor self-assignment writes | `/data/config/foldops/assigned-manifest.toml` and `/data/config/tools/assigned-version.json` writable by `foldops` on supervisor bootstrap only |
+| Remote operator entry | `POST /api/fleet/assign`, `POST /api/fleet/allow-boot` |
+
+`foldingosctl` must enforce the automation policy before executing approved
+mutators as the `foldops` user. Agent-role nodes must not receive supervisor
+mutation permissions.
+
 ## Failure behavior
 
 If any required inspect command fails:
@@ -235,6 +256,8 @@ operations:
 | --- | --- |
 | View enrolled agents | `provision list-enrollments --format json` |
 | Assign fleet desired version | `provision assign --format json …` |
+| View network-boot allowlist | `provision list-allow-boot --format json` |
+| Allow network boot for a MAC | `provision allow-boot --format json …` |
 | View registry | `registry list --format json`, `registry show --format json` |
 | Trigger upstream poll | invoke `registry poll` through an approved one-shot helper or document manual/timer ownership |
 | View supervisor commissioning state | `inspect commissioning --format json` |
@@ -394,4 +417,5 @@ See [4-implementation-spec.md](4-implementation-spec.md).
 - [ADR-0021](../adr/0021-machine-readable-foldingosctl-automation-interface.md)
 - [ADR-0022](../adr/0022-foldops-rust-source-in-foldingos-monorepo.md)
 - [ADR-0023](../adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md)
+- [ADR-0024](../adr/0024-foldops-supervisor-fleet-mutation-authorization.md)
 - [4-appliance-artifact-and-monorepo-plan.md](4-appliance-artifact-and-monorepo-plan.md)

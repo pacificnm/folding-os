@@ -9,7 +9,8 @@
 **Depends on:** [ADR-0020](0020-foldops-delegates-node-operations-to-foldingosctl.md),
 [ADR-0023](0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md)
 
-**Related:** [ADR-0022](0022-foldops-rust-source-in-foldingos-monorepo.md)
+**Related:** [ADR-0022](0022-foldops-rust-source-in-foldingos-monorepo.md),
+[ADR-0024](0024-foldops-supervisor-fleet-mutation-authorization.md)
 
 ---
 
@@ -80,9 +81,12 @@ with the following rules:
 
 5. **Automation authorization uses the `foldops` service identity.** Read-only
    `inspect` commands and approved read commands must succeed when invoked by
-   the `foldops` user without granting general root privileges. Mutating
-   commands remain restricted to `foldingos-admin` or systemd unless a future
-   ADR defines an explicit automation policy file.
+   the `foldops` user without granting general root privileges. Other mutating
+   commands remain restricted to `foldingos-admin` or systemd except for the
+   supervisor fleet mutations explicitly authorized in
+   [ADR-0024](0024-foldops-supervisor-fleet-mutation-authorization.md) through
+   `/usr/share/foldingos/foldops-supervisor-automation.toml` and matching
+   supervisor state permissions.
 
 6. **Schema changes are versioned.** Increment `schema_version` in JSON output
    when fields are removed or change meaning. Additive fields are permitted within
@@ -148,5 +152,6 @@ require stricter authorization and audit boundaries.
 - [Milestone 4 engineering specification](../milestone/4-engineering-spec.md)
 - [Milestone 4 appliance artifact and monorepo plan](../milestone/4-appliance-artifact-and-monorepo-plan.md)
 - [ADR-0020](0020-foldops-delegates-node-operations-to-foldingosctl.md)
+- [ADR-0024](0024-foldops-supervisor-fleet-mutation-authorization.md)
 - [ADR-0022](0022-foldops-rust-source-in-foldingos-monorepo.md)
 - [ADR-0023](0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md)
