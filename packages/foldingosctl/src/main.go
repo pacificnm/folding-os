@@ -84,6 +84,18 @@ func dispatch(args []string) error {
 	if len(args) == 2 && args[0] == "registry" && args[1] == "import-bootstrap" {
 		return registryImportBootstrap()
 	}
+	if len(args) >= 2 && args[0] == "registry" && args[1] == "import-foldops-manifest" {
+		return registryImportFoldOpsManifest(args[2:])
+	}
+	if len(args) >= 2 && args[0] == "registry" && args[1] == "import-tools-release" {
+		return registryImportToolsRelease(args[2:])
+	}
+	if len(args) == 2 && args[0] == "registry" && args[1] == "list-foldops-manifests" {
+		return listFoldOpsManifestRegistry()
+	}
+	if len(args) == 2 && args[0] == "registry" && args[1] == "list-tools-versions" {
+		return listToolsVersionRegistry()
+	}
 	if len(args) == 2 && args[0] == "registry" && args[1] == "poll" {
 		return registryPoll()
 	}

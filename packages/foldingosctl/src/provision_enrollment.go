@@ -55,8 +55,10 @@ type enrollmentRecord struct {
 	FoldingOSVersion    string   `json:"foldingos_version"`
 	Hostname            string   `json:"hostname"`
 	FAHActive           bool     `json:"fah_active,omitempty"`
-	DesiredImageVersion string   `json:"desired_image_version"`
-	LastUpdateStatus    string   `json:"last_update_status,omitempty"`
+	DesiredImageVersion           string   `json:"desired_image_version"`
+	DesiredFoldOpsManifestRelease string   `json:"desired_foldops_manifest_release,omitempty"`
+	DesiredToolsVersion           string   `json:"desired_tools_version,omitempty"`
+	LastUpdateStatus              string   `json:"last_update_status,omitempty"`
 	LastUpdateVersion   string   `json:"last_update_version,omitempty"`
 	LastUpdateMessage   string   `json:"last_update_message,omitempty"`
 	LastUpdateAt        string   `json:"last_update_at,omitempty"`
@@ -68,18 +70,24 @@ type enrollmentIndex struct {
 }
 
 type desiredVersionResponse struct {
-	SchemaVersion       int    `json:"schema_version"`
-	NodeID              string `json:"node_id"`
-	CurrentImageVersion string `json:"current_image_version"`
-	DesiredVersion      string `json:"desired_version"`
+	SchemaVersion                 int              `json:"schema_version"`
+	NodeID                        string           `json:"node_id"`
+	CurrentImageVersion           string           `json:"current_image_version"`
+	DesiredVersion                string           `json:"desired_version"`
+	DesiredFoldOpsManifestRelease string           `json:"desired_foldops_manifest_release,omitempty"`
+	DesiredFoldOpsManifest        string           `json:"desired_foldops_manifest,omitempty"`
+	DesiredToolsVersion             string           `json:"desired_tools_version,omitempty"`
+	DesiredToolsAssignment        *toolsAssignment `json:"desired_tools_assignment,omitempty"`
 }
 
 type rolloutAssignRequest struct {
-	SchemaVersion int    `json:"schema_version"`
-	EnrollmentToken string `json:"enrollment_token"`
-	Scope         string `json:"scope"`
-	NodeID        string `json:"node_id,omitempty"`
-	Version       string `json:"version"`
+	SchemaVersion               int    `json:"schema_version"`
+	EnrollmentToken             string `json:"enrollment_token"`
+	Scope                       string `json:"scope"`
+	NodeID                      string `json:"node_id,omitempty"`
+	Version                     string `json:"version,omitempty"`
+	FoldOpsManifestRelease      string `json:"foldops_manifest_release,omitempty"`
+	ToolsVersion                string `json:"tools_version,omitempty"`
 }
 
 func enrollmentRecordPath(nodeID string) string {
@@ -188,6 +196,26 @@ func validateEnrollmentRecord(record enrollmentRecord) (enrollmentRecord, error)
 			return enrollmentRecord{}, fmt.Errorf("desired image version %q is not ready for rollout", record.DesiredImageVersion)
 		}
 	}
+	record.DesiredFoldOpsManifestRelease = strings.TrimSpace(record.DesiredFoldOpsManifestRelease)
+	if record.DesiredFoldOpsManifestRelease != "" && !isBootstrapAssignmentLabel(record.DesiredFoldOpsManifestRelease) {
+		entry, err := loadFoldOpsManifestRegistryEntry(record.DesiredFoldOpsManifestRelease)
+		if err != nil {
+			return enrollmentRecord{}, fmt.Errorf("desired foldops manifest %q is not in registry: %w", record.DesiredFoldOpsManifestRelease, err)
+		}
+		if entry.RolloutState != "ready" {
+			return enrollmentRecord{}, fmt.Errorf("desired foldops manifest %q is not ready for rollout", record.DesiredFoldOpsManifestRelease)
+		}
+	}
+	record.DesiredToolsVersion = strings.TrimSpace(record.DesiredToolsVersion)
+	if record.DesiredToolsVersion != "" && !isBootstrapAssignmentLabel(record.DesiredToolsVersion) {
+		entry, err := loadToolsVersionRegistryEntry(record.DesiredToolsVersion)
+		if err != nil {
+			return enrollmentRecord{}, fmt.Errorf("desired tools version %q is not in registry: %w", record.DesiredToolsVersion, err)
+		}
+		if entry.RolloutState != "ready" {
+			return enrollmentRecord{}, fmt.Errorf("desired tools version %q is not ready for rollout", record.DesiredToolsVersion)
+		}
+	}
 	if record.RegisteredAt == "" {
 		record.RegisteredAt = time.Now().UTC().Format(time.RFC3339)
 	}
@@ -258,6 +286,8 @@ func registerAgent(request agentRegistrationRequest) (enrollmentRecord, error) {
 	if existing, err := loadEnrollmentRecord(validated.NodeID); err == nil {
 		record.RegisteredAt = existing.RegisteredAt
 		record.DesiredImageVersion = existing.DesiredImageVersion
+		record.DesiredFoldOpsManifestRelease = existing.DesiredFoldOpsManifestRelease
+		record.DesiredToolsVersion = existing.DesiredToolsVersion
 	} else if !os.IsNotExist(err) {
 		return enrollmentRecord{}, err
 	}
@@ -288,28 +318,100 @@ func desiredVersionForNode(nodeID string) (desiredVersionResponse, error) {
 	}
 
 	return desiredVersionResponse{
-		SchemaVersion:       1,
-		NodeID:              record.NodeID,
-		CurrentImageVersion: record.CurrentImageVersion,
-		DesiredVersion:      desired,
+		SchemaVersion:                 2,
+		NodeID:                        record.NodeID,
+		CurrentImageVersion:           record.CurrentImageVersion,
+		DesiredVersion:                desired,
+		DesiredFoldOpsManifestRelease: record.DesiredFoldOpsManifestRelease,
+		DesiredFoldOpsManifest:        resolveDesiredFoldOpsManifestTOML(record.DesiredFoldOpsManifestRelease),
+		DesiredToolsVersion:           record.DesiredToolsVersion,
+		DesiredToolsAssignment:        resolveDesiredToolsAssignment(record.DesiredToolsVersion),
 	}, nil
 }
 
+func resolveDesiredFoldOpsManifestTOML(release string) string {
+	release = strings.TrimSpace(release)
+	if isBootstrapAssignmentLabel(release) {
+		return ""
+	}
+	entry, err := loadFoldOpsManifestRegistryEntry(release)
+	if err != nil {
+		return ""
+	}
+	return entry.ManifestTOML
+}
+
+func resolveDesiredToolsAssignment(version string) *toolsAssignment {
+	version = strings.TrimSpace(version)
+	if isBootstrapAssignmentLabel(version) {
+		return nil
+	}
+	entry, err := loadToolsVersionRegistryEntry(version)
+	if err != nil {
+		return nil
+	}
+	assignment := entry.Assignment
+	return &assignment
+}
+
+type softwareAssignmentUpdate struct {
+	imageVersion           *string
+	foldOpsManifestRelease *string
+	toolsVersion           *string
+}
+
 func assignDesiredVersion(scope, nodeID, version string) (int, error) {
+	update := softwareAssignmentUpdate{}
+	if version != "" {
+		update.imageVersion = &version
+	}
+	return assignSoftwareVersions(scope, nodeID, update)
+}
+
+func assignSoftwareVersions(scope, nodeID string, update softwareAssignmentUpdate) (int, error) {
 	if err := requireSupervisorRole(); err != nil {
 		return 0, err
 	}
-	version = strings.TrimSpace(version)
-	if version == "" {
-		return 0, errors.New("assigned version is required")
+	if update.imageVersion == nil && update.foldOpsManifestRelease == nil && update.toolsVersion == nil {
+		return 0, errNoAssignmentFields
 	}
-	if version != "current" {
-		entry, err := loadRegistryEntry(version)
-		if err != nil {
-			return 0, fmt.Errorf("assigned version %q is not in registry: %w", version, err)
+	if update.imageVersion != nil {
+		version := strings.TrimSpace(*update.imageVersion)
+		if version == "" {
+			return 0, errors.New("assigned image version is required")
 		}
-		if entry.RolloutState != "ready" {
-			return 0, fmt.Errorf("assigned version %q is not ready for rollout", version)
+		if version != "current" {
+			entry, err := loadRegistryEntry(version)
+			if err != nil {
+				return 0, fmt.Errorf("assigned image version %q is not in registry: %w", version, err)
+			}
+			if entry.RolloutState != "ready" {
+				return 0, fmt.Errorf("assigned image version %q is not ready for rollout", version)
+			}
+		}
+	}
+	if update.foldOpsManifestRelease != nil {
+		release := strings.TrimSpace(*update.foldOpsManifestRelease)
+		if release != "" && !isBootstrapAssignmentLabel(release) {
+			entry, err := loadFoldOpsManifestRegistryEntry(release)
+			if err != nil {
+				return 0, fmt.Errorf("assigned foldops manifest %q is not in registry: %w", release, err)
+			}
+			if entry.RolloutState != "ready" {
+				return 0, fmt.Errorf("assigned foldops manifest %q is not ready for rollout", release)
+			}
+		}
+	}
+	if update.toolsVersion != nil {
+		version := strings.TrimSpace(*update.toolsVersion)
+		if version != "" && !isBootstrapAssignmentLabel(version) {
+			entry, err := loadToolsVersionRegistryEntry(version)
+			if err != nil {
+				return 0, fmt.Errorf("assigned tools version %q is not in registry: %w", version, err)
+			}
+			if entry.RolloutState != "ready" {
+				return 0, fmt.Errorf("assigned tools version %q is not ready for rollout", version)
+			}
 		}
 	}
 
@@ -340,8 +442,31 @@ func assignDesiredVersion(scope, nodeID, version string) (int, error) {
 		if err != nil {
 			return updated, err
 		}
-		record.DesiredImageVersion = version
+		if update.imageVersion != nil {
+			version := strings.TrimSpace(*update.imageVersion)
+			if version == "" {
+				version = "current"
+			}
+			record.DesiredImageVersion = version
+		}
+		if update.foldOpsManifestRelease != nil {
+			release := strings.TrimSpace(*update.foldOpsManifestRelease)
+			if isBootstrapAssignmentLabel(release) {
+				release = ""
+			}
+			record.DesiredFoldOpsManifestRelease = release
+		}
+		if update.toolsVersion != nil {
+			version := strings.TrimSpace(*update.toolsVersion)
+			if isBootstrapAssignmentLabel(version) {
+				version = ""
+			}
+			record.DesiredToolsVersion = version
+		}
 		if err := saveEnrollmentRecord(record); err != nil {
+			return updated, err
+		}
+		if err := applySupervisorLocalAssignmentsIfNeeded(scope, target, record); err != nil {
 			return updated, err
 		}
 		updated++
