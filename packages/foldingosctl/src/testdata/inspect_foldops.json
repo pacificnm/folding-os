@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "ok": true,
+  "command": "inspect foldops",
+  "data": {
+    "bootstrap_manifest_release": "0.1.0-1",
+    "assigned_manifest_release": "0.2.0-1",
+    "active_manifest_release": "0.2.0-1",
+    "effective_manifest_release": "0.2.0-1",
+    "packages_acquired": true,
+    "provisioned": true
+  }
+}

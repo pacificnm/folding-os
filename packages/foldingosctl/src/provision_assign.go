@@ -94,21 +94,20 @@ func provisionListEnrollments() error {
 	if err := requireSupervisorRole(); err != nil {
 		return err
 	}
-	index, err := loadEnrollmentIndex()
+	records, err := loadEnrollmentRecordsSorted()
 	if err != nil {
 		return err
 	}
-	if len(index.NodeIDs) == 0 {
+	if automationJSONEnabled() {
+		return writeAutomationSuccess(map[string]any{
+			"enrollments": records,
+		})
+	}
+	if len(records) == 0 {
 		fmt.Println("No enrolled agents.")
 		return nil
 	}
-	nodeIDs := append([]string(nil), index.NodeIDs...)
-	sort.Strings(nodeIDs)
-	for _, nodeID := range nodeIDs {
-		record, err := loadEnrollmentRecord(nodeID)
-		if err != nil {
-			return err
-		}
+	for _, record := range records {
 		fmt.Printf(
 			"%s\t%s\tcurrent=%s\tdesired=%s\tfoldops=%s\ttools=%s\n",
 			record.NodeID,
@@ -120,6 +119,24 @@ func provisionListEnrollments() error {
 		)
 	}
 	return nil
+}
+
+func loadEnrollmentRecordsSorted() ([]enrollmentRecord, error) {
+	index, err := loadEnrollmentIndex()
+	if err != nil {
+		return nil, err
+	}
+	nodeIDs := append([]string(nil), index.NodeIDs...)
+	sort.Strings(nodeIDs)
+	records := make([]enrollmentRecord, 0, len(nodeIDs))
+	for _, nodeID := range nodeIDs {
+		record, err := loadEnrollmentRecord(nodeID)
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, nil
 }
 
 func displayAssignmentLabel(value string) string {

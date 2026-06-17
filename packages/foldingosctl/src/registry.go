@@ -263,24 +263,36 @@ func listRegistry() error {
 		return err
 	}
 	if len(index.Versions) == 0 {
-		fmt.Println("Registry is empty.")
-		return nil
+		return automationOrHumanSuccess(map[string]any{
+			"versions": []registryEntry{},
+		}, func() error {
+			fmt.Println("Registry is empty.")
+			return nil
+		})
 	}
 	sort.Strings(index.Versions)
+	entries := make([]registryEntry, 0, len(index.Versions))
 	for _, version := range index.Versions {
 		entry, err := loadRegistryEntry(version)
 		if err != nil {
 			return err
 		}
-		fmt.Printf(
-			"%s\t%s\t%s\t%d bytes\n",
-			entry.FoldingOSVersion,
-			entry.RolloutState,
-			entry.ImageSHA256,
-			entry.ImageSizeBytes,
-		)
+		entries = append(entries, entry)
 	}
-	return nil
+	return automationOrHumanSuccess(map[string]any{
+		"versions": entries,
+	}, func() error {
+		for _, entry := range entries {
+			fmt.Printf(
+				"%s\t%s\t%s\t%d bytes\n",
+				entry.FoldingOSVersion,
+				entry.RolloutState,
+				entry.ImageSHA256,
+				entry.ImageSizeBytes,
+			)
+		}
+		return nil
+	})
 }
 
 func showRegistry(version string) error {
@@ -291,10 +303,12 @@ func showRegistry(version string) error {
 	if err != nil {
 		return err
 	}
-	content, err := json.MarshalIndent(entry, "", "  ")
-	if err != nil {
-		return err
-	}
-	fmt.Println(string(content))
-	return nil
+	return automationOrHumanSuccess(entry, func() error {
+		content, err := json.MarshalIndent(entry, "", "  ")
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(content))
+		return nil
+	})
 }
