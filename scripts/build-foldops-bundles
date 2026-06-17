@@ -1,0 +1,270 @@
+#!/usr/bin/env bash
+# Build FoldOps layout-tar-zst appliance bundles and a schema v2 manifest.
+#
+# Output: build/output/foldops/<manifest_release>/
+#   foldops-agent-x86_64.tar.zst
+#   foldops-supervisor-x86_64.tar.zst
+#   foldops-web-x86_64.tar.zst
+#   manifest.toml
+#   SHA256SUMS
+#
+# Does not modify the OS image overlay manifest (Milestone 3 deb/schema v1).
+# foldingosctl layout-tar-zst acquire is implemented in issue #84.
+set -euo pipefail
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+FOLDOPS_DIR="${PROJECT_ROOT}/packages/foldops"
+WEB_DIR="${FOLDOPS_DIR}/web"
+
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") [options]
+
+Build FoldOps layout bundles for packages.folding-os.com publication.
+
+Options:
+  --manifest-release <id>   Manifest release directory name (default: <version>-1)
+  --skip-web                Skip dashboard npm build (requires existing web/dist/)
+  --dry-run                 Print planned actions without building bundles
+  -h, --help                Show this help
+
+Requires: cargo, zstd, sha256sum, tar, npm (unless --skip-web with web/dist present)
+EOF
+}
+
+read_workspace_version() {
+  grep '^version' "${FOLDOPS_DIR}/Cargo.toml" | head -1 | sed 's/.*"\(.*\)".*/\1/'
+}
+
+require_command() {
+  local name="$1"
+  if ! command -v "${name}" >/dev/null 2>&1; then
+    echo "ERROR: required command not found: ${name}" >&2
+    exit 1
+  fi
+}
+
+MANIFEST_RELEASE=""
+SKIP_WEB=0
+DRY_RUN=0
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --manifest-release)
+      MANIFEST_RELEASE="${2:?missing value for --manifest-release}"
+      shift 2
+      ;;
+    --skip-web)
+      SKIP_WEB=1
+      shift
+      ;;
+    --dry-run)
+      DRY_RUN=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "ERROR: unknown option: $1" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+done
+
+VERSION="$(read_workspace_version)"
+if [ -z "${MANIFEST_RELEASE}" ]; then
+  MANIFEST_RELEASE="${VERSION}-1"
+fi
+
+OUTPUT_DIR="${PROJECT_ROOT}/build/output/foldops/${MANIFEST_RELEASE}"
+STAGING_ROOT="${OUTPUT_DIR}/.staging"
+PACKAGES_ORIGIN="https://packages.folding-os.com/foldops/${MANIFEST_RELEASE}"
+ARCHITECTURE="x86_64"
+MINIMUM_FOLDINGOS_VERSION="0.1.0"
+
+echo "FoldOps layout bundle build"
+echo "  workspace version: ${VERSION}"
+echo "  manifest release:  ${MANIFEST_RELEASE}"
+echo "  output directory:  ${OUTPUT_DIR}"
+
+if [ "${DRY_RUN}" -eq 1 ]; then
+  echo "Dry run — would build bundles and manifest in ${OUTPUT_DIR}"
+  exit 0
+fi
+
+require_command cargo
+require_command tar
+require_command zstd
+require_command sha256sum
+
+if [ ! -f "${FOLDOPS_DIR}/Cargo.toml" ]; then
+  echo "ERROR: missing FoldOps workspace: ${FOLDOPS_DIR}" >&2
+  exit 1
+fi
+
+build_web_dashboard() {
+  if [ -f "${WEB_DIR}/dist/index.html" ] && [ "${SKIP_WEB}" -eq 1 ]; then
+    echo "Using existing web dashboard dist (--skip-web)"
+    return
+  fi
+  require_command npm
+  if [ ! -f "${WEB_DIR}/package.json" ]; then
+    echo "ERROR: missing web package: ${WEB_DIR}/package.json" >&2
+    exit 1
+  fi
+  echo "Building FoldOps web dashboard …"
+  (
+    cd "${WEB_DIR}"
+    if [ -f package-lock.json ]; then
+      npm ci
+    else
+      npm install
+    fi
+    npm run build
+  )
+  if [ ! -f "${WEB_DIR}/dist/index.html" ]; then
+    echo "ERROR: web build did not produce ${WEB_DIR}/dist/index.html" >&2
+    exit 1
+  fi
+}
+
+build_rust_binaries() {
+  echo "Building FoldOps Rust release binaries …"
+  (
+    cd "${FOLDOPS_DIR}"
+    cargo build --release -p foldops-agent -p foldops-supervisor
+  )
+}
+
+bundle_layout() {
+  local package_name="$1"
+  local bundle_path="$2"
+  local install_tree="$3"
+
+  rm -rf "${install_tree}"
+  mkdir -p "${install_tree}"
+
+  case "${package_name}" in
+    foldops-agent)
+      install -D -m 0755 \
+        "${FOLDOPS_DIR}/target/release/foldops-agent" \
+        "${install_tree}/${package_name}/usr/bin/foldops-agent"
+      ;;
+    foldops-supervisor)
+      install -D -m 0755 \
+        "${FOLDOPS_DIR}/target/release/foldops-supervisor" \
+        "${install_tree}/${package_name}/usr/bin/foldops-supervisor"
+      ;;
+    foldops-web)
+      mkdir -p "${install_tree}/${package_name}/usr/share/foldops/web"
+      cp -a "${WEB_DIR}/dist/." "${install_tree}/${package_name}/usr/share/foldops/web/"
+      ;;
+    *)
+      echo "ERROR: unknown package: ${package_name}" >&2
+      exit 1
+      ;;
+  esac
+
+  rm -f "${bundle_path}"
+  tar -C "${install_tree}" -cf - "${package_name}" | zstd -19 -T0 -o "${bundle_path}"
+}
+
+sha256_file() {
+  sha256sum "$1" | awk '{print $1}'
+}
+
+write_manifest() {
+  local agent_size="$1"
+  local agent_sha="$2"
+  local supervisor_size="$3"
+  local supervisor_sha="$4"
+  local web_size="$5"
+  local web_sha="$6"
+
+  cat > "${OUTPUT_DIR}/manifest.toml" <<EOF
+schema_version = 2
+manifest_release = "${MANIFEST_RELEASE}"
+architecture = "${ARCHITECTURE}"
+artifact_format = "layout-tar-zst"
+minimum_foldingos_version = "${MINIMUM_FOLDINGOS_VERSION}"
+
+[[packages]]
+name = "foldops-agent"
+version = "${VERSION}"
+roles = ["agent", "supervisor"]
+install_prefix = "foldops-agent"
+artifact_url = "${PACKAGES_ORIGIN}/foldops-agent-${ARCHITECTURE}.tar.zst"
+artifact_size = ${agent_size}
+sha256 = "${agent_sha}"
+verification_path = "/data/apps/foldops/current/foldops-agent/usr/bin/foldops-agent"
+
+[[packages]]
+name = "foldops-supervisor"
+version = "${VERSION}"
+roles = ["supervisor"]
+install_prefix = "foldops-supervisor"
+artifact_url = "${PACKAGES_ORIGIN}/foldops-supervisor-${ARCHITECTURE}.tar.zst"
+artifact_size = ${supervisor_size}
+sha256 = "${supervisor_sha}"
+verification_path = "/data/apps/foldops/current/foldops-supervisor/usr/bin/foldops-supervisor"
+
+[[packages]]
+name = "foldops-web"
+version = "${VERSION}"
+roles = ["supervisor"]
+install_prefix = "foldops-web"
+artifact_url = "${PACKAGES_ORIGIN}/foldops-web-${ARCHITECTURE}.tar.zst"
+artifact_size = ${web_size}
+sha256 = "${web_sha}"
+verification_path = "/data/apps/foldops/current/foldops-web/usr/share/foldops/web/index.html"
+EOF
+}
+
+build_web_dashboard
+build_rust_binaries
+
+rm -rf "${STAGING_ROOT}" "${OUTPUT_DIR}"/*.tar.zst
+mkdir -p "${OUTPUT_DIR}" "${STAGING_ROOT}"
+
+AGENT_BUNDLE="${OUTPUT_DIR}/foldops-agent-${ARCHITECTURE}.tar.zst"
+SUPERVISOR_BUNDLE="${OUTPUT_DIR}/foldops-supervisor-${ARCHITECTURE}.tar.zst"
+WEB_BUNDLE="${OUTPUT_DIR}/foldops-web-${ARCHITECTURE}.tar.zst"
+
+echo "Creating layout bundles …"
+bundle_layout foldops-agent "${AGENT_BUNDLE}" "${STAGING_ROOT}/agent"
+bundle_layout foldops-supervisor "${SUPERVISOR_BUNDLE}" "${STAGING_ROOT}/supervisor"
+bundle_layout foldops-web "${WEB_BUNDLE}" "${STAGING_ROOT}/web"
+
+AGENT_SHA="$(sha256_file "${AGENT_BUNDLE}")"
+SUPERVISOR_SHA="$(sha256_file "${SUPERVISOR_BUNDLE}")"
+WEB_SHA="$(sha256_file "${WEB_BUNDLE}")"
+AGENT_SIZE="$(stat -c '%s' "${AGENT_BUNDLE}")"
+SUPERVISOR_SIZE="$(stat -c '%s' "${SUPERVISOR_BUNDLE}")"
+WEB_SIZE="$(stat -c '%s' "${WEB_BUNDLE}")"
+
+write_manifest \
+  "${AGENT_SIZE}" "${AGENT_SHA}" \
+  "${SUPERVISOR_SIZE}" "${SUPERVISOR_SHA}" \
+  "${WEB_SIZE}" "${WEB_SHA}"
+
+(
+  cd "${OUTPUT_DIR}"
+  sha256sum foldops-agent-${ARCHITECTURE}.tar.zst \
+    foldops-supervisor-${ARCHITECTURE}.tar.zst \
+    foldops-web-${ARCHITECTURE}.tar.zst \
+    manifest.toml > SHA256SUMS
+)
+
+rm -rf "${STAGING_ROOT}"
+
+echo ""
+echo "FoldOps layout bundles ready:"
+echo "  ${OUTPUT_DIR}/manifest.toml"
+echo "  ${OUTPUT_DIR}/SHA256SUMS"
+ls -1 "${OUTPUT_DIR}"/*.tar.zst
+echo ""
+echo "Publish to: ${PACKAGES_ORIGIN}/"
+echo "Use ./scripts/publish-foldops-bundles ${MANIFEST_RELEASE} when upload credentials are configured."

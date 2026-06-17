@@ -1,0 +1,26 @@
+{
+  "name": "@foldops/web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npx vite",
+    "build": "npx vite build",
+    "preview": "npx vite preview",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.16.0",
+    "recharts": "^3.8.1",
+    "vite": "^6.3.5",
+    "@vitejs/plugin-react": "^4.4.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "typescript": "^5.8.3"
+  }
+}

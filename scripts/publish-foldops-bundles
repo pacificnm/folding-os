@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# Upload build/output/foldops/<release>/ to packages.folding-os.com (R2-backed).
+set -euo pipefail
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") <manifest_release>
+
+Upload FoldOps layout bundles from:
+  build/output/foldops/<manifest_release>/
+
+Environment:
+  R2_REMOTE          rclone remote name (default: r2)
+  FOLDOPS_R2_BUCKET  destination bucket (default: foldops-packages)
+  FOLDOPS_R2_PREFIX  object prefix inside bucket (default: foldops)
+
+Requires rclone configured for the R2 remote.
+EOF
+}
+
+if [ "$#" -lt 1 ]; then
+  usage >&2
+  exit 1
+fi
+
+MANIFEST_RELEASE="$1"
+SOURCE_DIR="${PROJECT_ROOT}/build/output/foldops/${MANIFEST_RELEASE}"
+R2_REMOTE="${R2_REMOTE:-r2}"
+FOLDOPS_R2_BUCKET="${FOLDOPS_R2_BUCKET:-foldops-packages}"
+FOLDOPS_R2_PREFIX="${FOLDOPS_R2_PREFIX:-foldops}"
+DEST="${R2_REMOTE}:${FOLDOPS_R2_BUCKET}/${FOLDOPS_R2_PREFIX}/${MANIFEST_RELEASE}/"
+
+if [ ! -d "${SOURCE_DIR}" ]; then
+  echo "ERROR: source directory not found: ${SOURCE_DIR}" >&2
+  echo "Run ./scripts/build-foldops-bundles --manifest-release ${MANIFEST_RELEASE} first." >&2
+  exit 1
+fi
+
+if ! command -v rclone >/dev/null 2>&1; then
+  echo "ERROR: rclone not found" >&2
+  exit 1
+fi
+
+required=(
+  "manifest.toml"
+  "SHA256SUMS"
+  "foldops-agent-x86_64.tar.zst"
+  "foldops-supervisor-x86_64.tar.zst"
+  "foldops-web-x86_64.tar.zst"
+)
+for file in "${required[@]}"; do
+  if [ ! -f "${SOURCE_DIR}/${file}" ]; then
+    echo "ERROR: missing required artifact: ${SOURCE_DIR}/${file}" >&2
+    exit 1
+  fi
+done
+
+echo "Publishing FoldOps release ${MANIFEST_RELEASE}"
+echo "  source: ${SOURCE_DIR}"
+echo "  dest:   ${DEST}"
+
+rclone copy "${SOURCE_DIR}/" "${DEST}" --checksum --progress
+
+echo ""
+echo "Published. Public URL base:"
+echo "  https://packages.folding-os.com/foldops/${MANIFEST_RELEASE}/"

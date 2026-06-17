@@ -1,0 +1,54 @@
+[package]
+name = "foldops-supervisor"
+description = "FoldOps supervisor API, SQLite store, and dashboard server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "foldops-supervisor"
+path = "src/main.rs"
+
+[package.metadata.deb]
+name = "foldops-supervisor"
+maintainer = "Pacific NM <foldops@pacificnm.com>"
+copyright = "2026, Pacific NM"
+license-file = ["../../LICENSE", "4"]
+section = "utils"
+priority = "optional"
+revision = "1"
+depends = "systemd, foldops-web (= ${binary:Version}), $auto"
+extended-description = """\
+FoldOps supervisor: ingest API, SQLite store, alerts, and static dashboard server."""
+conf-files = ["/etc/foldops/supervisor.env.example"]
+maintainer-scripts = "../../packaging/deb/foldops-supervisor/"
+systemd-units = [{ unit-name = "foldops-supervisor.service", enable = false }]
+assets = [
+    "$auto",
+    ["../../systemd/rust/foldops-supervisor.service", "lib/systemd/system/foldops-supervisor.service", "644"],
+    ["../../packaging/folding-os/env/supervisor.env.example", "etc/foldops/supervisor.env.example", "644"],
+    ["../../packaging/folding-os/sysusers.d/foldops.conf", "usr/lib/sysusers.d/foldops.conf", "644"],
+    ["../../packaging/folding-os/tmpfiles.d/foldops.conf", "usr/lib/tmpfiles.d/foldops.conf", "644"],
+]
+
+[dependencies]
+axum = { workspace = true, features = ["macros"] }
+chrono.workspace = true
+dotenvy.workspace = true
+foldops-types.workspace = true
+regex.workspace = true
+reqwest.workspace = true
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tower-http = { version = "0.6", features = ["fs"] }
+tracing.workspace = true
+tracing-subscriber.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+tempfile = "3"
