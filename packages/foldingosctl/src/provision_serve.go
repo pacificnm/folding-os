@@ -156,7 +156,24 @@ func handleRolloutAssign(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 	scope := strings.TrimSpace(assign.Scope)
-	updated, err := assignDesiredVersion(scope, strings.TrimSpace(assign.NodeID), strings.TrimSpace(assign.Version))
+	update := softwareAssignmentUpdate{}
+	if strings.TrimSpace(assign.Version) != "" {
+		version := strings.TrimSpace(assign.Version)
+		update.imageVersion = &version
+	}
+	if strings.TrimSpace(assign.FoldOpsManifestRelease) != "" {
+		release := strings.TrimSpace(assign.FoldOpsManifestRelease)
+		update.foldOpsManifestRelease = &release
+	}
+	if strings.TrimSpace(assign.ToolsVersion) != "" {
+		version := strings.TrimSpace(assign.ToolsVersion)
+		update.toolsVersion = &version
+	}
+	if update.imageVersion == nil && update.foldOpsManifestRelease == nil && update.toolsVersion == nil {
+		http.Error(writer, errNoAssignmentFields.Error(), http.StatusBadRequest)
+		return
+	}
+	updated, err := assignSoftwareVersions(scope, strings.TrimSpace(assign.NodeID), update)
 	if err != nil {
 		status := http.StatusBadRequest
 		if strings.Contains(err.Error(), "not registered") {
@@ -168,7 +185,17 @@ func handleRolloutAssign(writer http.ResponseWriter, request *http.Request) {
 	writeJSON(writer, http.StatusOK, map[string]any{
 		"schema_version": 1,
 		"updated_agents": updated,
+		"assigned_image_version": optionalString(update.imageVersion),
+		"assigned_foldops_manifest_release": optionalString(update.foldOpsManifestRelease),
+		"assigned_tools_version": optionalString(update.toolsVersion),
 	})
+}
+
+func optionalString(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return strings.TrimSpace(*value)
 }
 
 func writeJSON(writer http.ResponseWriter, status int, value any) {

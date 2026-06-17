@@ -378,6 +378,10 @@ func provisionCheckVersionAndStage() error {
 		return nil
 	}
 
+	if err := syncLocalSoftwareAssignmentsFromSupervisor(supervisorURL, nodeID, token); err != nil {
+		installLogf("Software assignment sync failed: %v", err)
+	}
+
 	desired, err := queryDesiredVersion(supervisorURL, nodeID, token)
 	if err != nil {
 		fmt.Printf("current\n")
