@@ -5,6 +5,7 @@ use foldops_types::IngestPayload;
 
 use crate::collector::{collect_snapshot, CollectPaths, FahStats};
 use crate::config::Config;
+use crate::foldingos;
 
 pub struct IngestClient {
     http: reqwest::Client,
@@ -68,19 +69,33 @@ impl IngestClient {
     }
 
     pub async fn collect_and_post(&self) -> Result<(), String> {
-        let paths = CollectPaths {
-            fah_log_path: &self.config.fah_log_path,
-            fah_db_path: &self.config.fah_db_path,
-            fah_work_dir: &self.config.fah_work_dir,
-            fah_ws_host: &self.config.fah_ws_host,
-            fah_ws_port: self.config.fah_ws_port,
-            fah_stats: FahStats {
-                donor: self.config.fah_donor_id.clone(),
-                team: self.config.fah_team_number.clone(),
-            },
+        let fah_stats = FahStats {
+            donor: self.config.fah_donor_id.clone(),
+            team: self.config.fah_team_number.clone(),
         };
 
-        let payload = collect_snapshot(paths).await;
+        let payload = if self.config.uses_foldingos_delegation() {
+            tracing::debug!(
+                foldingosctl = %self.config.foldingosctl_path.display(),
+                "collecting ingest payload via foldingosctl inspect"
+            );
+            foldingos::collect_delegated_snapshot(foldingos::DelegatedCollectConfig {
+                foldingosctl_path: &self.config.foldingosctl_path,
+                fah_stats,
+            })
+            .await
+        } else {
+            let paths = CollectPaths {
+                fah_log_path: &self.config.fah_log_path,
+                fah_db_path: &self.config.fah_db_path,
+                fah_work_dir: &self.config.fah_work_dir,
+                fah_ws_host: &self.config.fah_ws_host,
+                fah_ws_port: self.config.fah_ws_port,
+                fah_stats,
+            };
+            collect_snapshot(paths).await
+        };
+
         self.post_snapshot(&payload).await?;
 
         let ppd = payload
@@ -96,6 +111,7 @@ impl IngestClient {
 
         tracing::info!(
             hostname = %payload.hostname,
+            node_id = payload.nodeId.as_deref().unwrap_or("n/a"),
             progress = %progress,
             ppd = %ppd,
             "ingest OK"

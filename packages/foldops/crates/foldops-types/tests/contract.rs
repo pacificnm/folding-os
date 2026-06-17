@@ -41,6 +41,20 @@ fn ingest_minimal_fixture_round_trips_json() {
 }
 
 #[test]
+fn ingest_foldingos_fixture_parses_and_validates() {
+    let json = load_fixture("ingest-foldingos.json");
+    let payload = parse_ingest_json(&json).expect("fixture should parse and validate");
+    assert_eq!(payload.hostname, "folding-test");
+    assert_eq!(
+        payload.nodeId.as_deref(),
+        Some("550e8400-e29b-41d4-a716-446655440000")
+    );
+    assert_eq!(payload.installationRole.as_deref(), Some("agent"));
+    assert_eq!(payload.foldingosVersion.as_deref(), Some("0.1.0"));
+    assert!(payload.logs.is_none());
+}
+
+#[test]
 fn ingest_minimal_optional_fields_absent() {
     let json = load_fixture("ingest-minimal.json");
     let value: serde_json::Value = serde_json::from_str(&json).unwrap();

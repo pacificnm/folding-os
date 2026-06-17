@@ -111,6 +111,9 @@ pub async fn collect_snapshot(paths: CollectPaths<'_>) -> IngestPayload {
     IngestPayload {
         hostname,
         timestamp: Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+        nodeId: None,
+        installationRole: None,
+        foldingosVersion: None,
         system: System {
             uptime,
             loadAvg: load_avg,
@@ -222,8 +225,12 @@ fn collect_network_rates() -> (u64, u64, Option<f64>, Option<f64>) {
 
     let rx_bytes = primary.map(|n| n.total_received()).unwrap_or(0);
     let tx_bytes = primary.map(|n| n.total_transmitted()).unwrap_or(0);
-    let now = Instant::now();
+    let network = network_with_rates(rx_bytes, tx_bytes);
+    (network.rxBytes, network.txBytes, network.rxSec, network.txSec)
+}
 
+pub fn network_with_rates(rx_bytes: u64, tx_bytes: u64) -> Network {
+    let now = Instant::now();
     let mut guard = LAST_NETWORK.lock().unwrap_or_else(|e| e.into_inner());
     let (rx_sec, tx_sec) = if let Some(prev) = guard.as_ref() {
         let elapsed = now.duration_since(prev.at).as_secs_f64();
@@ -245,7 +252,12 @@ fn collect_network_rates() -> (u64, u64, Option<f64>, Option<f64>) {
         at: now,
     });
 
-    (rx_bytes, tx_bytes, rx_sec, tx_sec)
+    Network {
+        rxBytes: rx_bytes,
+        txBytes: tx_bytes,
+        rxSec: rx_sec,
+        txSec: tx_sec,
+    }
 }
 
 async fn get_fah_systemd_status() -> FahSystemdStatus {

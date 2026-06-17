@@ -1,0 +1,45 @@
+{
+  "hostname": "folding-test",
+  "timestamp": "2026-06-11T12:00:00.000Z",
+  "nodeId": "550e8400-e29b-41d4-a716-446655440000",
+  "installationRole": "agent",
+  "foldingosVersion": "0.1.0",
+  "system": {
+    "uptime": 86400,
+    "loadAvg": [0.52, 0.48, 0.41],
+    "cpuUsage": 0,
+    "memory": {
+      "total": 16777216000,
+      "used": 8388608000,
+      "free": 8388608000,
+      "percent": 50
+    },
+    "disk": {
+      "total": 500107862016,
+      "used": 100021572403,
+      "free": 400086289613,
+      "percent": 20
+    },
+    "network": {
+      "rxBytes": 1048576,
+      "txBytes": 524288
+    },
+    "cpuTemp": 55.5,
+    "chassisTemp": null
+  },
+  "fah": {
+    "systemdStatus": "active",
+    "project": "18400",
+    "run": 0,
+    "clone": 0,
+    "gen": 0,
+    "progress": 42.5,
+    "ppd": 250000,
+    "tpf": "00:01:30",
+    "recentErrors": []
+  },
+  "maintenance": {
+    "aptUpdatesAvailable": 0,
+    "rebootRequired": false
+  }
+}

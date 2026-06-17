@@ -18,6 +18,8 @@ pub struct Config {
     pub update_enabled: bool,
     pub controls_enabled: bool,
     pub controls_allow_reboot: bool,
+    pub foldingosctl_path: PathBuf,
+    pub installation_role_path: PathBuf,
 }
 
 impl Config {
@@ -72,7 +74,13 @@ impl Config {
             update_enabled: env_flag("UPDATE_ENABLED"),
             controls_enabled: env_flag("CONTROLS_ENABLED"),
             controls_allow_reboot: env_flag("CONTROLS_ALLOW_REBOOT"),
+            foldingosctl_path: crate::foldingos::default_foldingosctl_path(),
+            installation_role_path: crate::foldingos::default_installation_role_path(),
         })
+    }
+
+    pub fn uses_foldingos_delegation(&self) -> bool {
+        crate::foldingos::foldingos_delegation_enabled(&self.installation_role_path)
     }
 
     pub fn supervisor_base(&self) -> String {

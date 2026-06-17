@@ -141,6 +141,9 @@ async fn list_machines(State(state): State<AppState>) -> Json<Value> {
             let online = db::is_online(&m.last_seen, state.config.offline_threshold_ms);
             json!({
                 "hostname": m.hostname,
+                "node_id": m.node_id,
+                "installation_role": m.installation_role,
+                "foldingos_version": m.foldingos_version,
                 "first_seen": m.first_seen,
                 "last_seen": m.last_seen,
                 "online": online,
@@ -178,6 +181,9 @@ async fn get_machine(State(state): State<AppState>, Path(name): Path<String>) ->
         .flatten();
     Json(json!({
         "hostname": machine.hostname,
+        "node_id": machine.node_id,
+        "installation_role": machine.installation_role,
+        "foldingos_version": machine.foldingos_version,
         "first_seen": machine.first_seen,
         "last_seen": machine.last_seen,
         "online": db::is_online(&machine.last_seen, state.config.offline_threshold_ms),
