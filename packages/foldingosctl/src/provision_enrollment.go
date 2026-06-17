@@ -372,6 +372,9 @@ func assignSoftwareVersions(scope, nodeID string, update softwareAssignmentUpdat
 	if err := requireSupervisorRole(); err != nil {
 		return 0, err
 	}
+	if err := requireSupervisorAutomationMutation("provision", "assign"); err != nil {
+		return 0, err
+	}
 	if update.imageVersion == nil && update.foldOpsManifestRelease == nil && update.toolsVersion == nil {
 		return 0, errNoAssignmentFields
 	}

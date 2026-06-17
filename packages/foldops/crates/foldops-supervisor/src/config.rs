@@ -14,6 +14,8 @@ pub struct Config {
     pub control_enabled: bool,
     pub web_root: PathBuf,
     pub alert_config: AlertConfig,
+    pub foldingosctl_path: PathBuf,
+    pub installation_role_path: PathBuf,
 }
 
 impl Config {
@@ -73,7 +75,13 @@ impl Config {
                     .filter(|s| !s.trim().is_empty())
                     .unwrap_or_else(|| "FoldOps".into()),
             },
+            foldingosctl_path: crate::foldingos::default_foldingosctl_path(),
+            installation_role_path: crate::foldingos::default_installation_role_path(),
         })
+    }
+
+    pub fn uses_supervisor_fleet_delegation(&self) -> bool {
+        crate::foldingos::supervisor_fleet_delegation_enabled(&self.installation_role_path)
     }
 }
 

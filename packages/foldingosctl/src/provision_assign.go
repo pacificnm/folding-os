@@ -76,6 +76,26 @@ func provisionAssign(args []string) error {
 		return err
 	}
 
+	if automationJSONEnabled() {
+		result := map[string]any{
+			"scope":         scope,
+			"updated_count": updated,
+		}
+		if nodeID != "" {
+			result["node_id"] = nodeID
+		}
+		if update.imageVersion != nil {
+			result["image_version"] = strings.TrimSpace(*update.imageVersion)
+		}
+		if update.foldOpsManifestRelease != nil {
+			result["foldops_manifest_release"] = strings.TrimSpace(*update.foldOpsManifestRelease)
+		}
+		if update.toolsVersion != nil {
+			result["tools_version"] = strings.TrimSpace(*update.toolsVersion)
+		}
+		return writeAutomationSuccess(result)
+	}
+
 	parts := make([]string, 0, 3)
 	if update.imageVersion != nil {
 		parts = append(parts, fmt.Sprintf("image=%q", strings.TrimSpace(*update.imageVersion)))

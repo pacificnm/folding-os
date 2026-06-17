@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+# Remote FoldOps supervisor API JSON checks (web UI contract).
+#
+# The web UI must not call foldingosctl directly. Every supervisor fleet action
+# is exposed under /api and delegates to foldingosctl on the supervisor host.
+#
+# Usage:
+#   ./scripts/test-foldops-fleet-delegation <supervisor-host> [https-port]
+#
+# Optional env: FOLDOPS_API=https://192.168.88.221:3443/api
+set -euo pipefail
+export LC_ALL=C
+
+FAILED=0
+TMPDIR="${TMPDIR:-/tmp}"
+CURL_TLS="${FOLDOPS_CURL_TLS:--k}"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  ./scripts/test-foldops-fleet-delegation <supervisor-host> [https-port]
+
+Verifies FoldOps supervisor HTTP JSON (machines + fleet delegation routes).
+Requires branch #89 foldops-supervisor and foldingosctl deployed on the host.
+EOF
+}
+
+if [ "$#" -lt 1 ]; then
+  usage >&2
+  exit 2
+fi
+
+API_BASE="${FOLDOPS_API:-https://$1:${2:-3443}/api}"
+
+pass() { printf 'PASS: %s\n' "$1"; }
+fail() { printf 'FAIL: %s\n' "$1" >&2; FAILED=1; }
+
+api_get() {
+  local path="$1"
+  local outfile="$2"
+  curl -sS "${CURL_TLS}" -o "${outfile}" -w '%{http_code}' \
+    "${API_BASE}${path}" 2>/dev/null || echo "000"
+}
+
+printf 'API base: %s\n\n' "${API_BASE}"
+
+# --- /machines (ingest-backed fleet view) ---
+
+CODE="$(api_get /machines "${TMPDIR}/foldops-machines.json")"
+if [ "${CODE}" = "200" ] && grep -q '"machines"' "${TMPDIR}/foldops-machines.json"; then
+  pass 'GET /machines → 200 + machines'
+else
+  fail "GET /machines → HTTP ${CODE}"
+fi
+
+if grep -q '"farm_ppd"' "${TMPDIR}/foldops-machines.json"; then
+  pass 'GET /machines → farm_ppd'
+else
+  fail 'GET /machines → farm_ppd missing'
+fi
+
+# --- /fleet/* (foldingosctl delegation) ---
+
+CODE="$(api_get /fleet/enrollments "${TMPDIR}/foldops-fleet-enrollments.json")"
+if [ "${CODE}" = "200" ] && grep -q '"enrollments"' "${TMPDIR}/foldops-fleet-enrollments.json"; then
+  pass 'GET /fleet/enrollments → 200 (provision list-enrollments)'
+else
+  fail "GET /fleet/enrollments → HTTP ${CODE} (deploy branch foldops-supervisor)"
+fi
+
+CODE="$(api_get /fleet/allow-boot "${TMPDIR}/foldops-fleet-allow-boot.json")"
+if [ "${CODE}" = "200" ] && grep -q '"devices"' "${TMPDIR}/foldops-fleet-allow-boot.json"; then
+  pass 'GET /fleet/allow-boot → 200 (provision list-allow-boot)'
+else
+  fail "GET /fleet/allow-boot → HTTP ${CODE} (deploy branch foldops-supervisor)"
+fi
+
+CODE="$(api_get /fleet/registry "${TMPDIR}/foldops-fleet-registry.json")"
+if [ "${CODE}" = "200" ] && grep -q '"versions"' "${TMPDIR}/foldops-fleet-registry.json"; then
+  pass 'GET /fleet/registry → 200 (registry list)'
+else
+  fail "GET /fleet/registry → HTTP ${CODE} (deploy branch foldops-supervisor)"
+fi
+
+VERSION="$(
+  grep '"foldingos_version"' "${TMPDIR}/foldops-fleet-registry.json" 2>/dev/null | head -1 \
+    | sed 's/.*"foldingos_version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' || true
+)"
+if [ -n "${VERSION}" ]; then
+  CODE="$(api_get "/fleet/registry/${VERSION}" "${TMPDIR}/foldops-fleet-registry-show.json")"
+  if [ "${CODE}" = "200" ] && grep -q '"rollout_state"' "${TMPDIR}/foldops-fleet-registry-show.json"; then
+    pass 'GET /fleet/registry/{version} → 200 (registry show)'
+  else
+    fail "GET /fleet/registry/${VERSION} → HTTP ${CODE}"
+  fi
+else
+  pass 'GET /fleet/registry/{version} → skipped (registry empty)'
+fi
+
+if [ "${FAILED}" -ne 0 ]; then
+  echo "One or more API tests failed." >&2
+  exit 1
+fi
+echo "All API tests passed."

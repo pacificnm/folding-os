@@ -67,6 +67,8 @@ Milestone 4 adds:
   `registry` commands on the supervisor role
 - operator workflows in FoldOps for fleet visibility, desired-version assignment,
   and selected configuration actions
+- supervisor fleet mutation authorization for the `foldops` service user per
+  [ADR-0024](../adr/0024-foldops-supervisor-fleet-mutation-authorization.md)
 - Rust FoldOps source in `packages/foldops/` per
   [ADR-0022](../adr/0022-foldops-rust-source-in-foldingos-monorepo.md)
 - runtime FoldOps and `foldingosctl` updates without OS reimage per
@@ -158,4 +160,5 @@ High-level phases:
 - [ADR-0021](../adr/0021-machine-readable-foldingosctl-automation-interface.md)
 - [ADR-0022](../adr/0022-foldops-rust-source-in-foldingos-monorepo.md)
 - [ADR-0023](../adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md)
+- [ADR-0024](../adr/0024-foldops-supervisor-fleet-mutation-authorization.md)
 - [Roadmap](../../ROADMAP.md)

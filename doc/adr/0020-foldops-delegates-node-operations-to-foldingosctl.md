@@ -72,6 +72,13 @@ FoldOps **delegates node-local FoldingOS operations to `foldingosctl`**.
    the `supervisor` role. Milestone 4 does not introduce SSH-based remote shell
    access from FoldOps to agents.
 
+   The FoldOps dashboard mutates fleet state through `foldops-supervisor` HTTP
+   routes that delegate to approved `foldingosctl` commands. Operators must
+   not need direct CLI access for assignment or network-boot allowlisting when
+   using the web UI. Mutating delegation authorization and supervisor image
+   permissions are defined in
+   [ADR-0024](0024-foldops-supervisor-fleet-mutation-authorization.md).
+
 5. **Agent-side actions that require mutation** (for example configuration
    activation) must go through explicit, auditable `foldingosctl` commands
    authorized for automation. FoldOps must not bypass validation performed by
@@ -159,5 +166,6 @@ on the fleet node.
 - [Milestone 4 implementation specification](../milestone/4-implementation-spec.md)
 - [Milestone 4 engineering specification](../milestone/4-engineering-spec.md)
 - [ADR-0021: Machine-Readable foldingosctl Automation Interface](0021-machine-readable-foldingosctl-automation-interface.md)
+- [ADR-0024: FoldOps Supervisor Fleet Mutation Authorization](0024-foldops-supervisor-fleet-mutation-authorization.md)
 - [ADR-0022: FoldOps Rust Source In FoldingOS Monorepo](0022-foldops-rust-source-in-foldingos-monorepo.md)
 - [ADR-0023: Runtime FoldOps And foldingosctl Updates Without OS Reimage](0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md)

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -260,6 +262,97 @@ func TestAddBootAllowlistMAC(t *testing.T) {
 	}
 	if err := isBootClientEligible("00:be:43:e7:59:5e", ""); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestProvisionListAllowBootJSON(t *testing.T) {
+	root := t.TempDir()
+	restore := setProvisionBootPaths(root)
+	defer restore()
+	writeSupervisorRole(t, root)
+	if err := provisionAllowBoot("00:be:43:e7:59:5e", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := provisionAllowBoot("52:54:00:12:34:56", "/dev/sda"); err != nil {
+		t.Fatal(err)
+	}
+
+	automationCtx = automationContext{
+		format:  formatJSON,
+		command: "provision list-allow-boot",
+	}
+	read, write, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := os.Stdout
+	os.Stdout = write
+	t.Cleanup(func() {
+		os.Stdout = previous
+	})
+	if err := provisionListAllowBoot(); err != nil {
+		t.Fatal(err)
+	}
+	write.Close()
+
+	var stdout bytes.Buffer
+	stdout.ReadFrom(read)
+	var document automationSuccessDocument
+	if err := json.Unmarshal(stdout.Bytes(), &document); err != nil {
+		t.Fatal(err)
+	}
+	if !document.OK {
+		t.Fatalf("document: %+v", document)
+	}
+	payload, ok := document.Data.(map[string]any)
+	if !ok {
+		t.Fatalf("data: %#v", document.Data)
+	}
+	devices, ok := payload["devices"].([]any)
+	if !ok || len(devices) != 2 {
+		t.Fatalf("devices: %#v", payload["devices"])
+	}
+}
+
+func TestProvisionAllowBootJSON(t *testing.T) {
+	root := t.TempDir()
+	restore := setProvisionBootPaths(root)
+	defer restore()
+	writeSupervisorRole(t, root)
+
+	automationCtx = automationContext{
+		format:  formatJSON,
+		command: "provision allow-boot",
+	}
+	read, write, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := os.Stdout
+	os.Stdout = write
+	t.Cleanup(func() {
+		os.Stdout = previous
+	})
+	if err := provisionAllowBoot("00:be:43:e7:59:5e", ""); err != nil {
+		t.Fatal(err)
+	}
+	write.Close()
+
+	var stdout bytes.Buffer
+	stdout.ReadFrom(read)
+	var document automationSuccessDocument
+	if err := json.Unmarshal(stdout.Bytes(), &document); err != nil {
+		t.Fatal(err)
+	}
+	if !document.OK {
+		t.Fatalf("document: %+v", document)
+	}
+	payload, ok := document.Data.(map[string]any)
+	if !ok {
+		t.Fatalf("data: %#v", document.Data)
+	}
+	if payload["mac_address"] != "00:be:43:e7:59:5e" {
+		t.Fatalf("mac_address: %#v", payload["mac_address"])
 	}
 }
 

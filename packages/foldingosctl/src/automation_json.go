@@ -127,6 +127,10 @@ func classifyAutomationError(err error) automationErrorBody {
 		return automationErrorBody{Code: "role_required", Message: message}
 	case strings.Contains(lower, "requires agent or supervisor role"):
 		return automationErrorBody{Code: "role_required", Message: message}
+	case strings.Contains(lower, "automation policy"):
+		return automationErrorBody{Code: "automation_denied", Message: message}
+	case strings.Contains(lower, "permission denied"):
+		return automationErrorBody{Code: "permission_denied", Message: message}
 	case strings.Contains(lower, "unknown configuration domain"),
 		strings.Contains(lower, "unknown inspect subcommand"),
 		strings.Contains(lower, "missing value for"):

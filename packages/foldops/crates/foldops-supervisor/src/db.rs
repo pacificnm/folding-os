@@ -223,6 +223,24 @@ pub fn get_machine(conn: &Connection, hostname: &str) -> rusqlite::Result<Option
     Ok(None)
 }
 
+pub fn get_machine_by_node_id(conn: &Connection, node_id: &str) -> rusqlite::Result<Option<MachineRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT hostname, first_seen, last_seen, node_id, installation_role, foldingos_version FROM machines WHERE node_id = ?1",
+    )?;
+    let mut rows = stmt.query(params![node_id])?;
+    if let Some(row) = rows.next()? {
+        return Ok(Some(MachineRow {
+            hostname: row.get(0)?,
+            first_seen: row.get(1)?,
+            last_seen: row.get(2)?,
+            node_id: row.get(3)?,
+            installation_role: row.get(4)?,
+            foldingos_version: row.get(5)?,
+        }));
+    }
+    Ok(None)
+}
+
 fn map_snapshot(row: &rusqlite::Row<'_>) -> rusqlite::Result<SnapshotRow> {
     Ok(SnapshotRow {
         id: row.get(0)?,
