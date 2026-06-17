@@ -488,6 +488,24 @@ fn validate_verification_path(path: &str, expected_prefix: &str) -> Result<(), S
     Ok(())
 }
 
+pub fn foldops_packages_for_role(
+    manifest: &FoldOpsManifest,
+    role: &str,
+) -> Result<Vec<FoldOpsPackage>, String> {
+    let mut packages = Vec::new();
+    for pkg in &manifest.packages {
+        if pkg.roles.iter().any(|pkg_role| pkg_role == role) {
+            packages.push(pkg.clone());
+        }
+    }
+    if packages.is_empty() {
+        return Err(format!(
+            "manifest defines no FoldOps packages for role \"{role}\""
+        ));
+    }
+    Ok(packages)
+}
+
 fn roles_equal(actual: &[String], expected: &[&str]) -> bool {
     let mut actual_sorted: Vec<_> = actual.iter().map(String::as_str).collect();
     let mut expected_sorted = expected.to_vec();
@@ -530,4 +548,184 @@ fn parse_quoted_string(value: &str) -> Result<String, String> {
         return Err("expected non-empty quoted string".into());
     }
     Ok(inner.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const VALID_FOLDOPS_MANIFEST: &str = r#"schema_version = 1
+manifest_release = "0.1.0-1"
+architecture = "x86_64"
+artifact_format = "deb"
+minimum_foldingos_version = "0.1.0"
+
+[[packages]]
+name = "foldops-agent"
+version = "0.1.0-1"
+roles = ["agent", "supervisor"]
+artifact_url = "https://deb.folding-os.com/pool/main/f/foldops-agent/foldops-agent_0.1.0-1_amd64.deb"
+artifact_size = 3127044
+sha256 = "9022c393630e11d5cec5794ac77281671c7b0d634d630c92d95ad6de22d2151a"
+verification_path = "/data/apps/foldops/current/foldops-agent/usr/bin/foldops-agent"
+
+[[packages]]
+name = "foldops-supervisor"
+version = "0.1.0-1"
+roles = ["supervisor"]
+artifact_url = "https://deb.folding-os.com/pool/main/f/foldops-supervisor/foldops-supervisor_0.1.0-1_amd64.deb"
+artifact_size = 3111920
+sha256 = "a8b91ec03803259ade0bc3595218d74408390f6ac4e0f077cc47ba85edaaa8d5"
+verification_path = "/data/apps/foldops/current/foldops-supervisor/usr/bin/foldops-supervisor"
+
+[[packages]]
+name = "foldops-web"
+version = "0.1.0"
+roles = ["supervisor"]
+artifact_url = "https://deb.folding-os.com/pool/main/f/foldops-web/foldops-web_0.1.0_all.deb"
+artifact_size = 174466
+sha256 = "e560956f0aa6f77677af9bbac464a71ebcf0ff1da19877070f6f8dc05f738ecf"
+verification_path = "/data/apps/foldops/current/foldops-web/usr/share/foldops/web/index.html"
+"#;
+
+    const VALID_FOLDOPS_MANIFEST_V2: &str = r#"schema_version = 2
+manifest_release = "0.2.0-1"
+architecture = "x86_64"
+artifact_format = "layout-tar-zst"
+minimum_foldingos_version = "0.1.0"
+
+[[packages]]
+name = "foldops-agent"
+version = "0.1.0"
+roles = ["agent", "supervisor"]
+install_prefix = "foldops-agent"
+artifact_url = "https://packages.folding-os.com/foldops/0.2.0-1/foldops-agent-x86_64.tar.zst"
+artifact_size = 3740000
+sha256 = "9022c393630e11d5cec5794ac77281671c7b0d634d630c92d95ad6de22d2151a"
+verification_path = "/data/apps/foldops/current/foldops-agent/usr/bin/foldops-agent"
+
+[[packages]]
+name = "foldops-supervisor"
+version = "0.1.0"
+roles = ["supervisor"]
+install_prefix = "foldops-supervisor"
+artifact_url = "https://packages.folding-os.com/foldops/0.2.0-1/foldops-supervisor-x86_64.tar.zst"
+artifact_size = 3720000
+sha256 = "a8b91ec03803259ade0bc3595218d74408390f6ac4e0f077cc47ba85edaaa8d5"
+verification_path = "/data/apps/foldops/current/foldops-supervisor/usr/bin/foldops-supervisor"
+
+[[packages]]
+name = "foldops-web"
+version = "0.1.0"
+roles = ["supervisor"]
+install_prefix = "foldops-web"
+artifact_url = "https://packages.folding-os.com/foldops/0.2.0-1/foldops-web-x86_64.tar.zst"
+artifact_size = 174000
+sha256 = "e560956f0aa6f77677af9bbac464a71ebcf0ff1da19877070f6f8dc05f738ecf"
+verification_path = "/data/apps/foldops/current/foldops-web/usr/share/foldops/web/index.html"
+"#;
+
+    #[test]
+    fn parse_approved_foldops_manifest() {
+        let manifest = parse_foldops_manifest(VALID_FOLDOPS_MANIFEST).expect("parse manifest");
+        validate_foldops_manifest(&manifest).expect("validate manifest");
+        assert_eq!(manifest.manifest_release, "0.1.0-1");
+        assert_eq!(manifest.packages.len(), 3);
+    }
+
+    #[test]
+    fn foldops_packages_for_role_filters_packages() {
+        let manifest = parse_foldops_manifest(VALID_FOLDOPS_MANIFEST).expect("parse manifest");
+        let agent_packages = foldops_packages_for_role(&manifest, "agent").expect("agent packages");
+        assert_eq!(agent_packages.len(), 1);
+        assert_eq!(agent_packages[0].name, "foldops-agent");
+        let supervisor_packages =
+            foldops_packages_for_role(&manifest, "supervisor").expect("supervisor packages");
+        assert_eq!(supervisor_packages.len(), 3);
+    }
+
+    #[test]
+    fn reject_unknown_foldops_manifest_key() {
+        let content = VALID_FOLDOPS_MANIFEST.replace(
+            r#"artifact_format = "deb""#,
+            "artifact_format = \"deb\"\nlatest = true",
+        );
+        assert!(parse_foldops_manifest(&content).is_err());
+    }
+
+    #[test]
+    fn reject_unpinned_latest_foldops_artifact_url() {
+        let content = VALID_FOLDOPS_MANIFEST.replace(
+            "foldops-agent_0.1.0-1_amd64.deb\"",
+            "latest.deb\"",
+        );
+        let manifest = parse_foldops_manifest(&content).expect("parse manifest");
+        assert!(validate_foldops_manifest(&manifest).is_err());
+    }
+
+    #[test]
+    fn reject_invalid_foldops_origin() {
+        let content = VALID_FOLDOPS_MANIFEST.replace(
+            "https://deb.folding-os.com/",
+            "https://evil.example/",
+        );
+        let manifest = parse_foldops_manifest(&content).expect("parse manifest");
+        assert!(validate_foldops_manifest(&manifest).is_err());
+    }
+
+    #[test]
+    fn reject_verification_path_outside_current() {
+        let content = VALID_FOLDOPS_MANIFEST.replace(
+            r#"verification_path = "/data/apps/foldops/current/foldops-agent/usr/bin/foldops-agent""#,
+            r#"verification_path = "/usr/bin/foldops-agent""#,
+        );
+        let manifest = parse_foldops_manifest(&content).expect("parse manifest");
+        assert!(validate_foldops_manifest(&manifest).is_err());
+    }
+
+    #[test]
+    fn parse_schema_v2_layout_manifest() {
+        let manifest = parse_foldops_manifest(VALID_FOLDOPS_MANIFEST_V2).expect("parse manifest");
+        validate_foldops_manifest(&manifest).expect("validate manifest");
+        assert_eq!(manifest.schema_version, 2);
+        assert_eq!(manifest.artifact_format, "layout-tar-zst");
+        assert_eq!(manifest.packages[0].install_prefix, "foldops-agent");
+    }
+
+    #[test]
+    fn reject_schema_v2_layout_missing_install_prefix() {
+        let content =
+            VALID_FOLDOPS_MANIFEST_V2.replace("install_prefix = \"foldops-agent\"\n", "");
+        let manifest = parse_foldops_manifest(&content).expect("parse manifest");
+        assert!(validate_foldops_manifest(&manifest).is_err());
+    }
+
+    #[test]
+    fn reject_missing_required_foldops_package() {
+        let content = VALID_FOLDOPS_MANIFEST.replace(
+            r#"
+[[packages]]
+name = "foldops-web"
+version = "0.1.0"
+roles = ["supervisor"]
+artifact_url = "https://deb.folding-os.com/pool/main/f/foldops-web/foldops-web_0.1.0_all.deb"
+artifact_size = 174466
+sha256 = "e560956f0aa6f77677af9bbac464a71ebcf0ff1da19877070f6f8dc05f738ecf"
+verification_path = "/data/apps/foldops/current/foldops-web/usr/share/foldops/web/index.html"
+"#,
+            "",
+        );
+        let manifest = parse_foldops_manifest(&content).expect("parse manifest");
+        assert!(validate_foldops_manifest(&manifest).is_err());
+    }
+
+    #[test]
+    fn reject_invalid_foldops_package_roles() {
+        let content = VALID_FOLDOPS_MANIFEST.replace(
+            r#"roles = ["agent", "supervisor"]"#,
+            r#"roles = ["agent"]"#,
+        );
+        let manifest = parse_foldops_manifest(&content).expect("parse manifest");
+        assert!(validate_foldops_manifest(&manifest).is_err());
+    }
 }

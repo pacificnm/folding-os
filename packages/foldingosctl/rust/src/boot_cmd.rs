@@ -27,6 +27,12 @@ pub fn boot_status(paths: &AppliancePaths) -> Result<(), String> {
     write_commissioning_display(paths, true)
 }
 
+pub fn refresh_commissioning_display(paths: &AppliancePaths) {
+    if let Err(error) = write_commissioning_display(paths, false) {
+        eprintln!("foldingosctl: refresh commissioning display: {error}");
+    }
+}
+
 fn write_commissioning_display(paths: &AppliancePaths, wait_for_services: bool) -> Result<(), String> {
     let mut pretty_name = os_release_value("PRETTY_NAME")?;
     if pretty_name.is_empty() {

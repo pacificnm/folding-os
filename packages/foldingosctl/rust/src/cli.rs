@@ -4,12 +4,15 @@ use crate::automation::{
 };
 use crate::boot_cmd::boot_status;
 use crate::config_cmd::{self, ConfigCommandOutput};
+use crate::fah;
+use crate::foldops;
 use crate::identity::ensure_identity;
 use crate::inspect;
 use crate::paths::AppliancePaths;
 use crate::provision;
 use crate::registry_cmd::{self, RegistryOutput};
 use crate::storage::expand_data;
+use crate::tools;
 
 const USAGE: &str =
     "usage: foldingosctl <boot|config|fah|foldops|identity|inspect|provision|registry|storage|tools> <command> [arguments]";
@@ -143,6 +146,20 @@ pub fn dispatch(mut args: Vec<String>) -> Result<(), CliError> {
         return boot_status(&paths).map_err(CliError::Failed);
     }
 
+    if args[0] == "fah" || args[0] == "foldops" || args[0] == "tools" {
+        if args.len() < 2 {
+            return Err(CliError::Usage);
+        }
+        let subcommand = args[1].clone();
+        let extra = args[2..].to_vec();
+        return match args[0].as_str() {
+            "fah" => fah::run(&paths, &subcommand, &extra).map_err(CliError::Failed),
+            "foldops" => foldops::run(&paths, &subcommand, &extra).map_err(CliError::Failed),
+            "tools" => tools::run(&paths, &subcommand, &extra).map_err(CliError::Failed),
+            _ => Err(CliError::Usage),
+        };
+    }
+
     let command = infer_command_name(&args);
     let ctx = AutomationContext::new(format, command);
     publish_failure(
@@ -207,14 +224,14 @@ fn publish_failure(ctx: &AutomationContext, message: String) -> Result<(), CliEr
 fn print_migration_status(format: OutputFormat) -> Result<(), CliError> {
     match format {
         OutputFormat::Human => {
-            println!("foldingosctl Rust migration: phase 4");
+            println!("foldingosctl Rust migration: phase 5");
             println!("marker: {MIGRATION_MARKER}");
             Ok(())
         }
         OutputFormat::Json => {
             let ctx = AutomationContext::new(OutputFormat::Json, "migration status");
             let data = serde_json::json!({
-                "phase": 4,
+                "phase": 5,
                 "marker": MIGRATION_MARKER,
                 "implementation": "rust",
             });

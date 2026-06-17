@@ -13,8 +13,8 @@ use crate::fs_atomic::atomic_write;
 use crate::paths::AppliancePaths;
 
 pub use apply::apply_domain;
-pub use effective::{effective_config, load_effective_config_for_domain};
-pub use parse::{parse_domain, HOSTNAME_PATTERN};
+pub use effective::{effective_config, load_effective_config_for_domain, validate_secret_reference};
+pub use parse::{parse_domain, DomainConfig, HOSTNAME_PATTERN};
 
 #[derive(Debug, Serialize)]
 struct ConfigValidationResult {

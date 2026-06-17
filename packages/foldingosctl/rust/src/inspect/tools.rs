@@ -1,11 +1,17 @@
 use std::fs;
+use std::path::{Component, Path, PathBuf};
 
 use regex::Regex;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::sync::LazyLock;
+use url::Url;
 
 use crate::paths::AppliancePaths;
+
+pub const TOOLS_APPROVED_ORIGIN: &str = "packages.folding-os.com";
+pub const TOOLS_ARTIFACT_BASENAME: &str = "foldingosctl-x86_64";
+const TOOLS_ASSIGNMENT_SCHEMA_VERSION: i32 = 1;
 
 static SHA256_PATTERN: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[0-9a-f]{64}$").expect("sha256 pattern compiles"));
@@ -19,11 +25,13 @@ pub struct ToolsAssignment {
     pub sha256: String,
 }
 
-#[derive(Debug, Deserialize)]
-struct ToolsActiveState {
-    schema_version: i32,
-    tools_version: String,
-    sha256: String,
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ToolsActiveState {
+    pub schema_version: i32,
+    pub tools_version: String,
+    pub sha256: String,
+    #[serde(default)]
+    pub installed_at_unix: i64,
 }
 
 pub fn inspect_tools(paths: &AppliancePaths) -> Result<serde_json::Value, String> {
@@ -77,13 +85,13 @@ pub fn collect_inspect_tools_data(paths: &AppliancePaths) -> Result<serde_json::
     Ok(data)
 }
 
-fn resolve_effective_tools_assignment(
+pub fn resolve_effective_tools_assignment(
     paths: &AppliancePaths,
 ) -> Result<Option<ToolsAssignment>, String> {
-    if paths.tools_assigned_version.exists() {
-        return load_tools_assignment(&paths.tools_assigned_version)
-            .map(Some)
-            .map_err(|error| error.to_string());
+    match load_tools_assignment(&paths.tools_assigned_version) {
+        Ok(assignment) => return Ok(Some(assignment)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.to_string()),
     }
     match load_tools_assignment(&paths.tools_bootstrap_manifest) {
         Ok(assignment) => Ok(Some(assignment)),
@@ -92,45 +100,104 @@ fn resolve_effective_tools_assignment(
     }
 }
 
-fn load_tools_assignment(path: &std::path::Path) -> Result<ToolsAssignment, std::io::Error> {
-    let content = fs::read_to_string(path)?;
-    let assignment: ToolsAssignment = serde_json::from_str(&content)
+pub fn parse_tools_assignment(content: &[u8]) -> Result<ToolsAssignment, String> {
+    serde_json::from_slice(content).map_err(|error| format!("parse tools assignment JSON: {error}"))
+}
+
+pub fn load_tools_assignment(path: &Path) -> Result<ToolsAssignment, std::io::Error> {
+    let content = fs::read(path)?;
+    let assignment = parse_tools_assignment(&content)
         .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
     validate_tools_assignment(&assignment)
         .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
     Ok(assignment)
 }
 
-fn load_tools_active_state(path: &std::path::Path) -> Result<ToolsActiveState, std::io::Error> {
+pub fn load_tools_active_state(path: &Path) -> Result<ToolsActiveState, std::io::Error> {
     let content = fs::read_to_string(path)?;
     let state: ToolsActiveState = serde_json::from_str(&content)
         .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
-    if state.schema_version != 1 {
+    if state.schema_version != TOOLS_ASSIGNMENT_SCHEMA_VERSION {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
             "active tools state schema_version is unsupported",
         ));
     }
+    validate_tools_version_label(&state.tools_version)
+        .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
+    if !SHA256_PATTERN.is_match(&state.sha256) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "active tools state sha256 is invalid",
+        ));
+    }
     Ok(state)
 }
 
-fn validate_tools_assignment(assignment: &ToolsAssignment) -> Result<(), String> {
-    if assignment.schema_version != 1 {
-        return Err("tools assignment schema_version must be 1".into());
-    }
-    if assignment.tools_version.trim().is_empty() {
+pub fn save_tools_active_state(path: &Path, mut state: ToolsActiveState) -> Result<(), String> {
+    state.schema_version = TOOLS_ASSIGNMENT_SCHEMA_VERSION;
+    let content = serde_json::to_vec(&state).map_err(|error| error.to_string())?;
+    let mut content_with_newline = content;
+    content_with_newline.push(b'\n');
+    crate::fs_atomic::atomic_write(path, &content_with_newline, 0o644)
+}
+
+fn validate_tools_version_label(version: &str) -> Result<(), String> {
+    let version = version.trim();
+    if version.is_empty() {
         return Err("tools version must be non-empty".into());
     }
+    let cleaned = PathBuf::from(version);
+    if cleaned.components().any(|component| {
+        matches!(
+            component,
+            Component::ParentDir | Component::RootDir | Component::Prefix(_)
+        )
+    }) || version.contains('/') || version.contains('\\') {
+        return Err("tools version must not contain path separators or traversal".into());
+    }
+    if cleaned != Path::new(version) {
+        return Err("tools version must not contain path separators or traversal".into());
+    }
+    Ok(())
+}
+
+fn validate_tools_assignment(assignment: &ToolsAssignment) -> Result<(), String> {
+    if assignment.schema_version != TOOLS_ASSIGNMENT_SCHEMA_VERSION {
+        return Err("tools assignment schema_version must be 1".into());
+    }
+    validate_tools_version_label(&assignment.tools_version)?;
     if !SHA256_PATTERN.is_match(&assignment.sha256) {
         return Err("sha256 must be a 64-character lowercase hex digest".into());
     }
     if assignment.artifact_size <= 0 {
         return Err("artifact_size must be positive".into());
     }
+
+    let artifact_url = Url::parse(&assignment.artifact_url)
+        .map_err(|error| format!("artifact_url is invalid: {error}"))?;
+    if artifact_url.scheme() != "https" {
+        return Err("artifact_url must use HTTPS".into());
+    }
+    if artifact_url.host_str() != Some(TOOLS_APPROVED_ORIGIN) {
+        return Err(format!(
+            "artifact_url must use HTTPS from the approved official origin: {TOOLS_APPROVED_ORIGIN}"
+        ));
+    }
+    let path = artifact_url.path();
+    let version_dir = format!("/foldingos-tools/{}/", assignment.tools_version);
+    if !path.contains(&version_dir) {
+        return Err("artifact_url must reference the assigned tools version directory".into());
+    }
+    if !path.ends_with(&format!("/{TOOLS_ARTIFACT_BASENAME}"))
+        && !path.ends_with(TOOLS_ARTIFACT_BASENAME)
+    {
+        return Err("artifact_url must reference the foldingosctl-x86_64 artifact".into());
+    }
     Ok(())
 }
 
-fn tools_installation_verified(paths: &AppliancePaths, assignment: &ToolsAssignment) -> bool {
+pub fn tools_installation_verified(paths: &AppliancePaths, assignment: &ToolsAssignment) -> bool {
     let Ok(state) = load_tools_active_state(&paths.tools_active_state) else {
         return false;
     };

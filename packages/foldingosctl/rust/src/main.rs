@@ -7,6 +7,8 @@ mod config;
 mod config_cmd;
 mod config_host;
 mod enrollment;
+mod fah;
+mod foldops;
 mod foldops_manifest;
 mod fs_atomic;
 mod identity;
@@ -21,6 +23,7 @@ mod registry_import;
 mod registry_poll;
 mod role;
 mod storage;
+mod tools;
 
 use cli::{dispatch, exit_code_for_error, print_human_error};
 

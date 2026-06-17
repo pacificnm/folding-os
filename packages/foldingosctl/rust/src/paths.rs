@@ -16,6 +16,8 @@ pub struct AppliancePaths {
     pub tools_binary: PathBuf,
     pub fah_apps_root: PathBuf,
     pub fah_embedded_manifest: PathBuf,
+    pub fah_acquire_state: PathBuf,
+    pub fah_runtime_config: PathBuf,
     pub fah_log: PathBuf,
     pub staged_update_meta: PathBuf,
     pub pending_update_report: PathBuf,
@@ -76,6 +78,8 @@ impl Default for AppliancePaths {
             tools_binary: PathBuf::from("/usr/bin/foldingosctl"),
             fah_apps_root: PathBuf::from("/data/apps/fah"),
             fah_embedded_manifest: PathBuf::from("/usr/share/foldingos/manifests/fah.toml"),
+            fah_acquire_state: PathBuf::from("/data/state/fah-acquire.state"),
+            fah_runtime_config: PathBuf::from("/run/foldingos/fah/config.xml"),
             fah_log: PathBuf::from("/data/fah/log.txt"),
             staged_update_meta: PathBuf::from("/data/state/provision/staged-update.json"),
             pending_update_report: PathBuf::from("/data/state/provision/pending-update-report.json"),
@@ -154,6 +158,37 @@ impl AppliancePaths {
 
     pub fn fah_current_link(&self) -> PathBuf {
         self.fah_apps_root.join("current")
+    }
+
+    pub fn fah_downloads_dir(&self) -> PathBuf {
+        self.fah_apps_root.join(".downloads")
+    }
+
+    pub fn fah_runtime_dir(&self) -> PathBuf {
+        self.fah_runtime_config
+            .parent()
+            .map(std::path::Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from("/run/foldingos/fah"))
+    }
+
+    pub fn fah_version_dir(&self, version: &str) -> PathBuf {
+        self.fah_apps_root.join(version)
+    }
+
+    pub fn fah_staging_dir(&self, version: &str) -> PathBuf {
+        self.fah_apps_root.join(format!("{version}.staging"))
+    }
+
+    pub fn fah_staged_deb(&self, version: &str) -> PathBuf {
+        self.fah_downloads_dir().join(format!("{version}.deb"))
+    }
+
+    pub fn fah_partial_deb(&self, version: &str) -> PathBuf {
+        self.fah_downloads_dir().join(format!("{version}.partial"))
+    }
+
+    pub fn fah_verified_marker(&self, version: &str) -> PathBuf {
+        self.fah_version_dir(version).join(".foldingos-verified")
     }
 
     pub fn enrollment_record_path(&self, node_id: &str) -> PathBuf {
