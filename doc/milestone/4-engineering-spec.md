@@ -336,29 +336,12 @@ The appliance control plane is implemented in Rust per
 | Source location | `packages/foldingosctl/` Rust crate |
 | Installed binary | `/usr/bin/foldingosctl` |
 | CLI and JSON contract | Stable per [foldingosctl.md](../foldingosctl.md) and [ADR-0021](../adr/0021-machine-readable-foldingosctl-automation-interface.md) |
-| Build | Buildroot Rust package; Go toolchain removed after migration |
+| Build | Buildroot Rust `cargo-package`; Go toolchain removed after migration |
 | FoldOps boundary | Subprocess delegation unchanged |
 
-### Transitional layout (ADR-0025 phases 1–5)
-
-Until Go removal in phase 6:
-
-| Path | Role |
-| --- | --- |
-| `packages/foldingosctl/src/` | Current Go implementation (`/usr/bin/foldingosctl`) |
-| `packages/foldingosctl/rust/` | Rust crate under migration |
-| `packages/foldingosctl-rust/` | Buildroot `cargo-package` wiring |
-| `/usr/bin/foldingosctl-rust` | Rust binary installed during migration for build and acceptance checks |
-
-FoldOps and operators continue to invoke `/usr/bin/foldingosctl` until the Rust
-crate reaches parity and replaces the Go package in the image build.
-
-The Rust crate vendors dependencies under `packages/foldingosctl/rust/VENDOR/` for
+The Rust crate vendors dependencies under `packages/foldingosctl/VENDOR/` for
 offline Buildroot `cargo-package` builds. Regenerate with
 `cargo vendor --locked VENDOR` in that directory when `Cargo.lock` changes.
-
-Until Go removal is complete, documentation and tests treat the CLI contract as
-authoritative regardless of implementation language.
 
 ---
 
