@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::automation_policy::require_acquire_automation_mutation;
 use crate::inspect::{
     hash_file_at_path, resolve_effective_tools_assignment, save_tools_active_state,
     tools_installation_verified, ToolsActiveState,
@@ -25,12 +26,22 @@ const TOOLS_DEPENDENT_SYSTEMD_UNITS: &[&str] = &[
     "foldingos-foldops-serve-https.service",
 ];
 
+pub fn acquire_json(paths: &AppliancePaths) -> Result<serde_json::Value, String> {
+    tools_acquire(paths, &ToolsAcquireHooks::default())
+}
+
 pub fn run(paths: &AppliancePaths, subcommand: &str, args: &[String]) -> Result<(), String> {
     if !args.is_empty() {
         return Err(format!("unknown tools option {:?}", args[0]));
     }
     match subcommand {
-        "acquire" => tools_acquire(paths, &ToolsAcquireHooks::default()),
+        "acquire" => {
+            let data = tools_acquire(paths, &ToolsAcquireHooks::default())?;
+            if let Some(message) = data.get("message").and_then(|value| value.as_str()) {
+                println!("{message}");
+            }
+            Ok(())
+        }
         other => Err(format!("unknown tools subcommand {other:?}")),
     }
 }
@@ -56,71 +67,81 @@ impl Default for ToolsAcquireHooks {
     }
 }
 
-fn tools_acquire(paths: &AppliancePaths, hooks: &ToolsAcquireHooks) -> Result<(), String> {
+fn tools_acquire(paths: &AppliancePaths, hooks: &ToolsAcquireHooks) -> Result<serde_json::Value, String> {
+    require_acquire_automation_mutation(paths, "tools")?;
+
     let assignment = match resolve_effective_tools_assignment(paths)? {
         Some(assignment) => assignment,
         None => {
-            println!(
-                "No supervisor-assigned or bootstrap tools version is configured; image bootstrap foldingosctl remains active."
-            );
-            return Ok(());
+            return Ok(tools_acquire_result(
+                None,
+                false,
+                false,
+                false,
+                false,
+                "No supervisor-assigned or bootstrap tools version is configured; image bootstrap foldingosctl remains active.",
+            ));
         }
     };
 
+    let tools_version = assignment.tools_version.clone();
+
     if tools_installation_verified(paths, &assignment) {
         clear_tools_acquire_state(&tools_acquire_state_path(paths))?;
-        println!(
-            "Verified foldingosctl tools release {} is already active; acquisition not required.",
-            assignment.tools_version
-        );
-        return Ok(());
+        return Ok(tools_acquire_result(
+            Some(&tools_version),
+            true,
+            false,
+            false,
+            true,
+            &format!(
+                "Verified foldingosctl tools release {tools_version} is already active; acquisition not required."
+            ),
+        ));
     }
 
     let acquire_state_path = tools_acquire_state_path(paths);
     let state = load_tools_acquire_state(&acquire_state_path)?;
     let now_unix = (hooks.now_unix)();
     if let Some(remaining) = defer_tools_acquisition_attempt(&state, now_unix)? {
-        println!(
-            "Tools acquisition deferred for {} (next attempt at {}).",
-            format_duration_rounded(remaining),
-            format_unix_rfc3339_utc(state.next_attempt_unix),
-        );
-        return Ok(());
+        return Ok(tools_acquire_result(
+            Some(&tools_version),
+            false,
+            false,
+            true,
+            false,
+            &format!(
+                "Tools acquisition deferred for {} (next attempt at {}).",
+                format_duration_rounded(remaining),
+                format_unix_rfc3339_utc(state.next_attempt_unix),
+            ),
+        ));
     }
 
     if let Err(error) = (hooks.check_prerequisites)() {
-        return record_tools_acquisition_failure(&acquire_state_path, &error, now_unix);
+        record_tools_acquisition_failure(&acquire_state_path, &error, now_unix)?;
     }
 
     let downloads_dir = tools_downloads_dir(paths);
-    let staged_path = match (hooks.download_and_stage)(&downloads_dir, &assignment) {
-        Ok(path) => path,
-        Err(error) => {
-            return record_tools_acquisition_failure(&acquire_state_path, &error, now_unix);
-        }
-    };
-    println!(
-        "Staged verified foldingosctl {} artifact at {}.",
-        assignment.tools_version,
-        staged_path.display()
-    );
+    let staged_path = (hooks.download_and_stage)(&downloads_dir, &assignment).map_err(|error| {
+        record_tools_acquisition_failure(&acquire_state_path, &error, now_unix).unwrap_err();
+        error
+    })?;
 
     if let Err(error) = atomic_replace_tools_binary(&staged_path, &paths.tools_binary) {
-        return record_tools_acquisition_failure(&acquire_state_path, &error, now_unix);
+        record_tools_acquisition_failure(&acquire_state_path, &error, now_unix)?;
     }
 
-    let digest = match hash_file_at_path(&paths.tools_binary, assignment.artifact_size) {
-        Ok(digest) => digest,
-        Err(error) => {
-            return record_tools_acquisition_failure(&acquire_state_path, &error, now_unix);
-        }
-    };
+    let digest = hash_file_at_path(&paths.tools_binary, assignment.artifact_size).map_err(|error| {
+        record_tools_acquisition_failure(&acquire_state_path, &error, now_unix).unwrap_err();
+        error
+    })?;
     if digest != assignment.sha256 {
-        return record_tools_acquisition_failure(
+        record_tools_acquisition_failure(
             &acquire_state_path,
             "installed tools binary SHA-256 digest does not match approved assignment",
             now_unix,
-        );
+        )?;
     }
 
     let active_state = ToolsActiveState {
@@ -130,18 +151,45 @@ fn tools_acquire(paths: &AppliancePaths, hooks: &ToolsAcquireHooks) -> Result<()
         installed_at_unix: now_unix,
     };
     if let Err(error) = save_tools_active_state(&paths.tools_active_state, active_state) {
-        return record_tools_acquisition_failure(&acquire_state_path, &error, now_unix);
+        record_tools_acquisition_failure(&acquire_state_path, &error, now_unix)?;
     }
     if let Err(error) = (hooks.restart_dependent_units)() {
-        return record_tools_acquisition_failure(&acquire_state_path, &error, now_unix);
+        record_tools_acquisition_failure(&acquire_state_path, &error, now_unix)?;
     }
     clear_tools_acquire_state(&acquire_state_path)?;
-    println!(
-        "Installed and verified foldingosctl tools release {} at {}.",
-        assignment.tools_version,
-        paths.tools_binary.display()
-    );
-    Ok(())
+
+    Ok(tools_acquire_result(
+        Some(&tools_version),
+        true,
+        true,
+        false,
+        false,
+        &format!(
+            "Installed and verified foldingosctl tools release {tools_version} at {}.",
+            paths.tools_binary.display()
+        ),
+    ))
+}
+
+fn tools_acquire_result(
+    tools_version: Option<&str>,
+    activated: bool,
+    acquired: bool,
+    deferred: bool,
+    already_active: bool,
+    message: &str,
+) -> serde_json::Value {
+    let mut data = serde_json::json!({
+        "activated": activated,
+        "acquired": acquired,
+        "already_active": already_active,
+        "deferred": deferred,
+        "message": message,
+    });
+    if let Some(version) = tools_version {
+        data["tools_version"] = serde_json::Value::String(version.to_string());
+    }
+    data
 }
 
 fn tools_acquire_state_path(paths: &AppliancePaths) -> PathBuf {

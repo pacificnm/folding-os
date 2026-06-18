@@ -27,6 +27,10 @@ pub fn boot_status(paths: &AppliancePaths) -> Result<(), String> {
     write_commissioning_display(paths, true)
 }
 
+pub fn boot_refresh(paths: &AppliancePaths) -> Result<(), String> {
+    write_commissioning_display(paths, false)
+}
+
 pub fn refresh_commissioning_display(paths: &AppliancePaths) {
     if let Err(error) = write_commissioning_display(paths, false) {
         eprintln!("foldingosctl: refresh commissioning display: {error}");
@@ -130,6 +134,12 @@ fn format_ready_display(pretty_name: &str, address: &str) -> String {
     )
 }
 
+fn format_waiting_display(pretty_name: &str, address: &str) -> String {
+    format!(
+        "{pretty_name} starting\nAddress: {address}\nSSH: {ADMIN_SSH_USER}@{address} (when ready)\n"
+    )
+}
+
 fn failure_display_message(pretty_name: &str, err: &str) -> String {
     format!("{pretty_name}\nNetwork: {err}\n")
 }
@@ -212,7 +222,6 @@ fn format_commissioning_display(
     address: &str,
     checks: &[CommissioningCheck],
 ) -> String {
-    let ready_lines = format_ready_display(pretty_name, address);
     let all_ready = !commissioning_checks_pending(checks);
     let status_line = if all_ready {
         "System ready"
@@ -223,7 +232,11 @@ fn format_commissioning_display(
     let mut output = String::new();
     output.push_str(&render_commissioning_box(pretty_name, status_line));
     output.push('\n');
-    output.push_str(&ready_lines);
+    if all_ready {
+        output.push_str(&format_ready_display(pretty_name, address));
+    } else {
+        output.push_str(&format_waiting_display(pretty_name, address));
+    }
     output.push('\n');
     if !version.is_empty() {
         output.push_str(&format!("Version       : {version}\n"));
@@ -288,4 +301,52 @@ fn print_commissioning_status_summary(checks: &[CommissioningCheck]) {
 
 fn clear_console() -> Result<(), String> {
     write_console(CONSOLE_CLEAR_SCREEN)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_checks(all_ready: bool) -> Vec<CommissioningCheck> {
+        vec![
+            CommissioningCheck {
+                label: "Network online".into(),
+                ready: true,
+            },
+            CommissioningCheck {
+                label: "FoldOps packages acquired".into(),
+                ready: all_ready,
+            },
+        ]
+    }
+
+    #[test]
+    fn waiting_display_does_not_claim_ready() {
+        let output = format_commissioning_display(
+            "FoldingOS 0.1.0",
+            "0.1.0",
+            "supervisor",
+            "192.168.1.10",
+            &sample_checks(false),
+        );
+        assert!(output.contains("Some services are still starting"));
+        assert!(output.contains("FoldingOS 0.1.0 starting"));
+        assert!(output.contains("(when ready)"));
+        assert!(!output.contains("FoldingOS 0.1.0 ready\n"));
+    }
+
+    #[test]
+    fn ready_display_shows_ssh_entry_point() {
+        let output = format_commissioning_display(
+            "FoldingOS 0.1.0",
+            "0.1.0",
+            "supervisor",
+            "192.168.1.10",
+            &sample_checks(true),
+        );
+        assert!(output.contains("System ready"));
+        assert!(output.contains("FoldingOS 0.1.0 ready"));
+        assert!(output.contains("SSH: foldingos-admin@192.168.1.10"));
+        assert!(!output.contains("(when ready)"));
+    }
 }

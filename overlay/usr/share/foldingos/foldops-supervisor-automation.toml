@@ -12,3 +12,11 @@ name = "assign"
 [[commands]]
 group = "provision"
 name = "allow-boot"
+
+[[commands]]
+group = "foldops"
+name = "acquire"
+
+[[commands]]
+group = "tools"
+name = "acquire"

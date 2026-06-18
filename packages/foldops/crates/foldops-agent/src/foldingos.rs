@@ -180,6 +180,32 @@ pub async fn activate_foldinghome_config(
     .await
 }
 
+pub async fn foldops_acquire(foldingosctl_path: &Path) -> Result<Value, AutomationCommandError> {
+    run_automation(foldingosctl_path, &["foldops", "acquire"]).await
+}
+
+pub async fn tools_acquire(foldingosctl_path: &Path) -> Result<Value, AutomationCommandError> {
+    run_automation(foldingosctl_path, &["tools", "acquire"]).await
+}
+
+pub async fn try_restart_systemd_unit(unit: &str) -> Result<(), String> {
+    let output = tokio::process::Command::new("systemctl")
+        .args(["try-restart", unit])
+        .output()
+        .await
+        .map_err(|error| error.to_string())?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(format!(
+            "systemctl try-restart {unit} failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ))
+    }
+}
+
+pub const FOLDOPS_AGENT_UNIT: &str = "foldingos-foldops-agent.service";
+
 async fn run_automation(
     foldingosctl_path: &Path,
     command_args: &[&str],

@@ -1,4 +1,7 @@
 mod upstream;
+mod apply;
+
+pub use apply::{apply_local, fleet_apply_foldops, fleet_apply_tools, ApplyLocalRequest, FleetSoftwareApplyRequest};
 
 use std::sync::Arc;
 
