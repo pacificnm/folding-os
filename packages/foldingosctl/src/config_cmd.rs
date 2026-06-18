@@ -20,10 +20,11 @@ pub fn run(
             let domain = args
                 .first()
                 .ok_or_else(|| "config validate requires a domain".to_string())?;
-            if args.len() > 1 {
-                return Err(format!("unknown config option {:?}", args[1]));
+            let candidate = args.get(1).map(String::as_str);
+            if args.len() > 2 {
+                return Err(format!("unknown config option {:?}", args[2]));
             }
-            let data = config::validate_config(paths, domain)?;
+            let data = config::validate_config(paths, domain, candidate)?;
             if format == OutputFormat::Json {
                 return Ok(ConfigCommandOutput::Json(data));
             }
@@ -59,8 +60,13 @@ pub fn run(
             if args.len() > 2 {
                 return Err(format!("unknown config option {:?}", args[2]));
             }
-            config::activate_config(paths, &args[0], &args[1])?;
-            Ok(ConfigCommandOutput::Silent)
+            config::activate_config(paths, &args[0], &args[1]).map(|data| {
+                if format == OutputFormat::Json {
+                    ConfigCommandOutput::Json(data)
+                } else {
+                    ConfigCommandOutput::Silent
+                }
+            })
         }
         other => Err(format!("unknown config subcommand {other:?}")),
     }

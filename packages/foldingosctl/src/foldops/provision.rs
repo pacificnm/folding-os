@@ -172,6 +172,7 @@ fn provision_foldops_supervisor(
         ("INGEST_TOKEN".to_string(), token.to_string()),
         ("DB_PATH".to_string(), "/data/foldops/foldops.db".to_string()),
         ("WEB_ROOT".to_string(), foldops_web_root(paths).display().to_string()),
+        ("CONFIG_ENABLED".to_string(), "true".to_string()),
     ]);
     write_foldops_env_file(Path::new(FOLDOPS_SUPERVISOR_ENV), &supervisor_env, 0o600)?;
 
@@ -189,6 +190,7 @@ fn provision_foldops_supervisor(
         ("FAH_LOG_PATH".to_string(), "/data/fah/log.txt".to_string()),
         ("FAH_DB_PATH".to_string(), "/data/fah/client.db".to_string()),
         ("FAH_WORK_DIR".to_string(), "/data/fah/work".to_string()),
+        ("CONFIG_ENABLED".to_string(), "true".to_string()),
     ]);
     write_foldops_env_file(Path::new(FOLDOPS_AGENT_ENV), &agent_env, 0o600)?;
     write_foldops_provisioned_marker(paths, "supervisor", manifest_release)
@@ -222,6 +224,7 @@ fn provision_foldops_agent(
         ("FAH_LOG_PATH".to_string(), "/data/fah/log.txt".to_string()),
         ("FAH_DB_PATH".to_string(), "/data/fah/client.db".to_string()),
         ("FAH_WORK_DIR".to_string(), "/data/fah/work".to_string()),
+        ("CONFIG_ENABLED".to_string(), "true".to_string()),
     ]);
     write_foldops_env_file(Path::new(FOLDOPS_AGENT_ENV), &agent_env, 0o600)?;
     write_foldops_provisioned_marker(paths, "agent", manifest_release)

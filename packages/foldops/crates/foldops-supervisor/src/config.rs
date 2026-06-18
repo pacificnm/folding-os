@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::alerts::types::AlertConfig;
 
@@ -12,6 +12,7 @@ pub struct Config {
     pub agent_http_port: u16,
     pub deploy_enabled: bool,
     pub control_enabled: bool,
+    pub config_enabled: bool,
     pub web_root: PathBuf,
     pub alert_config: AlertConfig,
     pub foldingosctl_path: PathBuf,
@@ -31,6 +32,8 @@ impl Config {
             .unwrap_or_else(|_| {
                 PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../apps/supervisor/web/dist")
             });
+
+        let installation_role_path = crate::foldingos::default_installation_role_path();
 
         Ok(Self {
             port: std::env::var("PORT")
@@ -52,6 +55,7 @@ impl Config {
                 .unwrap_or(9100),
             deploy_enabled: env_flag("DEPLOY_ENABLED"),
             control_enabled: env_flag("CONTROL_ENABLED"),
+            config_enabled: appliance_feature_enabled("CONFIG_ENABLED", &installation_role_path),
             web_root,
             alert_config: AlertConfig {
                 enabled: alerts_enabled,
@@ -76,7 +80,7 @@ impl Config {
                     .unwrap_or_else(|| "FoldOps".into()),
             },
             foldingosctl_path: crate::foldingos::default_foldingosctl_path(),
-            installation_role_path: crate::foldingos::default_installation_role_path(),
+            installation_role_path,
         })
     }
 
@@ -90,6 +94,31 @@ fn env_flag(name: &str) -> bool {
         std::env::var(name).as_deref(),
         Ok("1") | Ok("true") | Ok("TRUE")
     )
+}
+
+fn appliance_feature_enabled(name: &str, installation_role_path: &Path) -> bool {
+    match std::env::var(name).as_deref() {
+        Ok("1") | Ok("true") | Ok("TRUE") => return true,
+        Ok("0") | Ok("false") | Ok("FALSE") => return false,
+        _ => {}
+    }
+    installation_role_path.is_file()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn appliance_feature_enabled_when_installation_role_exists() {
+        let temp = TempDir::new().expect("tempdir");
+        let role_path = temp.path().join("installation-role");
+        assert!(!appliance_feature_enabled("CONFIG_ENABLED", &role_path));
+        fs::write(&role_path, "supervisor\n").expect("write role");
+        assert!(appliance_feature_enabled("CONFIG_ENABLED", &role_path));
+    }
 }
 
 fn env_trimmed(name: &str) -> Option<String> {

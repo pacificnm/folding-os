@@ -9,6 +9,10 @@ use foldops_types::{is_control_action, validate_ingest_payload, IngestPayload};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
+use crate::agent::config::{
+    build_foldinghome_candidate_toml, push_foldinghome_config, validate_foldinghome_candidate,
+    write_supervisor_candidate, FoldinghomeConfigRequest,
+};
 use crate::agent::control::{fetch_agent_control_status, push_agent_control};
 use crate::agent::logs::{fetch_live_agent_logs, LogSource};
 use crate::alerts::engine::{
@@ -35,6 +39,10 @@ pub fn router(state: AppState) -> Router {
         .route("/machines/{name}/logs", get(machine_logs))
         .route("/machines/{name}/control/status", get(control_status))
         .route("/machines/{name}/control", post(control_action))
+        .route(
+            "/machines/{name}/config/foldinghome",
+            post(foldinghome_config),
+        )
         .route("/deploy/runs", get(deploy_runs))
         .route("/deploy/runs/{id}", get(deploy_run))
         .route("/deploy/agents", post(deploy_agents))
@@ -454,6 +462,95 @@ async fn control_action(
                 (StatusCode::BAD_GATEWAY, Json(json!({ "error": msg }))).into_response()
             }
         }
+    }
+}
+
+async fn foldinghome_config(
+    State(state): State<AppState>,
+    Path(name): Path<String>,
+    Json(body): Json<FoldinghomeConfigRequest>,
+) -> Response {
+    if !state.config.config_enabled {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({ "error": "Remote config push disabled" })),
+        )
+            .into_response();
+    }
+
+    let username = body.username.trim();
+    if username.is_empty() || username.as_bytes().len() > 128 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "username must contain 1 through 128 UTF-8 bytes" })),
+        )
+            .into_response();
+    }
+    if body.team < 0 || body.team > 2_147_483_647 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "team is outside the supported range" })),
+        )
+            .into_response();
+    }
+
+    let config_toml =
+        build_foldinghome_candidate_toml(username, body.team, body.passkey_secret.trim());
+    let candidate_path = match write_supervisor_candidate(&config_toml) {
+        Ok(path) => path,
+        Err(error) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": error })),
+            )
+                .into_response();
+        }
+    };
+
+    if let Err(error) =
+        validate_foldinghome_candidate(&state.config.foldingosctl_path, &candidate_path).await
+    {
+        let _ = std::fs::remove_file(&candidate_path);
+        tracing::warn!(error = %error, "supervisor rejected foldinghome candidate");
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": error }))).into_response();
+    }
+    let _ = std::fs::remove_file(&candidate_path);
+
+    let proxy = {
+        let conn = state.db.lock();
+        let Some(machine) = db::get_machine(&conn, &name).ok().flatten() else {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": "Machine not found" })),
+            )
+                .into_response();
+        };
+        if !db::is_online(&machine.last_seen, state.config.offline_threshold_ms) {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({ "error": "Node offline" })),
+            )
+                .into_response();
+        }
+        (
+            machine.hostname.clone(),
+            state.config.agent_http_port,
+            state.config.ingest_token.clone(),
+        )
+    };
+
+    tracing::info!(hostname = %proxy.0, "proxying foldinghome config push to agent");
+
+    match push_foldinghome_config(&proxy.0, proxy.1, &proxy.2, &config_toml).await {
+        Ok(result) => Json(json!({
+            "hostname": proxy.0,
+            "ok": result.ok,
+            "domain": result.domain,
+            "candidate": result.candidate,
+            "activated": result.activated,
+        }))
+        .into_response(),
+        Err(msg) => (StatusCode::BAD_GATEWAY, Json(json!({ "error": msg }))).into_response(),
     }
 }
 

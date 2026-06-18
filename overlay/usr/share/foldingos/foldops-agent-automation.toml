@@ -1,0 +1,10 @@
+# FoldOps agent automation policy.
+# See ADR-0020 and Milestone 4 engineering spec (Remote Configuration).
+
+schema_version = 1
+service_user = "foldops"
+installation_role = "agent"
+
+[[commands]]
+group = "config"
+name = "activate"

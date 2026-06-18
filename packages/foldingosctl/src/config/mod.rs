@@ -7,7 +7,7 @@ use std::fs::{self, OpenOptions};
 use nix::fcntl::{Flock, FlockArg};
 use serde::Serialize;
 
-use crate::automation_policy::require_inspectable_role;
+use crate::automation_policy::{require_agent_automation_mutation, require_inspectable_role};
 use crate::fs_atomic::atomic_write;
 use crate::paths::AppliancePaths;
 
@@ -23,8 +23,20 @@ struct ConfigValidationResult {
     message: Option<String>,
 }
 
-pub fn validate_config(paths: &AppliancePaths, domain: &str) -> Result<serde_json::Value, String> {
+pub fn validate_config(
+    paths: &AppliancePaths,
+    domain: &str,
+    candidate: Option<&str>,
+) -> Result<serde_json::Value, String> {
     require_inspectable_role(paths)?;
+    if let Some(candidate_path) = candidate {
+        validate_candidate_file(paths, domain, candidate_path)?;
+        return Ok(serde_json::json!({
+            "domain": domain,
+            "candidate": candidate_path,
+            "valid": true,
+        }));
+    }
     if domain == "--all" {
         let results = validate_all_config_domains(paths)?;
         let valid = results.iter().all(|result| result.valid);
@@ -38,6 +50,20 @@ pub fn validate_config(paths: &AppliancePaths, domain: &str) -> Result<serde_jso
         "domain": domain,
         "valid": true,
     }))
+}
+
+pub fn validate_candidate_file(
+    paths: &AppliancePaths,
+    domain: &str,
+    candidate: &str,
+) -> Result<(), String> {
+    if !effective::valid_domain(domain) {
+        return Err(format!("unknown configuration domain {domain:?}"));
+    }
+    let (_resolved, content, values) = load_candidate(domain, candidate)?;
+    effective::validate_candidate(paths, domain, &values)?;
+    let _ = content;
+    Ok(())
 }
 
 pub fn print_effective_config(
@@ -63,20 +89,14 @@ pub fn activate_config(
     paths: &AppliancePaths,
     domain: &str,
     candidate: &str,
-) -> Result<(), String> {
+) -> Result<serde_json::Value, String> {
+    require_agent_automation_mutation(paths, "config", "activate")?;
+
     if !effective::valid_domain(domain) {
         return Err(format!("unknown configuration domain {domain:?}"));
     }
 
-    let resolved = fs::canonicalize(candidate).map_err(|error| error.to_string())?;
-    let resolved_str = resolved.to_string_lossy();
-    if resolved_str != "/data" && !resolved_str.starts_with("/data/") {
-        return Err("configuration candidate must be a regular file on /data".into());
-    }
-    let metadata = fs::metadata(&resolved).map_err(|error| error.to_string())?;
-    if !metadata.is_file() {
-        return Err("configuration candidate must be a regular file".into());
-    }
+    let (resolved, candidate_content, candidate_values) = load_candidate(domain, candidate)?;
 
     let lock_path = paths.domain_lock_path(domain);
     if let Some(parent) = lock_path.parent() {
@@ -91,12 +111,6 @@ pub fn activate_config(
     let _guard = Flock::lock(lock, FlockArg::LockExclusive)
         .map_err(|(_, errno)| errno.to_string())?;
 
-    let candidate_content = fs::read(&resolved).map_err(|error| error.to_string())?;
-    let candidate_values = parse_domain(
-        domain,
-        &String::from_utf8_lossy(&candidate_content),
-        false,
-    )?;
     effective::validate_candidate(paths, domain, &candidate_values)?;
 
     let active = paths.domain_active_path(domain);
@@ -113,10 +127,11 @@ pub fn activate_config(
     }
 
     if let Err(error) = atomic_write(&active, &candidate_content, 0o644) {
+        audit_config_activation(domain, &resolved, false, &error);
         return Err(error);
     }
     if let Err(error) = effective_config(paths, domain, true) {
-        return effective::rollback_config(
+        let message = effective::rollback_config(
             paths,
             domain,
             &active,
@@ -124,10 +139,14 @@ pub fn activate_config(
             previous_err,
             error,
             apply_domain,
-        );
+        )
+        .err()
+        .unwrap_or_else(|| "activation failed".into());
+        audit_config_activation(domain, &resolved, false, &message);
+        return Err(message);
     }
     if let Err(error) = apply_domain(paths, domain) {
-        return effective::rollback_config(
+        let message = effective::rollback_config(
             paths,
             domain,
             &active,
@@ -135,9 +154,48 @@ pub fn activate_config(
             previous_err,
             error,
             apply_domain,
-        );
+        )
+        .err()
+        .unwrap_or_else(|| "activation failed".into());
+        audit_config_activation(domain, &resolved, false, &message);
+        return Err(message);
     }
-    Ok(())
+
+    audit_config_activation(domain, &resolved, true, "activated");
+    Ok(serde_json::json!({
+        "domain": domain,
+        "candidate": resolved,
+        "activated": true,
+    }))
+}
+
+fn load_candidate(
+    domain: &str,
+    candidate: &str,
+) -> Result<(String, Vec<u8>, DomainConfig), String> {
+    let resolved = fs::canonicalize(candidate).map_err(|error| error.to_string())?;
+    let resolved_str = resolved.to_string_lossy().into_owned();
+    if resolved_str != "/data" && !resolved_str.starts_with("/data/") {
+        return Err("configuration candidate must be a regular file on /data".into());
+    }
+    let metadata = fs::metadata(&resolved).map_err(|error| error.to_string())?;
+    if !metadata.is_file() {
+        return Err("configuration candidate must be a regular file".into());
+    }
+
+    let candidate_content = fs::read(&resolved).map_err(|error| error.to_string())?;
+    let candidate_values = parse_domain(
+        domain,
+        &String::from_utf8_lossy(&candidate_content),
+        false,
+    )?;
+    Ok((resolved_str, candidate_content, candidate_values))
+}
+
+fn audit_config_activation(domain: &str, candidate: &str, success: bool, detail: &str) {
+    eprintln!(
+        "foldingosctl: audit config activate domain={domain} candidate={candidate} success={success} detail={detail}"
+    );
 }
 
 fn validate_all_config_domains(
