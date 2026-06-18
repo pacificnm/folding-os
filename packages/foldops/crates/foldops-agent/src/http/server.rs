@@ -14,6 +14,7 @@ use tokio::net::TcpListener;
 
 use crate::config::Config;
 use crate::fah::get_newest_work_log_path;
+use crate::foldingos::{activate_foldinghome_config, write_foldinghome_candidate, AutomationCommandError};
 use crate::log_tail::read_log_tail_default;
 use crate::node_control::{
     execute_control_action, get_control_status, schedule_agent_self_restart, ControlContext,
@@ -35,6 +36,19 @@ struct ControlBody {
     action: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+struct FoldinghomeConfigBody {
+    config: String,
+}
+
+#[derive(Serialize)]
+struct FoldinghomeConfigResponse {
+    ok: bool,
+    domain: &'static str,
+    candidate: String,
+    activated: bool,
+}
+
 pub async fn start_agent_http(config: Arc<Config>) {
     if config.agent_http_port == 0 {
         return;
@@ -48,6 +62,7 @@ pub async fn start_agent_http(config: Arc<Config>) {
         .route("/logs/work", get(logs_work))
         .route("/control/status", get(control_status))
         .route("/control", post(control_action))
+        .route("/config/foldinghome", post(foldinghome_config))
         .route("/update", post(update_agent))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
@@ -175,6 +190,81 @@ async fn control_action(State(state): State<AppState>, Json(body): Json<ControlB
     }
 
     response
+}
+
+async fn foldinghome_config(
+    State(state): State<AppState>,
+    Json(body): Json<FoldinghomeConfigBody>,
+) -> Response {
+    if !state.config.config_enabled {
+        return json_error(
+            StatusCode::FORBIDDEN,
+            "Remote config push disabled",
+        );
+    }
+
+    if body.config.trim().is_empty() {
+        return json_error(StatusCode::BAD_REQUEST, "Missing config body");
+    }
+
+    let candidate_path = match write_foldinghome_candidate(body.config.trim()) {
+        Ok(path) => path,
+        Err(error) => return json_error(StatusCode::INTERNAL_SERVER_ERROR, &error),
+    };
+
+    tracing::info!(
+        candidate = %candidate_path.display(),
+        "delegating foldinghome config activate to foldingosctl"
+    );
+
+    match activate_foldinghome_config(&state.config.foldingosctl_path, &candidate_path).await {
+        Ok(data) => {
+            let candidate = data
+                .get("candidate")
+                .and_then(|value| value.as_str())
+                .unwrap_or(candidate_path.to_str().unwrap_or_default())
+                .to_string();
+            let activated = data.get("activated").and_then(|value| value.as_bool()).unwrap_or(true);
+            tracing::info!(
+                candidate = %candidate,
+                activated,
+                "foldinghome config activate succeeded"
+            );
+            Json(FoldinghomeConfigResponse {
+                ok: true,
+                domain: "foldinghome",
+                candidate,
+                activated,
+            })
+            .into_response()
+        }
+        Err(AutomationCommandError::CommandRejected { command, code, message }) => {
+            tracing::warn!(
+                command = %command,
+                code = %code,
+                message = %message,
+                candidate = %candidate_path.display(),
+                "foldinghome config activate rejected"
+            );
+            (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": message,
+                    "code": code,
+                    "command": command,
+                })),
+            )
+                .into_response()
+        }
+        Err(error) => {
+            tracing::error!(
+                error = %error,
+                candidate = %candidate_path.display(),
+                "foldinghome config activate failed"
+            );
+            json_error(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string())
+        }
+    }
 }
 
 #[derive(Serialize)]

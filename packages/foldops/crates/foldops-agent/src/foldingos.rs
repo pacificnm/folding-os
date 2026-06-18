@@ -131,6 +131,93 @@ pub enum InspectCommandError {
     },
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum AutomationCommandError {
+    #[error("foldingosctl exited with status {status}: {message}")]
+    CommandFailed { status: i32, message: String },
+    #[error("failed to execute foldingosctl: {0}")]
+    Spawn(#[from] std::io::Error),
+    #[error("foldingosctl output was not valid UTF-8")]
+    InvalidUtf8,
+    #[error("foldingosctl output was not valid JSON: {0}")]
+    InvalidJson(#[from] serde_json::Error),
+    #[error("foldingosctl rejected {command}: [{code}] {message}")]
+    CommandRejected {
+        command: String,
+        code: String,
+        message: String,
+    },
+}
+
+const FOLDINGHOME_CANDIDATES_DIR: &str = "/data/config/candidates";
+
+pub fn write_foldinghome_candidate(content: &str) -> Result<PathBuf, String> {
+    std::fs::create_dir_all(FOLDINGHOME_CANDIDATES_DIR)
+        .map_err(|error| format!("create candidates dir: {error}"))?;
+    let path = PathBuf::from(format!(
+        "{FOLDINGHOME_CANDIDATES_DIR}/foldinghome-{}.toml",
+        Utc::now().timestamp_millis()
+    ));
+    std::fs::write(&path, content).map_err(|error| format!("write candidate: {error}"))?;
+    Ok(path)
+}
+
+pub async fn activate_foldinghome_config(
+    foldingosctl_path: &Path,
+    candidate_path: &Path,
+) -> Result<Value, AutomationCommandError> {
+    let candidate = candidate_path
+        .to_str()
+        .ok_or_else(|| AutomationCommandError::CommandRejected {
+            command: "config activate foldinghome".into(),
+            code: "invalid_input".into(),
+            message: "candidate path is not valid UTF-8".into(),
+        })?;
+    run_automation(
+        foldingosctl_path,
+        &["config", "activate", "foldinghome", candidate],
+    )
+    .await
+}
+
+async fn run_automation(
+    foldingosctl_path: &Path,
+    command_args: &[&str],
+) -> Result<Value, AutomationCommandError> {
+    let mut args = Vec::with_capacity(command_args.len() + 2);
+    args.extend_from_slice(command_args);
+    args.push("--format");
+    args.push("json");
+
+    let output = tokio::process::Command::new(foldingosctl_path)
+        .args(&args)
+        .output()
+        .await?;
+
+    let stdout = String::from_utf8(output.stdout).map_err(|_| AutomationCommandError::InvalidUtf8)?;
+    let envelope: AutomationEnvelope = serde_json::from_str(stdout.trim())?;
+
+    if !output.status.success() || !envelope.ok {
+        if let Some(error) = envelope.error {
+            return Err(AutomationCommandError::CommandRejected {
+                command: envelope.command,
+                code: error.code,
+                message: error.message,
+            });
+        }
+        return Err(AutomationCommandError::CommandFailed {
+            status: output.status.code().unwrap_or(-1),
+            message: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        });
+    }
+
+    envelope.data.ok_or_else(|| AutomationCommandError::CommandRejected {
+        command: envelope.command,
+        code: "missing_data".into(),
+        message: "automation response did not include data".into(),
+    })
+}
+
 #[derive(Debug, Deserialize)]
 struct AutomationEnvelope {
     ok: bool,
@@ -430,5 +517,28 @@ esac
         assert!(!foldingos_delegation_enabled(&role_path));
         fs::write(&role_path, "agent\n").expect("write role");
         assert!(foldingos_delegation_enabled(&role_path));
+    }
+
+    #[tokio::test]
+    async fn activate_foldinghome_config_parses_automation_json() {
+        let temp = TempDir::new().expect("tempdir");
+        let candidate = temp.path().join("candidate.toml");
+        fs::write(&candidate, "schema_version = 1\n").expect("write candidate");
+        let script = r#"#!/bin/sh
+if [ "$1" = "config" ] && [ "$2" = "activate" ] && [ "$3" = "foldinghome" ]; then
+  printf '%s' '{"schema_version":1,"ok":true,"command":"config activate foldinghome","data":{"domain":"foldinghome","candidate":"'"$4"'","activated":true}}'
+  exit 0
+fi
+exit 1
+"#;
+        let foldingosctl = write_mock_foldingosctl(&temp, script);
+        let data = activate_foldinghome_config(&foldingosctl, &candidate)
+            .await
+            .expect("activate foldinghome");
+        assert_eq!(data.get("domain").and_then(|value| value.as_str()), Some("foldinghome"));
+        assert_eq!(
+            data.get("activated").and_then(|value| value.as_bool()),
+            Some(true)
+        );
     }
 }

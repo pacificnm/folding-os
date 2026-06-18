@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -19,6 +19,7 @@ pub struct Config {
     pub update_enabled: bool,
     pub controls_enabled: bool,
     pub controls_allow_reboot: bool,
+    pub config_enabled: bool,
     pub foldingosctl_path: PathBuf,
     pub installation_role_path: PathBuf,
 }
@@ -33,6 +34,8 @@ impl Config {
         let update_script = std::env::var("UPDATE_SCRIPT")
             .map(PathBuf::from)
             .unwrap_or_else(|_| foldops_root.join("scripts/update-agent.sh"));
+
+        let installation_role_path = crate::foldingos::default_installation_role_path();
 
         Ok(Self {
             supervisor_url: std::env::var("SUPERVISOR_URL")
@@ -80,8 +83,9 @@ impl Config {
             update_enabled: env_flag("UPDATE_ENABLED"),
             controls_enabled: env_flag("CONTROLS_ENABLED"),
             controls_allow_reboot: env_flag("CONTROLS_ALLOW_REBOOT"),
+            config_enabled: appliance_feature_enabled("CONFIG_ENABLED", &installation_role_path),
             foldingosctl_path: crate::foldingos::default_foldingosctl_path(),
-            installation_role_path: crate::foldingos::default_installation_role_path(),
+            installation_role_path,
         })
     }
 
@@ -99,4 +103,39 @@ fn env_flag(name: &str) -> bool {
         std::env::var(name).as_deref(),
         Ok("1") | Ok("true") | Ok("TRUE")
     )
+}
+
+fn appliance_feature_enabled(name: &str, installation_role_path: &Path) -> bool {
+    match std::env::var(name).as_deref() {
+        Ok("1") | Ok("true") | Ok("TRUE") => return true,
+        Ok("0") | Ok("false") | Ok("FALSE") => return false,
+        _ => {}
+    }
+    installation_role_path.is_file()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn appliance_feature_enabled_when_installation_role_exists() {
+        let temp = TempDir::new().expect("tempdir");
+        let role_path = temp.path().join("installation-role");
+        assert!(!appliance_feature_enabled("CONFIG_ENABLED", &role_path));
+        fs::write(&role_path, "agent\n").expect("write role");
+        assert!(appliance_feature_enabled("CONFIG_ENABLED", &role_path));
+    }
+
+    #[test]
+    fn appliance_feature_explicit_false_overrides_role() {
+        let temp = TempDir::new().expect("tempdir");
+        let role_path = temp.path().join("installation-role");
+        fs::write(&role_path, "agent\n").expect("write role");
+        std::env::set_var("CONFIG_ENABLED", "false");
+        assert!(!appliance_feature_enabled("CONFIG_ENABLED", &role_path));
+        std::env::remove_var("CONFIG_ENABLED");
+    }
 }

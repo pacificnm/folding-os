@@ -2,7 +2,7 @@ use std::fs;
 use std::sync::Mutex;
 
 use crate::paths::AppliancePaths;
-use crate::role::{read_active_installation_role, require_supervisor_role};
+use crate::role::{read_active_installation_role, require_agent_role, require_supervisor_role};
 
 static TEST_USERNAME: Mutex<Option<String>> = Mutex::new(None);
 
@@ -61,16 +61,38 @@ pub fn require_supervisor_automation_mutation(
         return Ok(());
     }
     require_supervisor_role(paths)?;
-    let policy = load_automation_policy(paths)?;
+    let policy = load_automation_policy(&paths.automation_policy)?;
+    authorize_automation_policy(&policy, "supervisor", command_group, command_name)
+}
+
+pub fn require_agent_automation_mutation(
+    paths: &AppliancePaths,
+    command_group: &str,
+    command_name: &str,
+) -> Result<(), String> {
+    if !is_foldops_automation_user() {
+        return Ok(());
+    }
+    require_agent_role(paths)?;
+    let policy = load_automation_policy(&paths.agent_automation_policy)?;
+    authorize_automation_policy(&policy, "agent", command_group, command_name)
+}
+
+fn authorize_automation_policy(
+    policy: &AutomationPolicy,
+    expected_role: &str,
+    command_group: &str,
+    command_name: &str,
+) -> Result<(), String> {
     if policy.service_user != "foldops" {
         return Err(format!(
             "automation policy service_user must be foldops, found \"{}\"",
             policy.service_user
         ));
     }
-    if policy.installation_role != "supervisor" {
+    if policy.installation_role != expected_role {
         return Err(format!(
-            "automation policy installation_role must be supervisor, found \"{}\"",
+            "automation policy installation_role must be {expected_role}, found \"{}\"",
             policy.installation_role
         ));
     }
@@ -88,8 +110,8 @@ pub fn require_supervisor_automation_mutation(
     ))
 }
 
-fn load_automation_policy(paths: &AppliancePaths) -> Result<AutomationPolicy, String> {
-    let content = fs::read_to_string(&paths.automation_policy)
+fn load_automation_policy(path: &std::path::Path) -> Result<AutomationPolicy, String> {
+    let content = fs::read_to_string(path)
         .map_err(|error| format!("automation policy is unavailable: {error}"))?;
     parse_automation_policy(&content)
 }
@@ -265,6 +287,37 @@ name = "allow-boot"
         set_test_username(Some("foldops"));
         assert!(require_supervisor_automation_mutation(&paths, "provision", "install").is_err());
         assert!(require_supervisor_automation_mutation(&paths, "provision", "assign").is_ok());
+        set_test_username(None);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    const TEST_AGENT_POLICY: &str = r#"schema_version = 1
+service_user = "foldops"
+installation_role = "agent"
+
+[[commands]]
+group = "config"
+name = "activate"
+"#;
+
+    #[test]
+    fn authorizes_agent_config_activate() {
+        let root = std::env::temp_dir().join(format!(
+            "foldingosctl-agent-policy-test-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("config")).unwrap();
+        std::fs::write(root.join("config/installation-role"), "agent").unwrap();
+        std::fs::write(root.join("agent-automation-policy.toml"), TEST_AGENT_POLICY).unwrap();
+        let paths = AppliancePaths {
+            active_installation_role: root.join("config/installation-role"),
+            agent_automation_policy: root.join("agent-automation-policy.toml"),
+            ..AppliancePaths::default()
+        };
+        set_test_username(Some("foldops"));
+        assert!(require_agent_automation_mutation(&paths, "config", "activate").is_ok());
+        assert!(require_agent_automation_mutation(&paths, "config", "validate").is_err());
         set_test_username(None);
         let _ = std::fs::remove_dir_all(root);
     }
