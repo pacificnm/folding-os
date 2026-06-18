@@ -92,16 +92,25 @@ precedence or silently choose one statement.
   complete; see [milestone/3-readiness-review.md](milestone/3-readiness-review.md),
   [ADR-0016](adr/0016-network-provisioning-via-supervisor.md), and
   [milestone/3-engineering-spec.md](milestone/3-engineering-spec.md).
-- Milestone 4 FoldOps integration is the active implementation target; FoldOps
-  delegates node-local operations to `foldingosctl` per
+- Milestone 4 FoldOps integration is complete; runtime FoldOps and tools updates
+  without OS reimage are defined in
+  [ADR-0023](adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md).
+- Milestone 5 (Update and Recovery System) is the active implementation target:
+  supervisor-led FoldOps and `foldingosctl` update workflow, rclone publication,
+  and supervisor backup export per
+  [ADR-0028](adr/0028-supervisor-fleet-software-update-workflow.md),
+  [ADR-0029](adr/0029-packages-channel-publication-via-rclone.md),
+  [ADR-0030](adr/0030-supervisor-recovery-backup-and-export.md), and
+  [milestone/5-engineering-spec.md](milestone/5-engineering-spec.md).
+- FoldOps Upgrades (full dashboard rework) follows Milestone 5 per
+  [ROADMAP.md](../ROADMAP.md).
+- Milestone 4 delegation references:
   [ADR-0020](adr/0020-foldops-delegates-node-operations-to-foldingosctl.md),
   [ADR-0021](adr/0021-machine-readable-foldingosctl-automation-interface.md),
-  [ADR-0022](adr/0022-foldops-rust-source-in-foldingos-monorepo.md),
-  [ADR-0023](adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md), and
-  [ADR-0024](adr/0024-foldops-supervisor-fleet-mutation-authorization.md), and
+  [ADR-0024](adr/0024-foldops-supervisor-fleet-mutation-authorization.md),
   [ADR-0025](adr/0025-implement-foldingosctl-in-rust.md),
   [ADR-0026](adr/0026-foldops-dashboard-operator-authentication.md),
-  [ADR-0027](adr/0027-foldops-remote-operator-api.md), and
+  [ADR-0027](adr/0027-foldops-remote-operator-api.md),
   [milestone/4-engineering-spec.md](milestone/4-engineering-spec.md).
 - Operator build, deployment, recovery, and Folding@home runtime procedures are
   in [operations.md](operations.md).

@@ -148,6 +148,13 @@ FoldingOS does **not** ship runtime APT.
 `packages.folding-os.com/foldingos-tools/` without OS reimage per
 [ADR-0023](adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md).
 
+Milestone 5 adds the **operator update loop** (check for updates, assign fleet
+versions, trigger apply) and rclone publication automation. See
+[ADR-0028](adr/0028-supervisor-fleet-software-update-workflow.md),
+[ADR-0029](adr/0029-packages-channel-publication-via-rclone.md), and
+[milestone/5-engineering-spec.md](milestone/5-engineering-spec.md). Full dashboard
+rework follows in FoldOps Upgrades (Milestone 6).
+
 ## On general Debian hosts
 
 Operators install the same packages with apt:

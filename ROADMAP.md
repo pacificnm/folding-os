@@ -68,7 +68,7 @@ The superseded combined-image USB installer is recorded in
 
 ## Milestone 4: FoldOps Integration
 
-Status: **In planning** (2026-06-14)
+Status: **Complete** (2026-06-18)
 
 - Delegate node-local operations to `foldingosctl` instead of duplicating OS logic in FoldOps
 - Add machine-readable `foldingosctl inspect` and `--format json` automation output
@@ -78,38 +78,55 @@ Status: **In planning** (2026-06-14)
 - Refactor FoldOps agent ingest to collect inventory, health, FAH, and update state via `foldingosctl`
 - Correlate FoldOps ingest with FoldingOS `node-id` and installation role
 - Integrate FoldOps supervisor with local `foldingosctl provision` and `registry` fleet commands
-- Support approved remote configuration workflows (starting with Folding@home policy)
-- Validate integrated management on QEMU and physical hardware
+- Support approved remote configuration workflows (Folding@home policy push)
+- Validate on live supervisor/agent lab hardware
 
-See [ADR-0020](doc/adr/0020-foldops-delegates-node-operations-to-foldingosctl.md),
-[ADR-0021](doc/adr/0021-machine-readable-foldingosctl-automation-interface.md),
-[ADR-0022](doc/adr/0022-foldops-rust-source-in-foldingos-monorepo.md),
-[ADR-0023](doc/adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md),
-[doc/milestone/4-appliance-artifact-and-monorepo-plan.md](doc/milestone/4-appliance-artifact-and-monorepo-plan.md),
-[doc/milestone/4-implementation-spec.md](doc/milestone/4-implementation-spec.md), and
-[doc/milestone/4-engineering-spec.md](doc/milestone/4-engineering-spec.md).
+See [ADR-0020](doc/adr/0020-foldops-delegates-node-operations-to-foldingosctl.md) through
+[ADR-0027](doc/adr/0027-foldops-remote-operator-api.md),
+[doc/milestone/4-engineering-spec.md](doc/milestone/4-engineering-spec.md), and
+[doc/milestone/4-appliance-artifact-and-monorepo-plan.md](doc/milestone/4-appliance-artifact-and-monorepo-plan.md).
 
 Package acquisition, role-specific service activation, and supervisor TLS
 provisioning were delivered in Milestone 3 per
 [ADR-0018](doc/adr/0018-foldops-package-acquisition-and-update-model.md).
 Runtime assignment and layout-bundle transport extend that model in Milestone 4.
 
-## Milestone 5: Update System
+## Milestone 5: Update and Recovery System
 
-- Define update model
-- Evaluate A/B root filesystem design
-- Add signed update bundles
-- Add rollback behavior
-- Report update status to FoldOps
+Status: **In planning** (2026-06-18)
 
-## Milestone 6: Raspberry Pi Support
+First implementation step **before** the FoldOps Upgrades dashboard rework.
+
+- Operator workflow to update **FoldOps** and **`foldingosctl`** without OS reimage
+- Supervisor admin UI: check for updates, assign versions, trigger fleet apply
+- rclone publication automation for `packages.folding-os.com` (FoldOps bundles +
+  foldingos-tools channel)
+- Supervisor recovery: export and download database + configuration backup
+
+OS disk image updates remain on the Milestone 3 supervisor registry model
+([doc/update-system.md](doc/update-system.md)). A/B root filesystem slots remain
+future work.
+
+See [ADR-0028](doc/adr/0028-supervisor-fleet-software-update-workflow.md),
+[ADR-0029](doc/adr/0029-packages-channel-publication-via-rclone.md),
+[ADR-0030](doc/adr/0030-supervisor-recovery-backup-and-export.md),
+[doc/milestone/5-engineering-spec.md](doc/milestone/5-engineering-spec.md), and
+[doc/milestone/5-implementation-spec.md](doc/milestone/5-implementation-spec.md).
+
+## Milestone 6: FoldOps Upgrades
+
+- Full supervisor dashboard rework and admin settings UI
+- First-boot configuration wizard (consolidate env and feature flags)
+- Polish fleet operator workflows built on Milestone 5 APIs
+
+## Milestone 7: Raspberry Pi Support
 
 - Add ARM64 build target
 - Support Raspberry Pi 5 boot process
 - Validate Ethernet and storage
 - Produce flashable Pi image
 
-## Milestone 7: v1.0 Release
+## Milestone 8: v1.0 Release
 
 - Publish first stable x86_64 release
 - Complete installation documentation

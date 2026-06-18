@@ -52,6 +52,10 @@ This index groups the project's documentation by purpose.
   proposed concrete contract for inspect commands, JSON output, and FoldOps wiring
 - [Milestone 4 appliance artifact and monorepo plan](milestone/4-appliance-artifact-and-monorepo-plan.md) -
   proposed layout-bundle transport, monorepo source, and runtime updates without OS reimage
+- [Milestone 5 implementation specification](milestone/5-implementation-spec.md) -
+  proposed scope for fleet software updates and supervisor recovery
+- [Milestone 5 engineering specification](milestone/5-engineering-spec.md) -
+  proposed update discovery, apply APIs, publication indexes, and recovery export
 - [Deployment and provisioning](installer.md) - supervisor bootstrap and network
   fleet provisioning
 - [Milestone 3 engineering specification](milestone/3-engineering-spec.md) -

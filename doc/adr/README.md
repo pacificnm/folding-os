@@ -65,6 +65,9 @@ design decisions years after they were originally made.
 - [ADR-0025: Implement foldingosctl In Rust](0025-implement-foldingosctl-in-rust.md) (proposed)
 - [ADR-0026: FoldOps Dashboard Operator Authentication](0026-foldops-dashboard-operator-authentication.md) (proposed)
 - [ADR-0027: FoldOps Remote Operator API](0027-foldops-remote-operator-api.md) (proposed)
+- [ADR-0028: Supervisor Fleet Software Update Workflow](0028-supervisor-fleet-software-update-workflow.md) (proposed)
+- [ADR-0029: Packages Channel Publication Via rclone](0029-packages-channel-publication-via-rclone.md) (proposed)
+- [ADR-0030: Supervisor Recovery Backup And Export](0030-supervisor-recovery-backup-and-export.md) (proposed)
 
 ---
 

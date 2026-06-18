@@ -162,6 +162,23 @@ enhancements beyond Milestone 3.
 
 ---
 
+# Fleet Software Updates (FoldOps And foldingosctl)
+
+Routine updates to FoldOps application bundles and the `foldingosctl` control-plane
+binary use the **packages channel** without OS reimage. See
+[ADR-0023](adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md)
+and Milestone 5:
+
+- [ADR-0028](adr/0028-supervisor-fleet-software-update-workflow.md) — discover,
+  assign, and apply from the supervisor admin UI
+- [ADR-0029](adr/0029-packages-channel-publication-via-rclone.md) — build and
+  rclone upload to `packages.folding-os.com`
+- [milestone/5-engineering-spec.md](milestone/5-engineering-spec.md)
+
+This is separate from OS disk image updates in the sections above.
+
+---
+
 # Supervisor Updates
 
 The supervisor updates itself from the same registry and upstream polling model.
