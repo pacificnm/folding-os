@@ -16,6 +16,7 @@ mod inspect;
 mod paths;
 mod process;
 mod provision;
+mod recovery;
 mod registry_cmd;
 mod registry_foldops_tools;
 mod registry_image;

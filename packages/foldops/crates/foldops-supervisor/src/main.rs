@@ -6,6 +6,7 @@ mod db;
 mod deploy;
 mod fah_projects;
 mod foldingos;
+mod recovery;
 mod software;
 
 use std::net::SocketAddr;

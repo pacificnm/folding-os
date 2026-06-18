@@ -25,11 +25,13 @@ tar = "0.4"
 url = "2"
 ureq = { version = "2.12", default-features = false, features = ["tls", "json"] }
 users = "0.11"
+rusqlite = { version = "0.32", features = ["bundled", "backup"] }
 xz2 = "0.1"
 zstd = "0.13"
 
 [dev-dependencies]
 serde_json = "1"
+tempfile = "3"
 
 [lints.rust]
 warnings = "deny"
