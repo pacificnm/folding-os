@@ -15,6 +15,8 @@ set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FOLDOPS_DIR="${PROJECT_ROOT}/packages/foldops"
+# shellcheck source=lib/rust-host.sh
+source "${PROJECT_ROOT}/scripts/lib/rust-host.sh"
 WEB_DIR="${FOLDOPS_DIR}/web"
 
 usage() {
@@ -102,7 +104,7 @@ if [ "${DRY_RUN}" -eq 1 ]; then
   exit 0
 fi
 
-require_command cargo
+rust_host_ensure_cargo
 require_command tar
 require_command zstd
 require_command sha256sum

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Upload build/output/foldops/<release>/ to packages.folding-os.com (R2-backed).
+# Upload build/output/foldingos-tools/<version>/ to packages.folding-os.com (R2-backed).
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -8,10 +8,10 @@ source "${PROJECT_ROOT}/scripts/lib/packages-channel.sh"
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [options] <manifest_release>
+Usage: $(basename "$0") [options] <tools_version>
 
-Upload FoldOps layout bundles from:
-  build/output/foldops/<manifest_release>/
+Upload foldingosctl tools release from:
+  build/output/foldingos-tools/<tools_version>/
 
 Options:
   --dry-run       List planned uploads without writing objects
@@ -19,10 +19,11 @@ Options:
   -h, --help      Show this help
 
 Environment:
-  R2_REMOTE          rclone remote name (default: r2)
-  FOLDOPS_R2_BUCKET  destination bucket (default: foldops-packages)
-  FOLDOPS_R2_PREFIX  object prefix inside bucket (default: foldops)
-  PACKAGES_PUBLIC_BASE public HTTPS base (default: https://packages.folding-os.com)
+  R2_REMOTE                       rclone remote name (default: r2)
+  FOLDOPS_R2_BUCKET               destination bucket (default: foldops-packages)
+  TOOLS_R2_PREFIX                 object prefix inside bucket (default: foldingos-tools)
+  PACKAGES_PUBLIC_BASE            public HTTPS base (default: https://packages.folding-os.com)
+  PACKAGES_MINIMUM_FOLDINGOS_VERSION  minimum compatible FoldingOS version (default: 0.1.0)
 
 Requires rclone configured at ~/.config/rclone/rclone.conf.
 EOF
@@ -61,27 +62,20 @@ if [ "$#" -lt 1 ]; then
   exit 1
 fi
 
-MANIFEST_RELEASE="$1"
-SOURCE_DIR="${PROJECT_ROOT}/build/output/foldops/${MANIFEST_RELEASE}"
+TOOLS_VERSION="$1"
+SOURCE_DIR="${PROJECT_ROOT}/build/output/foldingos-tools/${TOOLS_VERSION}"
 packages_channel_defaults
-DEST="${R2_REMOTE}:${FOLDOPS_R2_BUCKET}/${FOLDOPS_R2_PREFIX}/${MANIFEST_RELEASE}/"
+DEST="${R2_REMOTE}:${FOLDOPS_R2_BUCKET}/${TOOLS_R2_PREFIX}/${TOOLS_VERSION}/"
 
 if [ ! -d "${SOURCE_DIR}" ]; then
   echo "ERROR: source directory not found: ${SOURCE_DIR}" >&2
-  echo "Run ./scripts/build-foldops-bundles --manifest-release ${MANIFEST_RELEASE} first." >&2
+  echo "Run ./scripts/build-foldingosctl-release --version ${TOOLS_VERSION} first." >&2
   exit 1
 fi
 
-if [ "${DRY_RUN}" -eq 0 ]; then
-  packages_require_rclone
-fi
-
 required=(
-  "manifest.toml"
+  "foldingosctl-x86_64"
   "SHA256SUMS"
-  "foldops-agent-x86_64.tar.zst"
-  "foldops-supervisor-x86_64.tar.zst"
-  "foldops-web-x86_64.tar.zst"
 )
 for file in "${required[@]}"; do
   if [ ! -f "${SOURCE_DIR}/${file}" ]; then
@@ -90,7 +84,11 @@ for file in "${required[@]}"; do
   fi
 done
 
-echo "Publishing FoldOps release ${MANIFEST_RELEASE}"
+if [ "${DRY_RUN}" -eq 0 ]; then
+  packages_require_rclone
+fi
+
+echo "Publishing foldingosctl tools release ${TOOLS_VERSION}"
 echo "  source: ${SOURCE_DIR}"
 echo "  dest:   ${DEST}"
 
@@ -102,11 +100,11 @@ else
 fi
 
 if [ "${SKIP_INDEX}" -eq 0 ]; then
-  packages_refresh_foldops_index "${MANIFEST_RELEASE}" "${SOURCE_DIR}/manifest.toml"
+  packages_refresh_tools_index "${TOOLS_VERSION}"
 fi
 
 echo ""
 echo "Published. Public URL base:"
-echo "  ${PACKAGES_PUBLIC_BASE}/${FOLDOPS_R2_PREFIX}/${MANIFEST_RELEASE}/"
+echo "  ${PACKAGES_PUBLIC_BASE}/${TOOLS_R2_PREFIX}/${TOOLS_VERSION}/"
 echo "Index:"
-echo "  ${PACKAGES_PUBLIC_BASE}/${FOLDOPS_R2_PREFIX}/index.json"
+echo "  ${PACKAGES_PUBLIC_BASE}/${TOOLS_R2_PREFIX}/index.json"

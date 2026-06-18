@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+# Build (optional) and publish FoldOps + foldingosctl tools releases to packages.folding-os.com.
+set -euo pipefail
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=lib/packages-channel.sh
+source "${PROJECT_ROOT}/scripts/lib/packages-channel.sh"
+
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") [options]
+
+Build (optional) and publish FoldOps layout bundles and foldingosctl tools to
+packages.folding-os.com via rclone.
+
+Options:
+  --foldops <manifest_release>   FoldOps manifest release id to publish
+  --tools <tools_version>        foldingosctl tools version id to publish
+  --build                        Run build scripts before upload
+  --skip-web                     Pass --skip-web to build-foldops-bundles
+  --dry-run                      List planned uploads without writing objects
+  --skip-index                   Upload artifacts only; do not refresh index.json
+  -h, --help                     Show this help
+
+At least one of --foldops or --tools is required.
+
+Environment defaults are documented in doc/adr/0029-packages-channel-publication-via-rclone.md.
+
+Example:
+  ./scripts/publish-packages-release --foldops 0.1.0-2 --tools 0.1.1 --build
+EOF
+}
+
+FOLDOPS_RELEASE=""
+TOOLS_VERSION=""
+DO_BUILD=0
+SKIP_WEB=0
+DRY_RUN=0
+SKIP_INDEX=0
+PUBLISH_ARGS=()
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --foldops)
+      FOLDOPS_RELEASE="${2:?missing value for --foldops}"
+      shift 2
+      ;;
+    --tools)
+      TOOLS_VERSION="${2:?missing value for --tools}"
+      shift 2
+      ;;
+    --build)
+      DO_BUILD=1
+      shift
+      ;;
+    --skip-web)
+      SKIP_WEB=1
+      shift
+      ;;
+    --dry-run)
+      DRY_RUN=1
+      shift
+      ;;
+    --skip-index)
+      SKIP_INDEX=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "ERROR: unknown option: $1" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+done
+
+if [ -z "${FOLDOPS_RELEASE}" ] && [ -z "${TOOLS_VERSION}" ]; then
+  echo "ERROR: specify at least one of --foldops or --tools" >&2
+  usage >&2
+  exit 1
+fi
+
+if [ "${DRY_RUN}" -eq 1 ]; then
+  PUBLISH_ARGS+=(--dry-run)
+fi
+if [ "${SKIP_INDEX}" -eq 1 ]; then
+  PUBLISH_ARGS+=(--skip-index)
+fi
+
+packages_channel_defaults
+
+if [ "${DO_BUILD}" -eq 1 ]; then
+  if [ -n "${FOLDOPS_RELEASE}" ]; then
+    build_args=(--manifest-release "${FOLDOPS_RELEASE}")
+    if [ "${SKIP_WEB}" -eq 1 ]; then
+      build_args+=(--skip-web)
+    fi
+    if [ "${DRY_RUN}" -eq 1 ]; then
+      build_args+=(--dry-run)
+    fi
+    echo "Building FoldOps release ${FOLDOPS_RELEASE} …"
+    "${PROJECT_ROOT}/scripts/build-foldops-bundles" "${build_args[@]}"
+  fi
+  if [ -n "${TOOLS_VERSION}" ]; then
+    if [ "${DRY_RUN}" -eq 1 ]; then
+      echo "Dry run — would build foldingosctl tools release ${TOOLS_VERSION}"
+    else
+      echo "Building foldingosctl tools release ${TOOLS_VERSION} …"
+      "${PROJECT_ROOT}/scripts/build-foldingosctl-release" --version "${TOOLS_VERSION}"
+    fi
+  fi
+fi
+
+if [ -n "${FOLDOPS_RELEASE}" ]; then
+  echo ""
+  "${PROJECT_ROOT}/scripts/publish-foldops-bundles" \
+    "${PUBLISH_ARGS[@]}" \
+    "${FOLDOPS_RELEASE}"
+fi
+
+if [ -n "${TOOLS_VERSION}" ]; then
+  echo ""
+  "${PROJECT_ROOT}/scripts/publish-foldingos-tools" \
+    "${PUBLISH_ARGS[@]}" \
+    "${TOOLS_VERSION}"
+fi
+
+echo ""
+echo "Publication complete."
+if [ -n "${FOLDOPS_RELEASE}" ]; then
+  echo "  FoldOps: ${PACKAGES_PUBLIC_BASE}/${FOLDOPS_R2_PREFIX}/${FOLDOPS_RELEASE}/"
+  echo "           ${PACKAGES_PUBLIC_BASE}/${FOLDOPS_R2_PREFIX}/index.json"
+fi
+if [ -n "${TOOLS_VERSION}" ]; then
+  echo "  Tools:   ${PACKAGES_PUBLIC_BASE}/${TOOLS_R2_PREFIX}/${TOOLS_VERSION}/"
+  echo "           ${PACKAGES_PUBLIC_BASE}/${TOOLS_R2_PREFIX}/index.json"
+fi

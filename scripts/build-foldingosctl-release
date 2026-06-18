@@ -8,6 +8,8 @@ set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FOLDINGOSCTL_CRATE="${PROJECT_ROOT}/packages/foldingosctl"
+# shellcheck source=lib/rust-host.sh
+source "${PROJECT_ROOT}/scripts/lib/rust-host.sh"
 
 usage() {
   cat <<EOF
@@ -41,10 +43,7 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-if ! command -v cargo >/dev/null 2>&1; then
-  echo "ERROR: cargo not found" >&2
-  exit 1
-fi
+rust_host_ensure_cargo
 
 OUTPUT_DIR="${PROJECT_ROOT}/build/output/foldingos-tools/${TOOLS_VERSION}"
 BINARY_NAME="foldingosctl-x86_64"
