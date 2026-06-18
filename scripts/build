@@ -41,6 +41,9 @@ if [ ! -f "${DEFCONFIG}" ]; then
   exit 1
 fi
 
+echo "Building FoldOps layout bundles for embedded bootstrap cache"
+"${PROJECT_ROOT}/scripts/build-foldops-bundles" --sync-overlay
+
 "${PROJECT_ROOT}/scripts/verify-fah-manifest"
 "${PROJECT_ROOT}/scripts/verify-foldops-manifest"
 
@@ -103,6 +106,12 @@ if ! grep -aFq "FOLDINGOSCTL_RUST_COMPLETE" "${FOLDINGOSCTL_BINARY}"; then
   echo "ERROR: Built foldingosctl binary is stale."
   echo "Expected Rust migration complete marker was not found."
   exit 1
+fi
+
+ROOTFS_TAR="${PROJECT_ROOT}/build/output/images/rootfs.tar"
+if [ -f "${ROOTFS_TAR}" ]; then
+  echo "Verifying embedded FoldOps bootstrap cache in rootfs"
+  "${PROJECT_ROOT}/scripts/verify-foldops-manifest" "${ROOTFS_TAR}"
 fi
 
 echo "Generating FoldingOS build artifacts"

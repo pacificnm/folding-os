@@ -13,10 +13,16 @@ import type {
   DeployRun,
   DeployRunsResponse,
   FahProjectInfo,
+  FleetAssignRequest,
+  FleetAssignResponse,
+  FleetSoftwareApplyRequest,
+  FleetSoftwareApplyResponse,
   LogSource,
   MachineLogsResponse,
   MachineSummary,
   MachinesResponse,
+  RecoveryExportResponse,
+  SoftwareUpdatesResponse,
   SnapshotsResponse,
 } from "./types";
 
@@ -247,4 +253,123 @@ export async function fetchFahProject(
 
   const info = (await res.json()) as FahProjectInfo;
   return hasProjectDetails(info) ? info : null;
+}
+
+async function readApiError(res: Response, fallback: string): Promise<string> {
+  const body = (await res.json().catch(() => ({}))) as { error?: string };
+  return body.error ?? `${fallback} (${res.status})`;
+}
+
+export async function fetchSoftwareUpdates(
+  refresh = false,
+): Promise<SoftwareUpdatesResponse> {
+  const params = refresh ? "?refresh=true" : "";
+  const res = await fetch(`/api/software/updates${params}`);
+  if (!res.ok) {
+    throw new Error(await readApiError(res, "Failed to check for updates"));
+  }
+  return res.json() as Promise<SoftwareUpdatesResponse>;
+}
+
+export async function fleetAssign(
+  body: FleetAssignRequest,
+): Promise<FleetAssignResponse> {
+  const res = await fetch("/api/fleet/assign", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(await readApiError(res, "Assignment failed"));
+  }
+  return res.json() as Promise<FleetAssignResponse>;
+}
+
+export async function assignLocalSoftware(
+  body: Pick<FleetAssignRequest, "foldops_manifest" | "tools_version">,
+): Promise<FleetAssignResponse> {
+  const res = await fetch("/api/software/assign-local", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(await readApiError(res, "Supervisor assignment failed"));
+  }
+  return res.json() as Promise<FleetAssignResponse>;
+}
+
+export async function fleetApplyFoldops(
+  body: FleetSoftwareApplyRequest,
+): Promise<FleetSoftwareApplyResponse> {
+  const res = await fetch("/api/fleet/software/apply-foldops", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(await readApiError(res, "FoldOps apply failed"));
+  }
+  return res.json() as Promise<FleetSoftwareApplyResponse>;
+}
+
+export async function fleetApplyTools(
+  body: FleetSoftwareApplyRequest,
+): Promise<FleetSoftwareApplyResponse> {
+  const res = await fetch("/api/fleet/software/apply-tools", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(await readApiError(res, "Tools apply failed"));
+  }
+  return res.json() as Promise<FleetSoftwareApplyResponse>;
+}
+
+export async function applyLocalSoftware(body: {
+  foldops?: boolean;
+  tools?: boolean;
+  force?: boolean;
+}): Promise<FleetSoftwareApplyResponse> {
+  const res = await fetch("/api/software/apply-local", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(await readApiError(res, "Supervisor apply failed"));
+  }
+  return res.json() as Promise<FleetSoftwareApplyResponse>;
+}
+
+export async function createRecoveryExport(
+  includeSecrets: boolean,
+): Promise<RecoveryExportResponse> {
+  const res = await fetch("/api/recovery/export", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ include_secrets: includeSecrets }),
+  });
+  if (!res.ok) {
+    throw new Error(await readApiError(res, "Recovery export failed"));
+  }
+  return res.json() as Promise<RecoveryExportResponse>;
+}
+
+export async function downloadRecoveryExport(): Promise<void> {
+  const res = await fetch("/api/recovery/export/latest");
+  if (!res.ok) {
+    throw new Error(await readApiError(res, "Recovery download failed"));
+  }
+  const blob = await res.blob();
+  const disposition = res.headers.get("content-disposition") ?? "";
+  const match = disposition.match(/filename="([^"]+)"/);
+  const filename = match?.[1] ?? "foldingos-supervisor-backup.tar.zst";
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }

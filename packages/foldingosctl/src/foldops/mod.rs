@@ -16,6 +16,11 @@ pub fn acquire_json(paths: &AppliancePaths) -> Result<serde_json::Value, String>
     acquire::foldops_acquire(paths)
 }
 
+pub fn prepare_recovery_config_permissions(paths: &AppliancePaths) -> Result<(), String> {
+    supervisor_permissions::ensure_foldops_config_group_readable(paths)?;
+    supervisor_permissions::ensure_recovery_state_accessible(paths)
+}
+
 pub fn run(paths: &AppliancePaths, subcommand: &str, args: &[String]) -> Result<(), String> {
     match subcommand {
         "validate-manifest" => manifest::validate_foldops_manifest_embedded(paths),

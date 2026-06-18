@@ -8,9 +8,9 @@
 #   manifest.toml
 #   SHA256SUMS
 #
-# Does not modify the OS image overlay manifest automatically.
-# After building, copy manifest.toml to overlay/usr/share/foldingos/manifests/foldops.toml
-# or run with --sync-overlay.
+# ./scripts/build invokes this automatically with --sync-overlay and embeds the
+# bundles into the OS image bootstrap cache at
+# /usr/share/foldingos/cache/foldops/<manifest_release>/.
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -84,6 +84,10 @@ while [ "$#" -gt 0 ]; do
 done
 
 VERSION="$(read_workspace_version)"
+OVERLAY_MANIFEST="${PROJECT_ROOT}/overlay/usr/share/foldingos/manifests/foldops.toml"
+if [ -z "${MANIFEST_RELEASE}" ] && [ -f "${OVERLAY_MANIFEST}" ]; then
+  MANIFEST_RELEASE="$(grep '^manifest_release' "${OVERLAY_MANIFEST}" | head -1 | sed 's/.*"\(.*\)".*/\1/')"
+fi
 if [ -z "${MANIFEST_RELEASE}" ]; then
   MANIFEST_RELEASE="${VERSION}-1"
 fi

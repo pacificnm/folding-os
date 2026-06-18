@@ -33,6 +33,32 @@ ln -snf /run/systemd/resolve/stub-resolv.conf "${TARGET_DIR}/etc/resolv.conf"
 # Host keys are generated on the node and must not be embedded in the image.
 rm -f "${TARGET_DIR}"/etc/ssh/ssh_host_*_key*
 chmod 0440 "${TARGET_DIR}/etc/sudoers.d/foldingos-admin"
+if [ -f "${TARGET_DIR}/etc/sudoers.d/foldops-recovery" ]; then
+  chmod 0440 "${TARGET_DIR}/etc/sudoers.d/foldops-recovery"
+fi
+
+FOLDOPS_MANIFEST="${PROJECT_ROOT}/overlay/usr/share/foldingos/manifests/foldops.toml"
+if [ ! -f "${FOLDOPS_MANIFEST}" ]; then
+  echo "ERROR: Missing embedded FoldOps manifest: ${FOLDOPS_MANIFEST}" >&2
+  exit 1
+fi
+FOLDOPS_MANIFEST_RELEASE="$(grep '^manifest_release' "${FOLDOPS_MANIFEST}" | head -1 | sed 's/.*"\(.*\)".*/\1/')"
+FOLDOPS_BUNDLE_DIR="${PROJECT_ROOT}/build/output/foldops/${FOLDOPS_MANIFEST_RELEASE}"
+if [ ! -d "${FOLDOPS_BUNDLE_DIR}" ]; then
+  echo "ERROR: Missing FoldOps bundles for embedded manifest ${FOLDOPS_MANIFEST_RELEASE}" >&2
+  echo "Run ./scripts/build — it builds FoldOps bundles before the OS image." >&2
+  exit 1
+fi
+FOLDOPS_CACHE="${TARGET_DIR}/usr/share/foldingos/cache/foldops/${FOLDOPS_MANIFEST_RELEASE}"
+mkdir -p "${FOLDOPS_CACHE}"
+for bundle in foldops-agent-x86_64.tar.zst foldops-supervisor-x86_64.tar.zst foldops-web-x86_64.tar.zst; do
+  if [ ! -f "${FOLDOPS_BUNDLE_DIR}/${bundle}" ]; then
+    echo "ERROR: Missing FoldOps bundle: ${FOLDOPS_BUNDLE_DIR}/${bundle}" >&2
+    exit 1
+  fi
+  install -D -m 0644 "${FOLDOPS_BUNDLE_DIR}/${bundle}" "${FOLDOPS_CACHE}/${bundle}"
+done
+echo "Embedded FoldOps bootstrap cache ${FOLDOPS_MANIFEST_RELEASE} into image rootfs"
 
 mkdir -p "${TARGET_DIR}/etc/systemd/system/local-fs.target.wants"
 ln -snf \

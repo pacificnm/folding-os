@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Verify the embedded approved FoldOps acquisition manifest and keyring."""
 
+import hashlib
 import re
 import sys
 import tarfile
@@ -15,6 +16,7 @@ DEFAULT_KEYRING = PROJECT_ROOT / "overlay/usr/share/keyrings/foldops.gpg"
 DEFAULT_ROOTFS = PROJECT_ROOT / "build/output/images/rootfs.tar"
 ROOTFS_MANIFEST = "usr/share/foldingos/manifests/foldops.toml"
 ROOTFS_KEYRING = "usr/share/keyrings/foldops.gpg"
+ROOTFS_FOLDOPS_CACHE = "usr/share/foldingos/cache/foldops"
 PLACEHOLDER = "REQUIRED_BEFORE_RELEASE"
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 APPROVED_PACKAGES_ORIGIN = "packages.folding-os.com"
@@ -222,9 +224,40 @@ def read_rootfs_member(rootfs_path, member_name):
         return source.read()
 
 
+def validate_embedded_bootstrap_cache(manifest, rootfs_path):
+    artifact_format = manifest.get("artifact_format")
+    if artifact_format != "layout-tar-zst":
+        return
+    release = manifest["manifest_release"]
+    architecture = manifest["architecture"]
+    with tarfile.open(rootfs_path) as archive:
+        members = {
+            member.name.removeprefix("./")
+            for member in archive.getmembers()
+            if member.isfile()
+        }
+        for package in manifest["packages"]:
+            bundle_name = f"{package['name']}-{architecture}.tar.zst"
+            member_name = f"{ROOTFS_FOLDOPS_CACHE}/{release}/{bundle_name}"
+            if member_name not in members:
+                fail(
+                    f"embedded bootstrap cache is missing {member_name} for manifest release {release}"
+                )
+            source = archive.extractfile(f"./{member_name}")
+            if source is None:
+                fail(f"cannot read embedded bootstrap bundle: {member_name}")
+            digest = hashlib.sha256(source.read()).hexdigest()
+            if digest != package["sha256"]:
+                fail(
+                    f"embedded bootstrap bundle {member_name} sha256 mismatch "
+                    f"(expected {package['sha256']}, found {digest})"
+                )
+
+
 def read_rootfs_manifest(rootfs_path):
     manifest = load_manifest_bytes(read_rootfs_member(rootfs_path, ROOTFS_MANIFEST))
     validate_manifest(manifest)
+    validate_embedded_bootstrap_cache(manifest, rootfs_path)
     return manifest
 
 

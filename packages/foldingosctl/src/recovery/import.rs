@@ -2,7 +2,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use rusqlite::Connection;
 use tar::Archive;
 
 use crate::automation_policy::require_supervisor_automation_mutation;
@@ -11,6 +10,9 @@ use crate::paths::AppliancePaths;
 use crate::recovery::bundle::{
     hash_file, validate_restore_target, RecoveryManifest, MANIFEST_SCHEMA_VERSION,
     MAX_EXPORT_BYTES,
+};
+use crate::recovery::privilege::{
+    delegate_recovery_import, prepare_recovery_access, should_delegate_recovery_import_to_root,
 };
 use crate::role::require_supervisor_role;
 
@@ -24,6 +26,12 @@ pub fn recovery_import(
     options: ImportOptions,
 ) -> Result<serde_json::Value, String> {
     require_supervisor_role(paths)?;
+
+    if should_delegate_recovery_import_to_root() {
+        return delegate_recovery_import(archive_path, options.dry_run);
+    }
+
+    prepare_recovery_access(paths)?;
     require_supervisor_automation_mutation(paths, "recovery", "import")?;
 
     let temp_dir = std::env::temp_dir().join(format!(
@@ -35,12 +43,13 @@ pub fn recovery_import(
     }
     fs::create_dir_all(&temp_dir).map_err(|error| error.to_string())?;
 
-    let result = import_inner(archive_path, &temp_dir, options);
+    let result = import_inner(paths, archive_path, &temp_dir, options);
     let _ = fs::remove_dir_all(&temp_dir);
     result
 }
 
 fn import_inner(
+    paths: &AppliancePaths,
     archive_path: &Path,
     temp_dir: &Path,
     options: ImportOptions,
@@ -69,6 +78,7 @@ fn import_inner(
         restore_file(&staged, &destination, entry.size_bytes)?;
     }
 
+    prepare_recovery_access(paths)?;
     restart_supervisor_services()?;
 
     Ok(serde_json::json!({
@@ -148,10 +158,12 @@ fn restore_file(staged: &Path, destination: &Path, expected_size: u64) -> Result
     }
     let destination_text = destination.to_string_lossy();
     let mode = if destination_text.contains("ingest-token") || destination_text.contains("/tls/") {
-        0o600
+        0o640
     } else if destination_text.contains("enrollments/") {
         0o664
     } else if destination_text.ends_with("foldops.db") {
+        0o640
+    } else if destination_text.contains("/config/foldops/") {
         0o640
     } else {
         0o644
@@ -180,6 +192,7 @@ fn restart_supervisor_services() -> Result<(), String> {
 mod tests {
     use super::*;
     use crate::recovery::export::recovery_export;
+    use rusqlite::Connection;
     use tempfile::TempDir;
 
     fn test_paths(root: &Path) -> AppliancePaths {

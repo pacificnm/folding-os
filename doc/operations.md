@@ -603,16 +603,21 @@ create an on-demand backup and download it through the HTTPS API or `foldingosct
 
 ### Create and download a backup
 
-Via HTTPS API (Bearer ingest token):
+Via supervisor admin UI (recommended):
+
+Open `https://<supervisor>:3443/admin/recovery` from a browser on the same
+network. Create and download backups without pasting an ingest token — the
+supervisor serves the admin UI over HTTPS like the other Milestone 5 admin
+screens.
+
+Via HTTPS API (localhost or automation):
 
 ```bash
 curl -k -X POST https://127.0.0.1:3443/api/recovery/export \
-  -H "Authorization: Bearer $(sudo cat /data/config/foldops/ingest-token)" \
   -H "Content-Type: application/json" \
   -d '{"include_secrets": false}'
 
 curl -k -L -o foldingos-supervisor-backup.tar.zst \
-  -H "Authorization: Bearer $(sudo cat /data/config/foldops/ingest-token)" \
   https://127.0.0.1:3443/api/recovery/export/latest
 ```
 

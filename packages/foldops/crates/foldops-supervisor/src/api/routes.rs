@@ -26,7 +26,7 @@ use crate::deploy::start_agent_deploy;
 use crate::fah_projects::fetch_fah_project;
 use crate::foldingos::{self, AllowBootRequest, AssignRequest, FleetCommandError, FleetDelegateConfig};
 use crate::recovery::{self, BACKUPS_DIR};
-use crate::software::{self, apply_local, fleet_apply_foldops, fleet_apply_tools, ApplyLocalRequest, FleetSoftwareApplyRequest, SoftwareService};
+use crate::software::{self, apply_local, assign_local, ensure_foldops_release_imported, fleet_apply_foldops, fleet_apply_tools, ApplyLocalRequest, AssignLocalBody, FleetSoftwareApplyRequest, SoftwareService};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -64,6 +64,7 @@ pub fn router(state: AppState) -> Router {
         .route("/fleet/software/apply-foldops", post(fleet_software_apply_foldops))
         .route("/fleet/software/apply-tools", post(fleet_software_apply_tools))
         .route("/software/updates", get(software_updates))
+        .route("/software/assign-local", post(software_assign_local))
         .route("/software/apply-local", post(software_apply_local))
         .route("/recovery/export", post(recovery_export_create))
         .route("/recovery/export/latest", get(recovery_export_latest))
@@ -1007,6 +1008,18 @@ async fn fleet_assign(State(state): State<AppState>, Json(body): Json<FleetAssig
         foldingosctl_path: &state.config.foldingosctl_path,
     };
 
+    if let Some(release) = foldops_manifest.as_deref() {
+        if let Err(error) =
+            ensure_foldops_release_imported(&state.config, release).await
+        {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": error })),
+            )
+                .into_response();
+        }
+    }
+
     match foldingos::provision_assign(
         config,
         AssignRequest {
@@ -1097,6 +1110,20 @@ async fn fleet_software_apply_tools(
     }
 }
 
+async fn software_assign_local(
+    State(state): State<AppState>,
+    Json(body): Json<AssignLocalBody>,
+) -> Response {
+    if !state.config.uses_supervisor_fleet_delegation() {
+        return fleet_delegation_unavailable();
+    }
+
+    match assign_local(&state.config, body).await {
+        Ok(body) => Json(body).into_response(),
+        Err(error) => (StatusCode::BAD_REQUEST, Json(json!({ "error": error }))).into_response(),
+    }
+}
+
 async fn software_apply_local(
     State(state): State<AppState>,
     Json(body): Json<ApplyLocalRequest>,
@@ -1119,12 +1146,8 @@ struct RecoveryExportBody {
 
 async fn recovery_export_create(
     State(state): State<AppState>,
-    headers: HeaderMap,
     Json(body): Json<RecoveryExportBody>,
 ) -> Response {
-    if let Err(resp) = require_auth(&headers, &state.config.ingest_token) {
-        return resp;
-    }
     if !state.config.uses_supervisor_fleet_delegation() {
         return fleet_delegation_unavailable();
     }
@@ -1145,10 +1168,7 @@ async fn recovery_export_create(
     }
 }
 
-async fn recovery_export_latest(State(state): State<AppState>, headers: HeaderMap) -> Response {
-    if let Err(resp) = require_auth(&headers, &state.config.ingest_token) {
-        return resp;
-    }
+async fn recovery_export_latest(State(state): State<AppState>) -> Response {
     if !state.config.uses_supervisor_fleet_delegation() {
         return fleet_delegation_unavailable();
     }

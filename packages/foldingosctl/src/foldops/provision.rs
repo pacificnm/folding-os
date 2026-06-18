@@ -8,7 +8,9 @@ use std::sync::LazyLock;
 
 use crate::boot_cmd::refresh_commissioning_display;
 use crate::config_host::read_hostname;
-use crate::foldops::supervisor_permissions::ensure_supervisor_fleet_automation_permissions;
+use crate::foldops::supervisor_permissions::{
+    ensure_foldops_config_group_readable, ensure_supervisor_fleet_automation_permissions,
+};
 use crate::foldops::tls::ensure_foldops_tls_material;
 use crate::foldops::util::{
     foldops_web_root, FOLDOPS_AGENT_ENV, FOLDOPS_AGENT_SERVICE, FOLDOPS_HTTPS_PORT,
@@ -91,6 +93,26 @@ pub fn start_foldops_provision_service() -> Result<(), String> {
     start_systemd_unit_if_loaded(FOLDOPS_PROVISION_SERVICE, false)
 }
 
+pub fn restart_foldops_runtime_services(paths: &AppliancePaths) -> Result<(), String> {
+    for unit in [
+        FOLDOPS_SUPERVISOR_SERVICE,
+        FOLDOPS_SERVE_HTTPS_SERVICE,
+        FOLDOPS_AGENT_SERVICE,
+    ] {
+        restart_systemd_unit_if_loaded(unit)?;
+    }
+    refresh_commissioning_display(paths);
+    Ok(())
+}
+
+fn restart_systemd_unit_if_loaded(unit: &str) -> Result<(), String> {
+    let state = command_output("systemctl", &["show", "-p", "LoadState", "--value", unit])?;
+    if state.trim() != "loaded" {
+        return Ok(());
+    }
+    run_command("systemctl", &["restart", unit]).map_err(|error| format!("restart {unit}: {error}"))
+}
+
 pub fn start_foldops_runtime_services(paths: &AppliancePaths) -> Result<(), String> {
     for unit in [
         FOLDOPS_SUPERVISOR_SERVICE,
@@ -134,7 +156,7 @@ fn import_foldops_ingest_token(paths: &AppliancePaths) -> Result<(String, bool),
         .map_err(|error| format!("EFI ingest token is invalid: {error}"))?;
     let mut payload = token.clone();
     payload.push('\n');
-    atomic_write(&paths.foldops_ingest_token, payload.as_bytes(), 0o600)?;
+    atomic_write(&paths.foldops_ingest_token, payload.as_bytes(), 0o640)?;
     Ok((token, true))
 }
 
@@ -174,7 +196,7 @@ fn provision_foldops_supervisor(
         ("WEB_ROOT".to_string(), foldops_web_root(paths).display().to_string()),
         ("CONFIG_ENABLED".to_string(), "true".to_string()),
     ]);
-    write_foldops_env_file(Path::new(FOLDOPS_SUPERVISOR_ENV), &supervisor_env, 0o600)?;
+    write_foldops_env_file(Path::new(FOLDOPS_SUPERVISOR_ENV), &supervisor_env, 0o640)?;
 
     let supervisor_host = read_hostname(paths)?;
     let agent_env = BTreeMap::from([
@@ -192,7 +214,8 @@ fn provision_foldops_supervisor(
         ("FAH_WORK_DIR".to_string(), "/data/fah/work".to_string()),
         ("CONFIG_ENABLED".to_string(), "true".to_string()),
     ]);
-    write_foldops_env_file(Path::new(FOLDOPS_AGENT_ENV), &agent_env, 0o600)?;
+    write_foldops_env_file(Path::new(FOLDOPS_AGENT_ENV), &agent_env, 0o640)?;
+    ensure_foldops_config_group_readable(paths)?;
     write_foldops_provisioned_marker(paths, "supervisor", manifest_release)
 }
 
@@ -226,7 +249,8 @@ fn provision_foldops_agent(
         ("FAH_WORK_DIR".to_string(), "/data/fah/work".to_string()),
         ("CONFIG_ENABLED".to_string(), "true".to_string()),
     ]);
-    write_foldops_env_file(Path::new(FOLDOPS_AGENT_ENV), &agent_env, 0o600)?;
+    write_foldops_env_file(Path::new(FOLDOPS_AGENT_ENV), &agent_env, 0o640)?;
+    ensure_foldops_config_group_readable(paths)?;
     write_foldops_provisioned_marker(paths, "agent", manifest_release)
 }
 
