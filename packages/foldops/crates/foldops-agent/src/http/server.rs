@@ -63,6 +63,8 @@ pub async fn start_agent_http(config: Arc<Config>) {
         .route("/control/status", get(control_status))
         .route("/control", post(control_action))
         .route("/config/foldinghome", post(foldinghome_config))
+        .route("/inspect/foldops", get(inspect_foldops))
+        .route("/inspect/tools", get(inspect_tools))
         .route("/update", post(update_agent))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
@@ -264,6 +266,34 @@ async fn foldinghome_config(
             );
             json_error(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string())
         }
+    }
+}
+
+async fn inspect_foldops(State(state): State<AppState>) -> Response {
+    if !state.config.uses_foldingos_delegation() {
+        return json_error(
+            StatusCode::FORBIDDEN,
+            "FoldingOS delegation not enabled on this agent",
+        );
+    }
+
+    match crate::foldingos::inspect_subcommand(&state.config.foldingosctl_path, "foldops").await {
+        Ok(data) => Json(serde_json::json!({ "data": data })).into_response(),
+        Err(error) => json_error(StatusCode::BAD_GATEWAY, &error.to_string()),
+    }
+}
+
+async fn inspect_tools(State(state): State<AppState>) -> Response {
+    if !state.config.uses_foldingos_delegation() {
+        return json_error(
+            StatusCode::FORBIDDEN,
+            "FoldingOS delegation not enabled on this agent",
+        );
+    }
+
+    match crate::foldingos::inspect_subcommand(&state.config.foldingosctl_path, "tools").await {
+        Ok(data) => Json(serde_json::json!({ "data": data })).into_response(),
+        Err(error) => json_error(StatusCode::BAD_GATEWAY, &error.to_string()),
     }
 }
 

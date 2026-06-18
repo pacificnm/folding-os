@@ -107,6 +107,27 @@ def validate_fleet_registry_show(doc: Any) -> None:
     require_string(obj, "rollout_state")
 
 
+def validate_software_updates(doc: Any) -> None:
+    obj = require_object(doc)
+    require_string(obj, "checked_at")
+    upstream = require_object(obj, "upstream")
+    require_object(upstream, "foldops")
+    require_object(upstream, "tools")
+    supervisor = require_object(obj, "supervisor")
+    require_string(supervisor, "hostname")
+    require_bool(supervisor, "foldops_update_available")
+    require_bool(supervisor, "tools_update_available")
+    agents = require_array(obj, "agents")
+    for index, entry in enumerate(agents):
+        if not isinstance(entry, dict):
+            raise CheckError(f"agents[{index}] must be an object")
+        require_string(entry, "hostname")
+        require_string(entry, "node_id")
+        require_bool(entry, "online")
+        require_bool(entry, "foldops_apply_pending")
+        require_bool(entry, "tools_apply_pending")
+
+
 def validate_foldingosctl_success(doc: Any) -> None:
     obj = require_object(doc, "foldingosctl response")
     if obj.get("schema_version") != 1:

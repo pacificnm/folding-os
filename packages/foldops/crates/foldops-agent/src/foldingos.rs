@@ -329,6 +329,13 @@ async fn run_inspect(foldingosctl_path: &Path, subcommand: &str) -> Result<Value
         })
 }
 
+pub async fn inspect_subcommand(
+    foldingosctl_path: &Path,
+    subcommand: &str,
+) -> Result<Value, InspectCommandError> {
+    run_inspect(foldingosctl_path, subcommand).await
+}
+
 fn parse_inspect_node(value: Value) -> InspectNodeData {
     serde_json::from_value(value).unwrap_or_default()
 }
