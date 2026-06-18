@@ -182,7 +182,7 @@ fn handle_provision_image_stream(paths: &AppliancePaths, request: &HttpRequest) 
     if request.method != "GET" {
         return HttpResponse::error(405, "method not allowed");
     }
-    let mut version = request
+    let version = request
         .path
         .trim_start_matches("/v1/provision/images/")
         .trim_end_matches("/stream")

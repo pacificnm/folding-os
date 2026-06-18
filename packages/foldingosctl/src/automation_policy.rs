@@ -7,13 +7,13 @@ use crate::role::{read_active_installation_role, require_supervisor_role};
 static TEST_USERNAME: Mutex<Option<String>> = Mutex::new(None);
 
 #[derive(Debug, Clone)]
-struct AutomationPolicyCommand {
+pub(crate) struct AutomationPolicyCommand {
     group: String,
     name: String,
 }
 
 #[derive(Debug, Clone)]
-struct AutomationPolicy {
+pub(crate) struct AutomationPolicy {
     schema_version: i32,
     service_user: String,
     installation_role: String,
@@ -37,11 +37,6 @@ pub fn is_foldops_automation_user() -> bool {
 pub fn set_test_username(name: Option<&str>) {
     let mut guard = TEST_USERNAME.lock().expect("test username lock");
     *guard = name.map(str::to_string);
-}
-
-#[cfg(test)]
-pub fn clear_policy_cache() {
-    // Policy cache is process-global; tests use unique policy paths via direct parse tests.
 }
 
 pub fn require_inspectable_role(paths: &AppliancePaths) -> Result<(), String> {
@@ -99,7 +94,7 @@ fn load_automation_policy(paths: &AppliancePaths) -> Result<AutomationPolicy, St
     parse_automation_policy(&content)
 }
 
-pub fn parse_automation_policy(content: &str) -> Result<AutomationPolicy, String> {
+fn parse_automation_policy(content: &str) -> Result<AutomationPolicy, String> {
     let mut policy = AutomationPolicy {
         schema_version: 0,
         service_user: String::new(),

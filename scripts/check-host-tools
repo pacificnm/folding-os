@@ -126,6 +126,8 @@ check_command perl perl
 check_command openssh-client ssh
 check_command openssh-client ssh-keygen
 check_command python3 python3
+check_command rustc rustc
+check_command cargo cargo
 check_command qemu-system-x86 qemu-system-x86_64
 check_command rsync rsync
 check_command sed sed

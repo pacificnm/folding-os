@@ -210,7 +210,7 @@ mod tests {
     use super::*;
     use sha2::{Digest, Sha256};
     use std::io::{Read, Write};
-    use std::net::{Shutdown, TcpListener};
+    use std::net::TcpListener;
     use std::thread;
 
     use crate::fah::manifest::parse_fah_manifest;
@@ -355,7 +355,7 @@ arguments = ["--config=/run/foldingos/fah/config.xml"]
         fs::write(version_dir.join("usr/bin/fah-client"), b"binary").expect("write exe");
         std::os::unix::fs::symlink("8.5.6", root.join("current")).expect("symlink");
         fs::write(
-            version_dir.join(".foldingos-verified"),
+            version_dir.join(crate::paths::FAH_VERIFIED_MARKER),
             "client_version=8.5.6\nartifact_sha256=643de04033a1cb972a81e3a193d710e919a4f34634a987f11adc4cee61fdaefe\n",
         )
         .expect("marker");

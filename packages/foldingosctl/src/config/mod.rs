@@ -3,9 +3,8 @@ mod effective;
 mod parse;
 
 use std::fs::{self, OpenOptions};
-use std::os::unix::io::AsRawFd;
 
-use nix::fcntl::{flock, FlockArg};
+use nix::fcntl::{Flock, FlockArg};
 use serde::Serialize;
 
 use crate::automation_policy::require_inspectable_role;
@@ -89,10 +88,8 @@ pub fn activate_config(
         .write(true)
         .open(&lock_path)
         .map_err(|error| error.to_string())?;
-    flock(lock.as_raw_fd(), FlockArg::LockExclusive).map_err(|error| error.to_string())?;
-    let unlock = || {
-        let _ = flock(lock.as_raw_fd(), FlockArg::Unlock);
-    };
+    let _guard = Flock::lock(lock, FlockArg::LockExclusive)
+        .map_err(|(_, errno)| errno.to_string())?;
 
     let candidate_content = fs::read(&resolved).map_err(|error| error.to_string())?;
     let candidate_values = parse_domain(
@@ -116,11 +113,9 @@ pub fn activate_config(
     }
 
     if let Err(error) = atomic_write(&active, &candidate_content, 0o644) {
-        unlock();
         return Err(error);
     }
     if let Err(error) = effective_config(paths, domain, true) {
-        unlock();
         return effective::rollback_config(
             paths,
             domain,
@@ -132,7 +127,6 @@ pub fn activate_config(
         );
     }
     if let Err(error) = apply_domain(paths, domain) {
-        unlock();
         return effective::rollback_config(
             paths,
             domain,
@@ -143,7 +137,6 @@ pub fn activate_config(
             apply_domain,
         );
     }
-    unlock();
     Ok(())
 }
 

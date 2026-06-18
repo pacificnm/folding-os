@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::io::{BufRead, BufReader};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use crate::foldops_manifest::{FoldOpsManifest, FoldOpsPackage};
 use crate::paths::AppliancePaths;
@@ -133,12 +133,18 @@ pub fn load_foldops_manifest_from_allowed_path(
 }
 
 pub fn resolve_effective_foldops_manifest(paths: &AppliancePaths) -> Result<FoldOpsManifest, String> {
-    if paths.foldops_assigned_manifest.exists() {
+    if assigned_foldops_manifest_present(&paths.foldops_assigned_manifest) {
         load_foldops_manifest_from_allowed_path(paths, &paths.foldops_assigned_manifest)
             .map_err(|error| format!("assigned manifest: {error}"))
     } else {
         load_foldops_manifest_from_allowed_path(paths, &paths.foldops_embedded_manifest)
     }
+}
+
+fn assigned_foldops_manifest_present(path: &Path) -> bool {
+    fs::metadata(path)
+        .map(|metadata| metadata.is_file() && metadata.len() > 0)
+        .unwrap_or(false)
 }
 
 pub fn foldops_supervisor_host_from_url(raw_url: &str) -> Result<String, String> {
@@ -152,4 +158,33 @@ pub fn foldops_supervisor_host_from_url(raw_url: &str) -> Result<String, String>
         return Err("supervisor URL host is empty".into());
     }
     Ok(host.to_string())
+}
+
+pub(crate) fn clean_path(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::Prefix(_) | Component::RootDir => out.push(component.as_os_str()),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                out.pop();
+            }
+            Component::Normal(part) => out.push(part),
+        }
+    }
+    out
+}
+
+pub(crate) fn path_with_trailing_sep(path: &Path) -> PathBuf {
+    let mut out = path.to_path_buf();
+    if !out.as_os_str().is_empty() {
+        out.push("");
+    }
+    out
+}
+
+pub(crate) fn path_within_root(root: &Path, candidate: &Path) -> bool {
+    let root_clean = clean_path(root);
+    let candidate_clean = clean_path(candidate);
+    candidate_clean == root_clean || candidate_clean.starts_with(&path_with_trailing_sep(&root_clean))
 }

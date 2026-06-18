@@ -46,7 +46,8 @@ fn ensure_group_file(path: &Path, mode: u32, gid: u32) -> Result<(), String> {
     let file = fs::OpenOptions::new()
         .create(true)
         .read(true)
-        .write(false)
+        .write(true)
+        .truncate(false)
         .open(path)
         .map_err(|error| error.to_string())?;
     drop(file);

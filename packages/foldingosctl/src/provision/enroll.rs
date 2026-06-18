@@ -87,12 +87,8 @@ pub fn provision_enroll(paths: &AppliancePaths) -> Result<serde_json::Value, Str
 }
 
 #[derive(Deserialize)]
-pub struct DesiredVersionApiResponse {
-    pub desired_version: String,
-    #[serde(default)]
-    pub desired_foldops_manifest: String,
-    #[serde(default)]
-    pub desired_tools_assignment: Option<crate::inspect::ToolsAssignment>,
+struct DesiredVersionApiResponse {
+    desired_version: String,
 }
 
 pub fn query_desired_version(

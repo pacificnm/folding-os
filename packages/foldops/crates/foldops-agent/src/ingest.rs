@@ -1,3 +1,4 @@
+use std::fs;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -14,11 +15,26 @@ pub struct IngestClient {
 
 impl IngestClient {
     pub fn new(config: Arc<Config>) -> Self {
+        let mut builder = reqwest::Client::builder().timeout(Duration::from_secs(30));
+        if let Some(ca_path) = &config.supervisor_tls_ca {
+            let ca_pem = fs::read(ca_path).unwrap_or_else(|error| {
+                panic!(
+                    "read SUPERVISOR_TLS_CA at {}: {error}",
+                    ca_path.display()
+                )
+            });
+            let certificate = reqwest::Certificate::from_pem(&ca_pem).unwrap_or_else(|error| {
+                panic!(
+                    "parse SUPERVISOR_TLS_CA at {}: {error}",
+                    ca_path.display()
+                )
+            });
+            builder = builder
+                .tls_built_in_root_certs(false)
+                .add_root_certificate(certificate);
+        }
         Self {
-            http: reqwest::Client::builder()
-                .timeout(Duration::from_secs(30))
-                .build()
-                .expect("reqwest client"),
+            http: builder.build().expect("reqwest client"),
             config,
         }
     }

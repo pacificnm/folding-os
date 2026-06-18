@@ -9,7 +9,7 @@ use crate::foldops::tls::{load_rustls_config, validate_foldops_tls_ready};
 use crate::foldops::util::FOLDOPS_SUPERVISOR_LOOPBACK_PORT;
 use crate::paths::AppliancePaths;
 
-const LISTEN_ADDRESS: &str = ":3443";
+const LISTEN_ADDRESS: &str = "0.0.0.0:3443";
 
 pub fn foldops_serve_https(paths: &AppliancePaths) -> Result<(), String> {
     let role = crate::role::read_active_installation_role(paths)?;
@@ -21,7 +21,7 @@ pub fn foldops_serve_https(paths: &AppliancePaths) -> Result<(), String> {
     let config = Arc::new(load_rustls_config(paths)?);
     let upstream = format!("http://127.0.0.1:{FOLDOPS_SUPERVISOR_LOOPBACK_PORT}");
     println!(
-        "FoldOps HTTPS front end listening on https://0.0.0.0{LISTEN_ADDRESS} -> {upstream}"
+        "FoldOps HTTPS front end listening on https://{LISTEN_ADDRESS} -> {upstream}"
     );
     serve_tls_reverse_proxy(LISTEN_ADDRESS, &upstream, config)
 }
@@ -63,7 +63,6 @@ fn handle_client(
 struct HttpRequest {
     method: String,
     path: String,
-    version: String,
     headers: Vec<(String, String)>,
     body: Vec<u8>,
 }
@@ -102,7 +101,7 @@ fn read_http_request(stream: &mut impl Read) -> Result<HttpRequest, String> {
     let mut parts = request_line.split_whitespace();
     let method = parts.next().unwrap_or_default().to_string();
     let path = parts.next().unwrap_or_default().to_string();
-    let version = parts.next().unwrap_or_default().to_string();
+    let _version = parts.next().unwrap_or_default();
     let mut headers = Vec::new();
     for line in lines {
         if line.is_empty() {
@@ -130,7 +129,6 @@ fn read_http_request(stream: &mut impl Read) -> Result<HttpRequest, String> {
     Ok(HttpRequest {
         method,
         path,
-        version,
         headers,
         body,
     })
@@ -154,9 +152,11 @@ fn proxy_request(request: &HttpRequest, upstream_base: &str) -> Result<HttpRespo
         }
         upstream_request = upstream_request.set(name, value);
     }
-    let response = upstream_request
-        .send_bytes(&request.body)
-        .map_err(|_| "foldops upstream unavailable".to_string())?;
+    let response = match upstream_request.send_bytes(&request.body) {
+        Ok(response) => response,
+        Err(ureq::Error::Status(_code, response)) => response,
+        Err(error) => return Err(format!("foldops upstream unavailable: {error}")),
+    };
     let status = response.status();
     let mut headers = Vec::new();
     for name in response.headers_names() {
@@ -177,7 +177,10 @@ fn write_http_response(stream: &mut impl Write, response: &HttpResponse) -> Resu
     let mut output = format!("HTTP/1.1 {} {}\r\n", response.status, response.reason);
     output.push_str(&format!("Content-Length: {}\r\n", response.body.len()));
     for (name, value) in &response.headers {
-        if name.eq_ignore_ascii_case("transfer-encoding") {
+        if name.eq_ignore_ascii_case("transfer-encoding")
+            || name.eq_ignore_ascii_case("content-length")
+            || name.eq_ignore_ascii_case("connection")
+        {
             continue;
         }
         output.push_str(&format!("{name}: {value}\r\n"));

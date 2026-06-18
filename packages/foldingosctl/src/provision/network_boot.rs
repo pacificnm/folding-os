@@ -18,7 +18,6 @@ const IPXE_AUTOEXEC_FILENAME: &str = "autoexec.ipxe";
 struct ProvisionBootEnvironment {
     iface: String,
     host: String,
-    port: String,
     subnet: String,
     boot_base: String,
     boot_url: String,
@@ -58,7 +57,6 @@ fn resolve_provision_boot_environment(paths: &AppliancePaths) -> Result<Provisio
     Ok(ProvisionBootEnvironment {
         iface,
         host,
-        port,
         subnet,
         boot_base,
         boot_url,

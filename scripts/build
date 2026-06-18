@@ -89,7 +89,7 @@ if [ ! -x "${FOLDINGOSCTL_BINARY}" ]; then
   echo "${FOLDINGOSCTL_BINARY}"
   exit 1
 fi
-if ! grep -aFq "Force-checked %s before data expansion." "${FOLDINGOSCTL_BINARY}"; then
+if ! grep -aFq "before data expansion." "${FOLDINGOSCTL_BINARY}"; then
   echo "ERROR: Built foldingosctl binary is stale."
   echo "Expected current storage-check behavior was not found."
   exit 1

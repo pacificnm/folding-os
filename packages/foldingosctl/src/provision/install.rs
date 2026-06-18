@@ -337,7 +337,7 @@ fn stage_provision_persistent_config(
 }
 
 fn write_provision_persistent_files(
-    paths: &AppliancePaths,
+    _paths: &AppliancePaths,
     root: &std::path::Path,
     role: &str,
     supervisor_url: &str,

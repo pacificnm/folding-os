@@ -31,10 +31,6 @@ struct UpstreamRelease {
     image_url: String,
     image_sha256: String,
     image_size_bytes: i64,
-    #[serde(default)]
-    metadata_url: String,
-    #[serde(default)]
-    checksum_url: String,
 }
 
 fn registry_http_agent() -> Agent {
@@ -65,7 +61,7 @@ pub fn poll(paths: &AppliancePaths) -> Result<(), String> {
     Ok(())
 }
 
-pub fn fetch_upstream_manifest(url: &str) -> Result<UpstreamReleasesManifest, String> {
+fn fetch_upstream_manifest(url: &str) -> Result<UpstreamReleasesManifest, String> {
     let agent = registry_http_agent();
     let response = agent
         .get(url)
@@ -165,7 +161,7 @@ fn import_upstream_release(paths: &AppliancePaths, mut release: UpstreamRelease)
     Ok(true)
 }
 
-pub fn download_verified_registry_image(
+fn download_verified_registry_image(
     release: &UpstreamRelease,
     destination: &Path,
 ) -> Result<(), String> {

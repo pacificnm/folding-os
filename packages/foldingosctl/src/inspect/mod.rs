@@ -2,12 +2,12 @@ mod commissioning;
 mod fah;
 mod foldops;
 mod system;
-mod tools;
+pub(crate) mod tools;
 mod update;
 
 pub use tools::{
-    hash_file_at_path, parse_tools_assignment, resolve_effective_tools_assignment,
-    save_tools_active_state, tools_installation_verified, validate_tools_assignment_public,
+    hash_file_at_path, resolve_effective_tools_assignment, save_tools_active_state,
+    tools_installation_verified, validate_tools_assignment_public,
     ToolsActiveState, ToolsAssignment,
 };
 

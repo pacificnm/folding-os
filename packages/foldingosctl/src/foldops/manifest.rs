@@ -37,7 +37,6 @@ pub fn validate_foldops_manifest_embedded(paths: &AppliancePaths) -> Result<(), 
 mod tests {
     use std::fs;
 
-    use super::*;
     use crate::foldops::util::{
         load_foldops_manifest_from_allowed_path, resolve_effective_foldops_manifest,
         FOLDOPS_MANIFEST_PLACEHOLDER,

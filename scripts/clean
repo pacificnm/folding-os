@@ -45,6 +45,7 @@ CLEAN_PATHS=(
   "${PROJECT_ROOT}/build/test-qemu"
   "${PROJECT_ROOT}/build/test-provision-qemu"
   "${PROJECT_ROOT}/packages/foldops/target"
+  "${PROJECT_ROOT}/packages/foldingosctl/target"
   "${PROJECT_ROOT}/packages/foldops/web/node_modules"
   "${PROJECT_ROOT}/packages/foldops/web/dist"
 )

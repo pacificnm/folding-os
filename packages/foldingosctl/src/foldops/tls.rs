@@ -7,6 +7,7 @@ use rustls::pki_types::CertificateDer;
 use crate::config_host::read_hostname;
 use crate::foldops::util::file_exists;
 use crate::fs_atomic::atomic_write;
+use crate::identity::routable_ipv4_address;
 use crate::paths::AppliancePaths;
 
 pub fn ensure_foldops_tls_material(paths: &AppliancePaths) -> Result<(), String> {
@@ -34,6 +35,13 @@ fn generate_foldops_self_signed_tls(paths: &AppliancePaths, hostname: &str) -> R
     params
         .subject_alt_names
         .push(SanType::IpAddress(std::net::IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))));
+    if let Some(address) = routable_ipv4_address() {
+        if let Ok(ip) = address.parse::<Ipv4Addr>() {
+            params
+                .subject_alt_names
+                .push(SanType::IpAddress(std::net::IpAddr::V4(ip)));
+        }
+    }
     let mut distinguished_name = DistinguishedName::new();
     distinguished_name.push(DnType::CommonName, hostname);
     params.distinguished_name = distinguished_name;

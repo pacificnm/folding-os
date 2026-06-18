@@ -64,7 +64,7 @@ fn systemd_unit_is_active(unit: &str) -> bool {
 fn fah_installation_verified(apps_root: &std::path::Path, version: &str, manifest: &str) -> Option<bool> {
     let client_version = parse_fah_client_version(manifest)?;
     let sha256 = parse_fah_sha256(manifest)?;
-    let marker_path = apps_root.join(version).join(".foldingos-verified");
+    let marker_path = apps_root.join(version).join(crate::paths::FAH_VERIFIED_MARKER);
     let marker = fs::read_to_string(marker_path).ok()?;
     let values = parse_key_value_lines(&marker);
     if values.get("client_version") != Some(&client_version) {

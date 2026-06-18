@@ -1,8 +1,8 @@
 use std::fs::{self, File};
 use std::io::{copy, Read};
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 
-use sha2::{Digest, Sha256};
+use crate::foldops::util::{clean_path, path_with_trailing_sep};
 use tar::Archive;
 use xz2::read::XzDecoder;
 use zstd::stream::read::Decoder as ZstdDecoder;
@@ -114,28 +114,16 @@ fn extract_tar_entry(
     header: &tar::Header,
     reader: &mut tar::Entry<'_, impl Read>,
 ) -> Result<(), String> {
-    let relative = sanitize_tar_path(header.path().map_err(|error| error.to_string())?.to_str().unwrap_or_default())?;
-    if relative.is_empty() {
+    let relative = sanitize_tar_path(&header.path().map_err(|error| error.to_string())?)?;
+    if relative.as_os_str().is_empty() {
         return Ok(());
     }
     let target = destination.join(&relative);
-    let cleaned = target.components().fold(PathBuf::new(), |mut acc, component| {
-        use std::path::Component;
-        if let Component::Normal(part) = component {
-            acc.push(part);
-        }
-        acc
-    });
-    let destination_root = destination.components().fold(PathBuf::new(), |mut acc, component| {
-        use std::path::Component;
-        if let Component::Normal(part) = component {
-            acc.push(part);
-        } else if matches!(component, Component::RootDir | Component::Prefix(_)) {
-            acc.push(std::path::MAIN_SEPARATOR.to_string());
-        }
-        acc
-    });
-    if cleaned != destination_root && !cleaned.starts_with(&destination_root) {
+    let destination_root = clean_path(destination);
+    let cleaned = clean_path(&target);
+    if cleaned != destination_root
+        && !cleaned.starts_with(&path_with_trailing_sep(&destination_root))
+    {
         return Err(format!(
             "archive entry escapes staging directory: {:?}",
             header.path()
@@ -154,7 +142,7 @@ fn extract_tar_entry(
             let mode = if mode == 0 { 0o644 } else { mode };
             let mut file = File::create(&target).map_err(|error| error.to_string())?;
             copy(reader, &mut file)
-                .map_err(|error| format!("write archive file \"{relative}\": {error}"))?;
+                .map_err(|error| format!("write archive file {:?}: {error}", relative))?;
             file.sync_all().ok();
             fs::set_permissions(&target, fs::Permissions::from_mode(mode)).ok();
         }
@@ -169,20 +157,41 @@ fn extract_tar_entry(
     Ok(())
 }
 
-fn sanitize_tar_path(name: &str) -> Result<String, String> {
-    let name = name.trim();
+fn sanitize_tar_path(name: &Path) -> Result<PathBuf, String> {
+    let name = name.to_string_lossy().trim().to_string();
     if name.is_empty() || name == "." || name == "./" {
-        return Ok(String::new());
+        return Ok(PathBuf::new());
     }
-    let name = name.trim_start_matches("./");
+    let name = name.strip_prefix("./").unwrap_or(&name);
     if name.starts_with('/') {
-        return Err(format!("archive entry uses an absolute path: \"{name}\""));
+        return Err(format!("archive entry uses an absolute path: {name:?}"));
     }
-    if name.contains("..") {
-        return Err(format!("archive entry contains path traversal: \"{name}\""));
+    let path = Path::new(name);
+    for component in path.components() {
+        match component {
+            Component::ParentDir => {
+                return Err(format!("archive entry contains path traversal: {name:?}"));
+            }
+            Component::Normal(part) if part == ".." => {
+                return Err(format!("archive entry contains path traversal: {name:?}"));
+            }
+            _ => {}
+        }
     }
-    Ok(name.to_string())
+    let cleaned = path
+        .components()
+        .filter_map(|component| match component {
+            Component::Normal(part) => Some(part),
+            _ => None,
+        })
+        .collect::<PathBuf>();
+    if cleaned.as_os_str().is_empty() {
+        return Ok(PathBuf::new());
+    }
+    Ok(cleaned)
 }
+
+use sha2::{Digest, Sha256};
 
 struct ArMemberHeader {
     name: String,
@@ -217,9 +226,25 @@ fn normalize_ar_member_name(name: &str) -> String {
     name.split('/').next().unwrap_or(name).to_string()
 }
 
-use std::path::PathBuf;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sanitize_tar_path_accepts_relative_prefix() {
+        let path = sanitize_tar_path(Path::new("./etc/ssl/certs")).expect("path");
+        assert_eq!(path, Path::new("etc/ssl/certs"));
+    }
+
+    #[test]
+    fn reject_tar_path_traversal() {
+        assert!(sanitize_tar_path(Path::new("./../escape.txt")).is_err());
+        assert!(sanitize_tar_path(Path::new("/etc/passwd")).is_err());
+    }
+}
 
 pub fn verify_foldops_artifact_file(path: &Path, pkg: &crate::foldops_manifest::FoldOpsPackage) -> Result<(), String> {
     let file = File::open(path).map_err(|error| error.to_string())?;

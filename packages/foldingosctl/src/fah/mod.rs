@@ -31,5 +31,3 @@ pub fn run(paths: &AppliancePaths, subcommand: &str, args: &[String]) -> Result<
         other => Err(format!("unknown fah subcommand: {other}")),
     }
 }
-
-pub use manifest::{parse_fah_manifest, validate_fah_manifest, FahManifest};

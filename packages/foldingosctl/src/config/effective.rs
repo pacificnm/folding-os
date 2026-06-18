@@ -1,24 +1,11 @@
 use std::fs;
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
-use std::sync::Mutex;
 
 use crate::fs_atomic::atomic_write;
 use crate::paths::AppliancePaths;
 
 use super::parse::{domain_config_to_map, parse_domain, render_domain, validate_domain, DomainConfig};
-
-type SecretValidatorFn = dyn Fn(&AppliancePaths, &str) -> Result<(), String> + Send + Sync;
-
-static VALIDATE_SECRET_REFERENCE_FN: Mutex<Option<Box<SecretValidatorFn>>> = Mutex::new(None);
-
-#[cfg(test)]
-pub fn set_validate_secret_reference_fn(validator: Option<Box<SecretValidatorFn>>) {
-    let mut guard = VALIDATE_SECRET_REFERENCE_FN
-        .lock()
-        .expect("secret validator lock");
-    *guard = validator;
-}
 
 pub fn load_effective_config_for_domain(
     paths: &AppliancePaths,
@@ -133,11 +120,6 @@ pub fn load_effective(
 }
 
 pub fn validate_secret_reference(paths: &AppliancePaths, name: &str) -> Result<(), String> {
-    if let Ok(guard) = VALIDATE_SECRET_REFERENCE_FN.lock() {
-        if let Some(validator) = guard.as_ref() {
-            return validator(paths, name);
-        }
-    }
     if name.is_empty() {
         return Ok(());
     }

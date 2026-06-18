@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::foldops::util::{
-    FOLDOPS_VERIFICATION_PATH_PREFIX, validate_foldops_release_label,
+    path_within_root, FOLDOPS_VERIFICATION_PATH_PREFIX, validate_foldops_release_label,
 };
 use crate::foldops_manifest::FoldOpsPackage;
 use crate::fs_atomic::atomic_write;
@@ -135,27 +135,7 @@ pub fn foldops_verification_target_at_root(
         return Err("manifest verification_path is invalid".into());
     }
     let target = release_root.join(relative);
-    let cleaned = target.components().fold(PathBuf::new(), |mut acc, component| {
-        use std::path::Component;
-        match component {
-            Component::Normal(part) => acc.push(part),
-            Component::ParentDir => {
-                acc.pop();
-            }
-            _ => {}
-        }
-        acc
-    });
-    let release_root_clean = release_root.components().fold(PathBuf::new(), |mut acc, component| {
-        use std::path::Component;
-        if let Component::Normal(part) = component {
-            acc.push(part);
-        } else if let Component::RootDir = component {
-            acc.push(std::path::MAIN_SEPARATOR.to_string());
-        }
-        acc
-    });
-    if cleaned != release_root_clean && !cleaned.starts_with(&release_root_clean) {
+    if !path_within_root(release_root, &target) {
         return Err("resolved verification path escapes release directory".into());
     }
     Ok(target)

@@ -140,26 +140,33 @@ pub fn read_installed_foldingos_version() -> Result<String, String> {
 }
 
 pub fn collect_mac_addresses() -> Result<Vec<String>, String> {
-    let output = Command::new("ip")
-        .args(["-o", "link", "show", "up"])
-        .output()
-        .map_err(|error| format!("list network interfaces: {error}"))?;
-    if !output.status.success() {
-        return Err("list network interfaces failed".into());
-    }
+    collect_mac_addresses_from_sys_class_net(std::path::Path::new("/sys/class/net"))
+}
+
+fn collect_mac_addresses_from_sys_class_net(net_dir: &std::path::Path) -> Result<Vec<String>, String> {
     let mut addresses = Vec::new();
-    for line in String::from_utf8_lossy(&output.stdout).lines() {
-        if line.contains(" lo:") || line.contains(": lo:") {
+    let entries = fs::read_dir(net_dir)
+        .map_err(|error| format!("list network interfaces: {error}"))?;
+    for entry in entries {
+        let entry = entry.map_err(|error| format!("list network interfaces: {error}"))?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name == "lo" {
             continue;
         }
-        let Some(index) = line.find("link/ether ") else {
+        let interface_dir = entry.path();
+        let operstate = fs::read_to_string(interface_dir.join("operstate"))
+            .unwrap_or_default();
+        if operstate.trim() != "up" {
             continue;
-        };
-        let rest = &line[index + "link/ether ".len()..];
-        let mac = rest.split_whitespace().next().unwrap_or_default();
-        if !mac.is_empty() {
-            addresses.push(mac.to_string());
         }
+        let mac = fs::read_to_string(interface_dir.join("address"))
+            .map_err(|error| format!("read interface {name} address: {error}"))?
+            .trim()
+            .to_string();
+        if mac.is_empty() || mac == "00:00:00:00:00:00" {
+            continue;
+        }
+        addresses.push(mac);
     }
     addresses.sort();
     if addresses.is_empty() {
@@ -281,4 +288,50 @@ pub fn read_node_identity(paths: &AppliancePaths) -> Result<serde_json::Value, S
         data["primary_ipv4"] = serde_json::Value::String(address);
     }
     Ok(data)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    fn write_interface(root: &Path, name: &str, operstate: &str, address: &str) {
+        let interface_dir = root.join(name);
+        fs::create_dir_all(&interface_dir).unwrap();
+        fs::write(interface_dir.join("operstate"), operstate).unwrap();
+        fs::write(interface_dir.join("address"), address).unwrap();
+    }
+
+    #[test]
+    fn collect_mac_addresses_reads_up_interfaces_from_sysfs() {
+        let root = std::env::temp_dir().join(format!(
+            "foldingosctl-mac-collect-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        write_interface(&root, "lo", "unknown", "00:00:00:00:00:00");
+        write_interface(&root, "eth0", "up", "52:54:00:12:34:56");
+        write_interface(&root, "eth1", "down", "00:be:43:e7:59:5e");
+
+        let macs = collect_mac_addresses_from_sys_class_net(&root).unwrap();
+        assert_eq!(macs, vec!["52:54:00:12:34:56".to_string()]);
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn collect_mac_addresses_rejects_empty_allowlist() {
+        let root = std::env::temp_dir().join(format!(
+            "foldingosctl-mac-empty-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        write_interface(&root, "eth0", "down", "52:54:00:12:34:56");
+
+        assert!(collect_mac_addresses_from_sys_class_net(&root).is_err());
+
+        let _ = fs::remove_dir_all(root);
+    }
 }

@@ -170,7 +170,7 @@ mod tests {
 
     #[test]
     fn record_fah_acquisition_failure_persists_next_attempt() {
-        let dir = tempfile_dir();
+        let dir = tempfile_dir("persist-next-attempt");
         let paths = test_paths(&dir);
         let now_before = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -190,7 +190,7 @@ mod tests {
 
     #[test]
     fn record_fah_acquisition_failure_caps_delay_at_six_hours() {
-        let dir = tempfile_dir();
+        let dir = tempfile_dir("cap-delay-six-hours");
         let paths = test_paths(&dir);
         save_fah_acquire_state(
             &paths,
@@ -213,8 +213,16 @@ mod tests {
         assert!(state.next_attempt_unix >= now_before + 6 * 60 * 60);
     }
 
-    fn tempfile_dir() -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("fah-acquire-test-{}", std::process::id()));
+    fn tempfile_dir(label: &str) -> std::path::PathBuf {
+        use std::sync::atomic::{AtomicU64, Ordering};
+
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        let id = NEXT.fetch_add(1, Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!(
+            "fah-acquire-test-{}-{}-{label}",
+            std::process::id(),
+            id
+        ));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).expect("create temp dir");
         dir

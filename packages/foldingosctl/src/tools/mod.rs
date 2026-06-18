@@ -16,7 +16,7 @@ use self::acquire_state::{
     clear_tools_acquire_state, defer_tools_acquisition_attempt, format_duration_rounded,
     format_unix_rfc3339_utc, load_tools_acquire_state, record_tools_acquisition_failure,
 };
-use self::download::{download_and_stage_tools_binary, tools_http_agent, write_staged_tools_binary};
+use self::download::{download_and_stage_tools_binary, tools_http_agent};
 use self::replace::atomic_replace_tools_binary;
 
 const TOOLS_DEPENDENT_SYSTEMD_UNITS: &[&str] = &[
@@ -207,10 +207,11 @@ mod tests {
     use sha2::{Digest, Sha256};
 
     use super::*;
+    use crate::inspect::tools::parse_tools_assignment;
     use crate::inspect::{
-        parse_tools_assignment, save_tools_active_state, validate_tools_assignment_public,
-        ToolsActiveState,
+        save_tools_active_state, validate_tools_assignment_public, ToolsActiveState,
     };
+    use super::download::write_staged_tools_binary;
 
     const VALID_TOOLS_ASSIGNMENT_JSON: &str = r#"{
   "schema_version": 1,

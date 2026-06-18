@@ -1,0 +1,223 @@
+#!/usr/bin/env python3
+"""FoldOps supervisor HTTP API and foldingosctl JSON automation acceptance tests.
+
+Add new cases to HTTP_CASES or FOLDINGOSCTL_CASES below. Each case names a
+command or route, fetches JSON, and runs a structural validator.
+
+Usage:
+  ./scripts/test-api-json <supervisor-host> [https-port]
+  ./scripts/test-api-json --foldingosctl /path/to/foldingosctl
+  ./scripts/test-api-json --foldingosctl /path/to/foldingosctl <supervisor-host> [port]
+
+Environment:
+  FOLDOPS_API       Override API base URL (default: https://HOST:PORT/api)
+  FOLDOPS_CURL_TLS  Extra curl TLS flags (default: -k)
+"""
+from __future__ import annotations
+
+import argparse
+import importlib.util
+import os
+import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Callable
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+VALIDATE_PATH = SCRIPT_DIR / "lib" / "api-json-validate.py"
+spec = importlib.util.spec_from_file_location("api_json_validate", VALIDATE_PATH)
+if spec is None or spec.loader is None:
+    raise RuntimeError(f"unable to load validator module: {VALIDATE_PATH}")
+validate = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(validate)
+
+
+@dataclass(frozen=True)
+class HttpCase:
+    name: str
+    method: str
+    path: str
+    validator: Callable[[Any], None]
+    dynamic: bool = False
+
+
+@dataclass(frozen=True)
+class FoldingosctlCase:
+    name: str
+    args: tuple[str, ...]
+    validator: Callable[[Any], None]
+
+
+HTTP_CASES: tuple[HttpCase, ...] = (
+    HttpCase("GET /machines", "GET", "/machines", validate.validate_machines),
+    HttpCase(
+        "GET /fleet/enrollments",
+        "GET",
+        "/fleet/enrollments",
+        validate.validate_fleet_enrollments,
+    ),
+    HttpCase(
+        "GET /fleet/allow-boot",
+        "GET",
+        "/fleet/allow-boot",
+        validate.validate_fleet_allow_boot,
+    ),
+    HttpCase(
+        "GET /fleet/registry",
+        "GET",
+        "/fleet/registry",
+        validate.validate_fleet_registry,
+    ),
+    HttpCase(
+        "GET /fleet/registry/{version}",
+        "GET",
+        "/fleet/registry/{version}",
+        validate.validate_fleet_registry_show,
+        dynamic=True,
+    ),
+)
+
+FOLDINGOSCTL_CASES: tuple[FoldingosctlCase, ...] = (
+    FoldingosctlCase(
+        "foldingosctl migration status --format json",
+        ("migration", "status", "--format", "json"),
+        validate.validate_foldingosctl_migration_status,
+    ),
+)
+
+
+class Runner:
+    def __init__(self) -> None:
+        self.failed = 0
+
+    def pass_(self, message: str) -> None:
+        print(f"PASS: {message}")
+
+    def fail(self, message: str) -> None:
+        print(f"FAIL: {message}", file=sys.stderr)
+        self.failed += 1
+
+
+def curl_request(base: str, method: str, path: str, tls_flags: str) -> tuple[int, str]:
+    url = f"{base.rstrip('/')}{path}"
+    command = ["curl", "-sS", *tls_flags.split(), "-X", method, "-w", "\n%{http_code}", url]
+    completed = subprocess.run(command, check=False, capture_output=True, text=True)
+    if completed.returncode != 0:
+        raise RuntimeError(completed.stderr.strip() or f"curl failed for {url}")
+    body, _, status_line = completed.stdout.rpartition("\n")
+    try:
+        status = int(status_line.strip())
+    except ValueError as exc:
+        raise RuntimeError(f"unexpected curl output for {url}") from exc
+    return status, body
+
+
+def run_http_cases(runner: Runner, base: str, tls_flags: str) -> dict[str, Any]:
+    context: dict[str, Any] = {}
+    for case in HTTP_CASES:
+        path = case.path
+        if case.dynamic:
+            versions = context.get("registry_versions")
+            if not versions:
+                runner.pass_(f"{case.name} → skipped (registry empty)")
+                continue
+            version = versions[0]["foldingos_version"]
+            path = path.replace("{version}", version)
+
+        try:
+            status, body = curl_request(base, case.method, path, tls_flags)
+        except RuntimeError as exc:
+            runner.fail(f"{case.name} → {exc}")
+            continue
+
+        if status != 200:
+            runner.fail(f"{case.name} → HTTP {status}")
+            continue
+
+        try:
+            document = validate.parse_json(body, case.name)
+            case.validator(document)
+        except validate.CheckError as exc:
+            runner.fail(f"{case.name} → {exc}")
+            continue
+
+        runner.pass_(f"{case.name} → 200 + valid JSON")
+        if case.path == "/fleet/registry":
+            context["registry_versions"] = document.get("versions", [])
+
+    return context
+
+
+def run_foldingosctl_cases(runner: Runner, binary: Path) -> None:
+    if not binary.is_file():
+        runner.fail(f"foldingosctl binary not found: {binary}")
+        return
+
+    for case in FOLDINGOSCTL_CASES:
+        command = [str(binary), *case.args]
+        completed = subprocess.run(command, check=False, capture_output=True, text=True)
+        if completed.returncode != 0:
+            detail = completed.stderr.strip() or completed.stdout.strip() or "non-zero exit"
+            runner.fail(f"{case.name} → {detail}")
+            continue
+        try:
+            document = validate.parse_json(completed.stdout, case.name)
+            case.validator(document)
+        except validate.CheckError as exc:
+            runner.fail(f"{case.name} → {exc}")
+            continue
+        runner.pass_(f"{case.name} → valid JSON envelope")
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "supervisor_host",
+        nargs="?",
+        help="Supervisor hostname or IP for HTTPS /api checks",
+    )
+    parser.add_argument(
+        "https_port",
+        nargs="?",
+        type=int,
+        default=3443,
+        help="HTTPS port (default: 3443)",
+    )
+    parser.add_argument(
+        "--foldingosctl",
+        metavar="PATH",
+        help="Also validate foldingosctl --format json automation envelopes",
+    )
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    runner = Runner()
+
+    if args.foldingosctl:
+        run_foldingosctl_cases(runner, Path(args.foldingosctl))
+
+    if args.supervisor_host:
+        base = os.environ.get(
+            "FOLDOPS_API",
+            f"https://{args.supervisor_host}:{args.https_port}/api",
+        )
+        tls_flags = os.environ.get("FOLDOPS_CURL_TLS", "-k")
+        print(f"API base: {base}\n")
+        run_http_cases(runner, base, tls_flags)
+    elif not args.foldingosctl:
+        print("ERROR: provide a supervisor host and/or --foldingosctl", file=sys.stderr)
+        return 2
+
+    if runner.failed:
+        print(f"\n{runner.failed} check(s) failed.", file=sys.stderr)
+        return 1
+
+    print("\nAll API JSON checks passed.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

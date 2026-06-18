@@ -113,7 +113,8 @@ pub fn verify_tools_artifact_file(path: &Path, assignment: &ToolsAssignment) -> 
     verify_tools_executable_elf(path)
 }
 
-pub fn write_staged_tools_binary(
+#[cfg(test)]
+pub(crate) fn write_staged_tools_binary(
     downloads_dir: &Path,
     assignment: &ToolsAssignment,
     artifact: &[u8],

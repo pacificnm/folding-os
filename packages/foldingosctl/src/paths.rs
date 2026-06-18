@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+pub const FAH_VERIFIED_MARKER: &str = ".foldingos-verified";
+
 #[derive(Debug, Clone)]
 pub struct AppliancePaths {
     pub config_dir: PathBuf,
@@ -188,7 +190,7 @@ impl AppliancePaths {
     }
 
     pub fn fah_verified_marker(&self, version: &str) -> PathBuf {
-        self.fah_version_dir(version).join(".foldingos-verified")
+        self.fah_version_dir(version).join(FAH_VERIFIED_MARKER)
     }
 
     pub fn enrollment_record_path(&self, node_id: &str) -> PathBuf {
@@ -221,7 +223,7 @@ impl AppliancePaths {
     }
 
     pub fn foldops_supervisor_ca_pem(&self) -> PathBuf {
-        self.foldops_tls_dir.join("ca.pem")
+        self.config_dir.join("foldops/supervisor-ca.pem")
     }
 
     pub fn domain_active_path(&self, domain: &str) -> PathBuf {

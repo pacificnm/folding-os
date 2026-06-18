@@ -6,7 +6,6 @@ use std::path::{Component, Path, PathBuf};
 
 use crate::paths::AppliancePaths;
 
-pub const FAH_VERIFIED_MARKER_NAME: &str = ".foldingos-verified";
 pub const FAH_EXECUTABLE_PATH_PREFIX: &str = "/data/apps/fah/current/";
 pub const FAH_SERVICE_NAME: &str = "folding-at-home.service";
 pub const FAH_SERVICE_GID: u32 = 200;

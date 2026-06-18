@@ -8,7 +8,6 @@ use crate::paths::AppliancePaths;
 use crate::provision::ssh::validate_authorized_keys;
 use crate::provision::util::{
     new_session_id, rfc3339_now, validate_enrollment_token, AGENT_INSTALLATION_ROLE,
-    INSTALL_SESSION_HEADER,
 };
 use crate::registry_image::{
     load_registry_entry, load_registry_index, verify_registry_image_file, RegistryEntry,
@@ -282,5 +281,3 @@ fn normalize_mac_addresses(addresses: &[String]) -> Vec<String> {
     normalized.sort();
     normalized
 }
-
-pub const INSTALL_SESSION_HEADER_NAME: &str = INSTALL_SESSION_HEADER;

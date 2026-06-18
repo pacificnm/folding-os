@@ -964,7 +964,7 @@ fn flush_pending_update_report(paths: &AppliancePaths) -> Result<(), String> {
 }
 
 fn report_agent_update_status(
-    paths: &AppliancePaths,
+    _paths: &AppliancePaths,
     supervisor_url: &str,
     node_id: &str,
     token: &str,
