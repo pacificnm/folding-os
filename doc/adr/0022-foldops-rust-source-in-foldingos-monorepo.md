@@ -80,7 +80,7 @@ runtime acquisition are separate concerns.
 
 ```text
 packages/
-  foldingosctl/          # Go — appliance control plane
+  foldingosctl/          # Rust — appliance control plane (see ADR-0025)
   foldops/               # Rust workspace — fleet management applications
     Cargo.toml
     crates/
@@ -121,7 +121,7 @@ Rust tree directly. Monorepo source is simpler for joint changes.
 ### Positive
 
 - Single pull request can change FoldOps, `foldingosctl`, manifests, and docs
-- Local development builds Rust and Go from one tree
+- Local development builds Rust platform and fleet code from one tree
 - Rust-only FoldOps aligns with appliance constraints (no Node runtime)
 - Clear platform ownership: FoldingOS repository is the appliance stack
 

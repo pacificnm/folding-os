@@ -70,6 +70,14 @@ destructive reinstallation.
 The first node is always the supervisor. Install it by direct flash to internal
 NVMe or SATA.
 
+**Milestone 4 target:** flash the release image without mandatory EFI secrets,
+open the HTTPS dashboard on first boot, sign in with default operator
+credentials, change the password, and complete supervisor first-run setup
+([ADR-0026](adr/0026-foldops-dashboard-operator-authentication.md)).
+
+**Current and lab path:** pre-stage SSH public keys and optionally the fleet
+ingest token on EFI before first boot (below).
+
 ## Prepare boot media
 
 ```bash

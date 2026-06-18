@@ -7,7 +7,7 @@
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-FOLDINGOSCTL_SRC="${PROJECT_ROOT}/packages/foldingosctl/src"
+FOLDINGOSCTL_CRATE="${PROJECT_ROOT}/packages/foldingosctl"
 
 usage() {
   cat <<EOF
@@ -41,8 +41,8 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-if ! command -v go >/dev/null 2>&1; then
-  echo "ERROR: go not found" >&2
+if ! command -v cargo >/dev/null 2>&1; then
+  echo "ERROR: cargo not found" >&2
   exit 1
 fi
 
@@ -54,11 +54,10 @@ mkdir -p "${OUTPUT_DIR}"
 
 echo "Building foldingosctl tools release ${TOOLS_VERSION} …"
 (
-  cd "${FOLDINGOSCTL_SRC}"
-  CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    go build -trimpath -ldflags "-buildid=" -o "${OUTPUT_BINARY}" .
+  cd "${FOLDINGOSCTL_CRATE}"
+  cargo build --release --offline --locked
 )
-
+cp "${FOLDINGOSCTL_CRATE}/target/release/foldingosctl" "${OUTPUT_BINARY}"
 chmod 0755 "${OUTPUT_BINARY}"
 
 (

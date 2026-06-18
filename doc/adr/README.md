@@ -62,6 +62,9 @@ design decisions years after they were originally made.
 - [ADR-0022: FoldOps Rust Source In FoldingOS Monorepo](0022-foldops-rust-source-in-foldingos-monorepo.md) (proposed)
 - [ADR-0023: Runtime FoldOps And foldingosctl Updates Without OS Reimage](0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md) (proposed)
 - [ADR-0024: FoldOps Supervisor Fleet Mutation Authorization](0024-foldops-supervisor-fleet-mutation-authorization.md) (proposed)
+- [ADR-0025: Implement foldingosctl In Rust](0025-implement-foldingosctl-in-rust.md) (proposed)
+- [ADR-0026: FoldOps Dashboard Operator Authentication](0026-foldops-dashboard-operator-authentication.md) (proposed)
+- [ADR-0027: FoldOps Remote Operator API](0027-foldops-remote-operator-api.md) (proposed)
 
 ---
 

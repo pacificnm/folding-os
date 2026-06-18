@@ -1,0 +1,30 @@
+[package]
+name = "users"
+description = "Library for accessing Unix users and groups"
+
+authors = ["Benjamin Sago <ogham@bsago.me>"]
+documentation = "https://docs.rs/users/"
+exclude = ["/.rustfmt.toml", "/.travis.yml"]
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/ogham/rust-users"
+version = "0.11.0"
+
+[features]
+default = ["cache", "mock", "logging"]
+cache = []
+mock = []
+logging = ["log"]
+
+[dependencies.libc]
+version = "0.2"
+
+[dependencies.log]
+version = "0.4"
+optional = true
+default_features = false
+
+[dev_dependencies.env_logger]
+version = "0.7"
+default_features = false
+features = []

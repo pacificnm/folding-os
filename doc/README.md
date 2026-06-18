@@ -30,7 +30,9 @@ This index groups the project's documentation by purpose.
 - [Security model](security.md) - runtime security architecture
 - [FoldOps integration](foldops-integration.md) - fleet-management relationship;
   Rust source in `packages/foldops/` per
-  [ADR-0022](adr/0022-foldops-rust-source-in-foldingos-monorepo.md)
+  [ADR-0022](adr/0022-foldops-rust-source-in-foldingos-monorepo.md);
+  `foldingosctl` migrates to Rust per
+  [ADR-0025](adr/0025-implement-foldingosctl-in-rust.md)
 
 ## Implementation Specifications
 

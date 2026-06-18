@@ -3,6 +3,7 @@ use std::path::PathBuf;
 #[derive(Debug, Clone)]
 pub struct Config {
     pub supervisor_url: String,
+    pub supervisor_tls_ca: Option<PathBuf>,
     pub agent_token: String,
     pub interval_ms: u64,
     pub fah_log_path: PathBuf,
@@ -36,6 +37,11 @@ impl Config {
         Ok(Self {
             supervisor_url: std::env::var("SUPERVISOR_URL")
                 .unwrap_or_else(|_| "http://localhost:3000".into()),
+            supervisor_tls_ca: std::env::var("SUPERVISOR_TLS_CA")
+                .ok()
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty())
+                .map(PathBuf::from),
             agent_token,
             interval_ms: std::env::var("INTERVAL_MS")
                 .ok()

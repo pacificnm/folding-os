@@ -69,6 +69,12 @@ Milestone 4 adds:
   and selected configuration actions
 - supervisor fleet mutation authorization for the `foldops` service user per
   [ADR-0024](../adr/0024-foldops-supervisor-fleet-mutation-authorization.md)
+- `foldingosctl` reimplementation in Rust per
+  [ADR-0025](../adr/0025-implement-foldingosctl-in-rust.md) (issue #101)
+- dashboard operator authentication and first-boot bootstrap per
+  [ADR-0026](../adr/0026-foldops-dashboard-operator-authentication.md)
+- remote operator API model (supervisor gateway and agent proxy) per
+  [ADR-0027](../adr/0027-foldops-remote-operator-api.md)
 - Rust FoldOps source in `packages/foldops/` per
   [ADR-0022](../adr/0022-foldops-rust-source-in-foldingos-monorepo.md)
 - runtime FoldOps and `foldingosctl` updates without OS reimage per
@@ -128,8 +134,11 @@ Milestone 4 is complete when:
    desired image, FoldOps, and tools versions through `foldingosctl`
 4. At least one remote configuration workflow uses `foldingosctl config activate`
    through an approved FoldOps action path
-5. QEMU and physical validation records are committed
-6. [4-readiness-review.md](4-readiness-review.md) is committed after all
+5. Dashboard operator authentication and remote operator API protect supervisor
+   management paths per ADR-0026 and ADR-0027
+6. `foldingosctl` is implemented in Rust and the Go tree is removed per ADR-0025
+7. QEMU and physical validation records are committed
+8. [4-readiness-review.md](4-readiness-review.md) is committed after all
    release-blocking issues close
 
 ---
@@ -144,9 +153,11 @@ High-level phases:
 2. Machine-readable CLI foundation
 3. FoldOps agent delegation on agents
 4. FoldOps supervisor local fleet commands
-5. Dashboard operator workflows
-6. Remote configuration workflow
-7. Validation and readiness review
+5. Dashboard operator authentication and first-run bootstrap
+6. Dashboard operator workflows and remote operator API routes
+7. `foldingosctl` Rust migration (issue #101)
+8. Remote configuration workflow
+9. Validation and readiness review
 
 ---
 
@@ -161,4 +172,7 @@ High-level phases:
 - [ADR-0022](../adr/0022-foldops-rust-source-in-foldingos-monorepo.md)
 - [ADR-0023](../adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md)
 - [ADR-0024](../adr/0024-foldops-supervisor-fleet-mutation-authorization.md)
+- [ADR-0025](../adr/0025-implement-foldingosctl-in-rust.md)
+- [ADR-0026](../adr/0026-foldops-dashboard-operator-authentication.md)
+- [ADR-0027](../adr/0027-foldops-remote-operator-api.md)
 - [Roadmap](../../ROADMAP.md)

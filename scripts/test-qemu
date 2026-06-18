@@ -686,13 +686,19 @@ do
 done
 BUILT_FOLDINGOSCTL="${TEST_DIR}/foldingosctl-under-test"
 tar -xOf "${ROOTFS_TAR}" ./usr/bin/foldingosctl >"${BUILT_FOLDINGOSCTL}"
-if ! grep -aFq "Force-checked %s before data expansion." "${BUILT_FOLDINGOSCTL}"; then
+if ! grep -aFq "before data expansion." "${BUILT_FOLDINGOSCTL}"; then
   echo "ERROR: Release artifacts contain a stale foldingosctl binary." >&2
   echo "Rebuild FoldingOS before running QEMU tests." >&2
   exit 1
 fi
 if ! grep -aFq ".ssh_host_ed25519_key.tmp-" "${BUILT_FOLDINGOSCTL}"; then
   echo "ERROR: Release artifacts contain stale SSH-provisioning behavior." >&2
+  echo "Rebuild FoldingOS before running QEMU tests." >&2
+  exit 1
+fi
+if ! grep -aFq "FOLDINGOSCTL_RUST_COMPLETE" "${BUILT_FOLDINGOSCTL}"; then
+  echo "ERROR: Release artifacts contain a stale foldingosctl binary." >&2
+  echo "Expected Rust migration complete marker was not found." >&2
   echo "Rebuild FoldingOS before running QEMU tests." >&2
   exit 1
 fi

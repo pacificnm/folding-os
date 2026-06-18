@@ -1,32 +1,35 @@
-schema_version = 1
+schema_version = 2
 manifest_release = "0.1.0-1"
 architecture = "x86_64"
-artifact_format = "deb"
+artifact_format = "layout-tar-zst"
 minimum_foldingos_version = "0.1.0"
 
 [[packages]]
 name = "foldops-agent"
-version = "0.1.0-1"
+version = "0.1.0"
 roles = ["agent", "supervisor"]
-artifact_url = "https://deb.folding-os.com/pool/main/f/foldops-agent/foldops-agent_0.1.0-1_amd64.deb"
-artifact_size = 3127044
-sha256 = "9022c393630e11d5cec5794ac77281671c7b0d634d630c92d95ad6de22d2151a"
+install_prefix = "foldops-agent"
+artifact_url = "https://packages.folding-os.com/foldops/0.1.0-1/foldops-agent-x86_64.tar.zst"
+artifact_size = 3773238
+sha256 = "7302f0dd648c999c00dd8820a56aae33f20b72928b68a8bad60c4769c6d03ae8"
 verification_path = "/data/apps/foldops/current/foldops-agent/usr/bin/foldops-agent"
 
 [[packages]]
 name = "foldops-supervisor"
-version = "0.1.0-1"
+version = "0.1.0"
 roles = ["supervisor"]
-artifact_url = "https://deb.folding-os.com/pool/main/f/foldops-supervisor/foldops-supervisor_0.1.0-1_amd64.deb"
-artifact_size = 3111920
-sha256 = "a8b91ec03803259ade0bc3595218d74408390f6ac4e0f077cc47ba85edaaa8d5"
+install_prefix = "foldops-supervisor"
+artifact_url = "https://packages.folding-os.com/foldops/0.1.0-1/foldops-supervisor-x86_64.tar.zst"
+artifact_size = 3793258
+sha256 = "2d5d6ba467d9350ea4d186c63d9fa22b4734a6823e95fe434fb587eb13b8a1d7"
 verification_path = "/data/apps/foldops/current/foldops-supervisor/usr/bin/foldops-supervisor"
 
 [[packages]]
 name = "foldops-web"
 version = "0.1.0"
 roles = ["supervisor"]
-artifact_url = "https://deb.folding-os.com/pool/main/f/foldops-web/foldops-web_0.1.0_all.deb"
-artifact_size = 174466
-sha256 = "e560956f0aa6f77677af9bbac464a71ebcf0ff1da19877070f6f8dc05f738ecf"
+install_prefix = "foldops-web"
+artifact_url = "https://packages.folding-os.com/foldops/0.1.0-1/foldops-web-x86_64.tar.zst"
+artifact_size = 173970
+sha256 = "04544ea16d31f1042b663d07c3e7cff506668a87d1a2997680b57f4b619fe37d"
 verification_path = "/data/apps/foldops/current/foldops-web/usr/share/foldops/web/index.html"
