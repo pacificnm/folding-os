@@ -8,6 +8,7 @@ ConditionPathExists=/data/apps/foldops/current
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/foldingosctl foldops provision
+ExecStopPost=-/usr/bin/foldingosctl boot refresh
 RemainAfterExit=yes
 
 [Install]

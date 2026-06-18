@@ -78,6 +78,23 @@ pub fn require_agent_automation_mutation(
     authorize_automation_policy(&policy, "agent", command_group, command_name)
 }
 
+pub fn require_acquire_automation_mutation(
+    paths: &AppliancePaths,
+    command_group: &str,
+) -> Result<(), String> {
+    if !is_foldops_automation_user() {
+        return Ok(());
+    }
+    let role = read_active_installation_role(paths)?;
+    match role.as_str() {
+        "agent" => require_agent_automation_mutation(paths, command_group, "acquire"),
+        "supervisor" => require_supervisor_automation_mutation(paths, command_group, "acquire"),
+        other => Err(format!(
+            "operation requires agent or supervisor role, found \"{other}\""
+        )),
+    }
+}
+
 fn authorize_automation_policy(
     policy: &AutomationPolicy,
     expected_role: &str,

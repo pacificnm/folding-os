@@ -6,7 +6,7 @@ use serde_json::Value;
 const DEFAULT_FOLDINGOSCTL_PATH: &str = "/usr/bin/foldingosctl";
 const DEFAULT_INSTALLATION_ROLE_PATH: &str = "/data/config/installation-role";
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct FleetDelegateConfig<'a> {
     pub foldingosctl_path: &'a Path,
 }
@@ -181,6 +181,18 @@ pub async fn inspect_tools(
     config: FleetDelegateConfig<'_>,
 ) -> Result<Value, FleetCommandError> {
     run_automation(config.foldingosctl_path, &["inspect", "tools"]).await
+}
+
+pub async fn foldops_acquire(
+    config: FleetDelegateConfig<'_>,
+) -> Result<Value, FleetCommandError> {
+    run_automation(config.foldingosctl_path, &["foldops", "acquire"]).await
+}
+
+pub async fn tools_acquire(
+    config: FleetDelegateConfig<'_>,
+) -> Result<Value, FleetCommandError> {
+    run_automation(config.foldingosctl_path, &["tools", "acquire"]).await
 }
 
 pub async fn list_allow_boot(

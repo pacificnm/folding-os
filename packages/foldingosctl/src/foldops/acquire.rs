@@ -2,10 +2,12 @@ use std::fs::{self, File};
 use std::io::{Read, Write};
 
 use sha2::{Digest, Sha256};
+use crate::automation_policy::require_acquire_automation_mutation;
 use crate::foldops::acquire_state::{
     clear_foldops_acquire_state, defer_foldops_acquisition_attempt, record_foldops_acquisition_failure,
 };
 use crate::foldops::activate::{foldops_activate, write_foldops_verified_marker};
+use crate::boot_cmd::refresh_commissioning_display;
 use crate::foldops::extract::{
     extract_foldops_deb_data, extract_foldops_layout_bundle, verify_foldops_artifact_file,
 };
@@ -19,57 +21,108 @@ use crate::foldops_manifest::{foldops_packages_for_role, FoldOpsPackage};
 use crate::paths::AppliancePaths;
 use crate::process::{command_output, run_command};
 
-pub fn foldops_acquire(paths: &AppliancePaths) -> Result<(), String> {
+pub fn foldops_acquire(paths: &AppliancePaths) -> Result<serde_json::Value, String> {
+    require_acquire_automation_mutation(paths, "foldops")?;
+
     let manifest = resolve_effective_foldops_manifest(paths)?;
     validate_foldingos_compatibility(&manifest.minimum_foldingos_version)?;
     let role = crate::role::read_active_installation_role(paths)?;
     let packages = foldops_packages_for_role(&manifest, &role)?;
-    if has_verified_active_release(paths, &manifest.manifest_release, &role, &packages)? {
+    let package_names: Vec<String> = packages.iter().map(|pkg| pkg.name.clone()).collect();
+    let manifest_release = manifest.manifest_release.clone();
+
+    if has_verified_active_release(paths, &manifest_release, &role, &packages)? {
         clear_foldops_acquire_state(paths)?;
-        println!(
-            "Verified FoldOps release {} is already active for role {role}; acquisition not required.",
-            manifest.manifest_release
+        let result = foldops_acquire_result(
+            &manifest_release,
+            &package_names,
+            true,
+            false,
+            false,
+            &format!(
+                "Verified FoldOps release {manifest_release} is already active for role {role}; acquisition not required."
+            ),
         );
-        return start_foldops_provision_service();
+        refresh_commissioning_display(paths);
+        if let Err(error) = start_foldops_provision_service() {
+            return Err(error);
+        }
+        return Ok(result);
     }
 
     let state = crate::foldops::acquire_state::load_foldops_acquire_state(paths)?;
     if let (true, remaining) = defer_foldops_acquisition_attempt(&state)? {
         let next_attempt = chrono_like_rfc3339(state.next_attempt_unix);
-        println!(
-            "FoldOps acquisition deferred for {}s (next attempt at {next_attempt}).",
-            remaining.as_secs()
-        );
-        return Ok(());
+        return Ok(foldops_acquire_result(
+            &manifest_release,
+            &package_names,
+            false,
+            false,
+            true,
+            &format!(
+                "FoldOps acquisition deferred for {}s (next attempt at {next_attempt}).",
+                remaining.as_secs()
+            ),
+        ));
     }
 
     if let Err(error) = require_foldops_acquisition_prerequisites() {
-        return record_foldops_acquisition_failure(paths, &error);
+        record_foldops_acquisition_failure(paths, &error)?;
     }
     if let Err(error) = download_and_stage_foldops_packages(paths, &manifest.artifact_format, &packages) {
-        return record_foldops_acquisition_failure(paths, &error);
+        record_foldops_acquisition_failure(paths, &error)?;
     }
-    let release_dir = match extract_and_install_foldops_packages(
+    let release_dir = extract_and_install_foldops_packages(
         paths,
-        &manifest.manifest_release,
+        &manifest_release,
         &manifest.artifact_format,
         &packages,
         &role,
-    ) {
-        Ok(release_dir) => release_dir,
-        Err(error) => return record_foldops_acquisition_failure(paths, &error),
-    };
-    println!(
-        "Installed and verified FoldOps release {} at {}.",
-        manifest.manifest_release,
-        release_dir.display()
-    );
+    )
+    .map_err(|error| {
+        record_foldops_acquisition_failure(paths, &error).unwrap_err();
+        error
+    })?;
 
-    if let Err(error) = foldops_activate(paths, &manifest.manifest_release) {
-        return record_foldops_acquisition_failure(paths, &error);
+    if let Err(error) = foldops_activate(paths, &manifest_release) {
+        record_foldops_acquisition_failure(paths, &error)?;
     }
     clear_foldops_acquire_state(paths)?;
-    start_foldops_provision_service()
+    if let Err(error) = start_foldops_provision_service() {
+        return Err(error);
+    }
+    refresh_commissioning_display(paths);
+
+    Ok(foldops_acquire_result(
+        &manifest_release,
+        &package_names,
+        true,
+        true,
+        false,
+        &format!(
+            "Installed and verified FoldOps release {manifest_release} at {}.",
+            release_dir.display()
+        ),
+    ))
+}
+
+fn foldops_acquire_result(
+    manifest_release: &str,
+    packages: &[String],
+    activated: bool,
+    acquired: bool,
+    deferred: bool,
+    message: &str,
+) -> serde_json::Value {
+    serde_json::json!({
+        "manifest_release": manifest_release,
+        "activated": activated,
+        "packages": packages,
+        "acquired": acquired,
+        "already_active": activated && !acquired && !deferred,
+        "deferred": deferred,
+        "message": message,
+    })
 }
 
 fn chrono_like_rfc3339(unix: i64) -> String {

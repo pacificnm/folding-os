@@ -14,7 +14,7 @@ use tokio::net::TcpListener;
 
 use crate::config::Config;
 use crate::fah::get_newest_work_log_path;
-use crate::foldingos::{activate_foldinghome_config, write_foldinghome_candidate, AutomationCommandError};
+use crate::foldingos::{activate_foldinghome_config, foldops_acquire, tools_acquire, try_restart_systemd_unit, write_foldinghome_candidate, AutomationCommandError, FOLDOPS_AGENT_UNIT};
 use crate::log_tail::read_log_tail_default;
 use crate::node_control::{
     execute_control_action, get_control_status, schedule_agent_self_restart, ControlContext,
@@ -65,6 +65,8 @@ pub async fn start_agent_http(config: Arc<Config>) {
         .route("/config/foldinghome", post(foldinghome_config))
         .route("/inspect/foldops", get(inspect_foldops))
         .route("/inspect/tools", get(inspect_tools))
+        .route("/software/foldops-acquire", post(software_foldops_acquire))
+        .route("/software/tools-acquire", post(software_tools_acquire))
         .route("/update", post(update_agent))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
@@ -293,6 +295,98 @@ async fn inspect_tools(State(state): State<AppState>) -> Response {
 
     match crate::foldingos::inspect_subcommand(&state.config.foldingosctl_path, "tools").await {
         Ok(data) => Json(serde_json::json!({ "data": data })).into_response(),
+        Err(error) => json_error(StatusCode::BAD_GATEWAY, &error.to_string()),
+    }
+}
+
+#[derive(Serialize)]
+struct SoftwareAcquireResponse {
+    ok: bool,
+    data: serde_json::Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    restarted: Option<bool>,
+}
+
+async fn software_foldops_acquire(State(state): State<AppState>) -> Response {
+    if !state.config.uses_foldingos_delegation() {
+        return json_error(
+            StatusCode::FORBIDDEN,
+            "FoldingOS delegation not enabled on this agent",
+        );
+    }
+
+    match foldops_acquire(&state.config.foldingosctl_path).await {
+        Ok(data) => {
+            let acquired = data.get("acquired").and_then(|value| value.as_bool()) == Some(true);
+            let restarted = if acquired {
+                match try_restart_systemd_unit(FOLDOPS_AGENT_UNIT).await {
+                    Ok(()) => Some(true),
+                    Err(error) => {
+                        tracing::error!(error = %error, "foldops acquire succeeded but agent restart failed");
+                        Some(false)
+                    }
+                }
+            } else {
+                None
+            };
+            Json(SoftwareAcquireResponse {
+                ok: true,
+                data,
+                restarted,
+            })
+            .into_response()
+        }
+        Err(AutomationCommandError::CommandRejected { command, code, message }) => (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": message,
+                "code": code,
+                "command": command,
+            })),
+        )
+            .into_response(),
+        Err(error) => json_error(StatusCode::BAD_GATEWAY, &error.to_string()),
+    }
+}
+
+async fn software_tools_acquire(State(state): State<AppState>) -> Response {
+    if !state.config.uses_foldingos_delegation() {
+        return json_error(
+            StatusCode::FORBIDDEN,
+            "FoldingOS delegation not enabled on this agent",
+        );
+    }
+
+    match tools_acquire(&state.config.foldingosctl_path).await {
+        Ok(data) => {
+            let acquired = data.get("acquired").and_then(|value| value.as_bool()) == Some(true);
+            let restarted = if acquired {
+                match try_restart_systemd_unit(FOLDOPS_AGENT_UNIT).await {
+                    Ok(()) => Some(true),
+                    Err(error) => {
+                        tracing::error!(error = %error, "tools acquire succeeded but agent restart failed");
+                        Some(false)
+                    }
+                }
+            } else {
+                None
+            };
+            Json(SoftwareAcquireResponse {
+                ok: true,
+                data,
+                restarted,
+            })
+            .into_response()
+        }
+        Err(AutomationCommandError::CommandRejected { command, code, message }) => (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": message,
+                "code": code,
+                "command": command,
+            })),
+        )
+            .into_response(),
         Err(error) => json_error(StatusCode::BAD_GATEWAY, &error.to_string()),
     }
 }

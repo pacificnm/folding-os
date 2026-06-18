@@ -2,7 +2,7 @@ use crate::automation::{
     format_automation_command, write_failure, write_success, AutomationContext, MIGRATION_MARKER,
     OutputFormat,
 };
-use crate::boot_cmd::boot_status;
+use crate::boot_cmd::{self, boot_status};
 use crate::config_cmd::{self, ConfigCommandOutput};
 use crate::fah;
 use crate::foldops;
@@ -146,14 +146,42 @@ pub fn dispatch(mut args: Vec<String>) -> Result<(), CliError> {
         return boot_status(&paths).map_err(CliError::Failed);
     }
 
-    if args[0] == "fah" || args[0] == "foldops" || args[0] == "tools" {
+    if args.len() == 2 && args[0] == "boot" && args[1] == "refresh" {
+        return boot_cmd::boot_refresh(&paths).map_err(CliError::Failed);
+    }
+
+    if args[0] == "fah" {
         if args.len() < 2 {
             return Err(CliError::Usage);
         }
         let subcommand = args[1].clone();
         let extra = args[2..].to_vec();
-        return match args[0].as_str() {
-            "fah" => fah::run(&paths, &subcommand, &extra).map_err(CliError::Failed),
+        return fah::run(&paths, &subcommand, &extra).map_err(CliError::Failed);
+    }
+
+    if args[0] == "foldops" || args[0] == "tools" {
+        if args.len() < 2 {
+            return Err(CliError::Usage);
+        }
+        let group = args[0].as_str();
+        let subcommand = args[1].clone();
+        let extra = args[2..].to_vec();
+        if subcommand == "acquire" {
+            if !extra.is_empty() {
+                return Err(CliError::Failed(format!("unknown {group} option {:?}", extra[0])));
+            }
+            let command = format_automation_command(&[group, "acquire"]);
+            let ctx = AutomationContext::new(format, command);
+            return match if group == "foldops" {
+                foldops::acquire_json(&paths)
+            } else {
+                tools::acquire_json(&paths)
+            } {
+                Ok(data) => publish_success(&ctx, data, &subcommand),
+                Err(message) => publish_failure(&ctx, message),
+            };
+        }
+        return match group {
             "foldops" => foldops::run(&paths, &subcommand, &extra).map_err(CliError::Failed),
             "tools" => tools::run(&paths, &subcommand, &extra).map_err(CliError::Failed),
             _ => Err(CliError::Usage),

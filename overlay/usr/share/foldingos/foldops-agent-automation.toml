@@ -8,3 +8,11 @@ installation_role = "agent"
 [[commands]]
 group = "config"
 name = "activate"
+
+[[commands]]
+group = "foldops"
+name = "acquire"
+
+[[commands]]
+group = "tools"
+name = "acquire"

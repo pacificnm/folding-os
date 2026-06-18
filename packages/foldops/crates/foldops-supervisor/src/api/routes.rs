@@ -24,7 +24,7 @@ use crate::deploy::db::{get_deploy_run, list_deploy_runs};
 use crate::deploy::start_agent_deploy;
 use crate::fah_projects::fetch_fah_project;
 use crate::foldingos::{self, AllowBootRequest, AssignRequest, FleetCommandError, FleetDelegateConfig};
-use crate::software::{self, SoftwareService};
+use crate::software::{self, apply_local, fleet_apply_foldops, fleet_apply_tools, ApplyLocalRequest, FleetSoftwareApplyRequest, SoftwareService};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -59,7 +59,10 @@ pub fn router(state: AppState) -> Router {
         .route("/fleet/registry", get(fleet_registry))
         .route("/fleet/registry/{version}", get(fleet_registry_show))
         .route("/fleet/assign", post(fleet_assign))
+        .route("/fleet/software/apply-foldops", post(fleet_software_apply_foldops))
+        .route("/fleet/software/apply-tools", post(fleet_software_apply_tools))
         .route("/software/updates", get(software_updates))
+        .route("/software/apply-local", post(software_apply_local))
         .with_state(state)
 }
 
@@ -1059,6 +1062,48 @@ async fn software_updates(
             Json(json!({ "error": error.to_string() })),
         )
             .into_response(),
+    }
+}
+
+async fn fleet_software_apply_foldops(
+    State(state): State<AppState>,
+    Json(body): Json<FleetSoftwareApplyRequest>,
+) -> Response {
+    if !state.config.uses_supervisor_fleet_delegation() {
+        return fleet_delegation_unavailable();
+    }
+
+    match fleet_apply_foldops(&state.db, &state.config, body).await {
+        Ok(body) => Json(body).into_response(),
+        Err(error) => (StatusCode::BAD_REQUEST, Json(json!({ "error": error }))).into_response(),
+    }
+}
+
+async fn fleet_software_apply_tools(
+    State(state): State<AppState>,
+    Json(body): Json<FleetSoftwareApplyRequest>,
+) -> Response {
+    if !state.config.uses_supervisor_fleet_delegation() {
+        return fleet_delegation_unavailable();
+    }
+
+    match fleet_apply_tools(&state.db, &state.config, body).await {
+        Ok(body) => Json(body).into_response(),
+        Err(error) => (StatusCode::BAD_REQUEST, Json(json!({ "error": error }))).into_response(),
+    }
+}
+
+async fn software_apply_local(
+    State(state): State<AppState>,
+    Json(body): Json<ApplyLocalRequest>,
+) -> Response {
+    if !state.config.uses_supervisor_fleet_delegation() {
+        return fleet_delegation_unavailable();
+    }
+
+    match apply_local(&state.config, body).await {
+        Ok(body) => Json(body).into_response(),
+        Err(error) => (StatusCode::BAD_REQUEST, Json(json!({ "error": error }))).into_response(),
     }
 }
 

@@ -7,4 +7,5 @@ ConditionPathExists=/data/config/installation-role
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/foldingosctl foldops acquire
+ExecStopPost=-/usr/bin/foldingosctl boot refresh
 RemainAfterExit=no
