@@ -3,18 +3,6 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-const VALID_FOLDINGHOME_CANDIDATE: &str = r#"schema_version = 1
-
-[identity]
-username = "Test User"
-team = 0
-passkey_secret = ""
-
-[resources]
-cpus = 0
-gpus = false
-"#;
-
 pub fn build_foldinghome_candidate_toml(
     username: &str,
     team: i64,
@@ -127,6 +115,18 @@ pub fn write_supervisor_candidate(content: &str) -> Result<PathBuf, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const VALID_FOLDINGHOME_CANDIDATE: &str = r#"schema_version = 1
+
+[identity]
+username = "Test User"
+team = 0
+passkey_secret = ""
+
+[resources]
+cpus = 0
+gpus = false
+"#;
 
     #[test]
     fn build_foldinghome_candidate_toml_quotes_strings() {

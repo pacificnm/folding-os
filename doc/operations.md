@@ -522,6 +522,79 @@ foldingosctl inspect tools --format json
 
 See [ADR-0023](adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md).
 
+## Packages channel publication (Milestone 5)
+
+FoldOps layout bundles and `foldingosctl` tools binaries publish to
+`packages.folding-os.com` using **rclone** from the build host. OS disk images
+continue to publish through `releases.folding-os.com` separately.
+
+### Prerequisites
+
+- `rclone` installed on the build host
+- R2 remote configured at `~/.config/rclone/rclone.conf` (default remote name
+  `r2`, overridable via `R2_REMOTE`)
+- Build outputs under `build/output/foldops/<manifest_release>/` and/or
+  `build/output/foldingos-tools/<version>/`
+
+Default destination environment variables (override when needed):
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `R2_REMOTE` | `r2` | rclone remote name |
+| `FOLDOPS_R2_BUCKET` | `foldops-packages` | destination bucket |
+| `FOLDOPS_R2_PREFIX` | `foldops` | FoldOps object prefix |
+| `TOOLS_R2_PREFIX` | `foldingos-tools` | tools object prefix |
+| `PACKAGES_PUBLIC_BASE` | `https://packages.folding-os.com` | public URL base |
+
+Scripts do **not** embed credentials. Credentials live only in the operator rclone
+config file per [ADR-0029](adr/0029-packages-channel-publication-via-rclone.md).
+
+### Build and publish
+
+Build only:
+
+```bash
+./scripts/build-foldops-bundles --manifest-release 0.1.0-2
+./scripts/build-foldingosctl-release --version 0.1.1
+```
+
+Publish one channel:
+
+```bash
+./scripts/publish-foldops-bundles 0.1.0-2
+./scripts/publish-foldingos-tools 0.1.1
+```
+
+Build and publish both channels (umbrella script):
+
+```bash
+./scripts/publish-packages-release --foldops 0.1.0-2 --tools 0.1.1 --build
+```
+
+Dry-run (list planned uploads and index updates without writing objects):
+
+```bash
+./scripts/publish-packages-release --foldops 0.1.0-2 --tools 0.1.1 --dry-run
+```
+
+Each publication refreshes the channel **`index.json`** at:
+
+- `https://packages.folding-os.com/foldops/index.json`
+- `https://packages.folding-os.com/foldingos-tools/index.json`
+
+Supervisor “check for updates” reads these indexes per
+[ADR-0028](adr/0028-supervisor-fleet-software-update-workflow.md).
+
+Publishing a new FoldOps release does **not** require an immediate OS image rebuild.
+The embedded bootstrap manifest in the OS image remains the floor; supervisor
+assignment overrides the floor on running nodes per
+[ADR-0023](adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md).
+
+References:
+
+- [ADR-0029](adr/0029-packages-channel-publication-via-rclone.md)
+- [Milestone 5 engineering spec](milestone/5-engineering-spec.md)
+
 ---
 
 # Diagnostics

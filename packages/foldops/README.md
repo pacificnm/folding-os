@@ -58,6 +58,8 @@ cd packages/foldops && cargo test --workspace
 
 # Upload to packages.folding-os.com (when rclone is configured)
 ./scripts/publish-foldops-bundles 0.1.0-1
+./scripts/publish-foldingos-tools 0.1.1
+./scripts/publish-packages-release --foldops 0.1.0-1 --tools 0.1.1 --build
 ```
 
 The OS image build (`./scripts/build`) does **not** compile FoldOps. The embedded
