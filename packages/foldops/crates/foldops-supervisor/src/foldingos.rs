@@ -165,6 +165,24 @@ pub async fn list_enrollments(
     Ok(serde_json::from_value(enrollments)?)
 }
 
+pub async fn inspect_node(
+    config: FleetDelegateConfig<'_>,
+) -> Result<Value, FleetCommandError> {
+    run_automation(config.foldingosctl_path, &["inspect", "node"]).await
+}
+
+pub async fn inspect_foldops(
+    config: FleetDelegateConfig<'_>,
+) -> Result<Value, FleetCommandError> {
+    run_automation(config.foldingosctl_path, &["inspect", "foldops"]).await
+}
+
+pub async fn inspect_tools(
+    config: FleetDelegateConfig<'_>,
+) -> Result<Value, FleetCommandError> {
+    run_automation(config.foldingosctl_path, &["inspect", "tools"]).await
+}
+
 pub async fn list_allow_boot(
     config: FleetDelegateConfig<'_>,
 ) -> Result<Vec<AllowBootDevice>, FleetCommandError> {

@@ -24,11 +24,13 @@ use crate::deploy::db::{get_deploy_run, list_deploy_runs};
 use crate::deploy::start_agent_deploy;
 use crate::fah_projects::fetch_fah_project;
 use crate::foldingos::{self, AllowBootRequest, AssignRequest, FleetCommandError, FleetDelegateConfig};
+use crate::software::{self, SoftwareService};
 
 #[derive(Clone)]
 pub struct AppState {
     pub db: Arc<Db>,
     pub config: Arc<Config>,
+    pub software: Arc<SoftwareService>,
 }
 
 pub fn router(state: AppState) -> Router {
@@ -57,6 +59,7 @@ pub fn router(state: AppState) -> Router {
         .route("/fleet/registry", get(fleet_registry))
         .route("/fleet/registry/{version}", get(fleet_registry_show))
         .route("/fleet/assign", post(fleet_assign))
+        .route("/software/updates", get(software_updates))
         .with_state(state)
 }
 
@@ -1025,6 +1028,37 @@ fn empty_as_null(value: &str) -> Value {
         Value::Null
     } else {
         Value::String(value.to_string())
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct SoftwareUpdatesQuery {
+    refresh: Option<bool>,
+}
+
+async fn software_updates(
+    State(state): State<AppState>,
+    Query(query): Query<SoftwareUpdatesQuery>,
+) -> Response {
+    if !state.config.uses_supervisor_fleet_delegation() {
+        return fleet_delegation_unavailable();
+    }
+
+    let refresh = query.refresh.unwrap_or(false);
+    match software::build_updates_response(
+        &state.db,
+        &state.config,
+        &state.software,
+        refresh,
+    )
+    .await
+    {
+        Ok(body) => Json(body).into_response(),
+        Err(error) => (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({ "error": error.to_string() })),
+        )
+            .into_response(),
     }
 }
 

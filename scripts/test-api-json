@@ -76,6 +76,12 @@ HTTP_CASES: tuple[HttpCase, ...] = (
         validate.validate_fleet_registry_show,
         dynamic=True,
     ),
+    HttpCase(
+        "GET /software/updates",
+        "GET",
+        "/software/updates",
+        validate.validate_software_updates,
+    ),
 )
 
 FOLDINGOSCTL_CASES: tuple[FoldingosctlCase, ...] = (

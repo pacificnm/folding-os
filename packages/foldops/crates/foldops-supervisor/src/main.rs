@@ -6,6 +6,7 @@ mod db;
 mod deploy;
 mod fah_projects;
 mod foldingos;
+mod software;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -17,6 +18,7 @@ use tower_http::services::{ServeDir, ServeFile};
 use api::{router as api_router, spawn_alert_eval, AppState};
 use config::Config;
 use db::Db;
+use software::software_service;
 
 #[tokio::main]
 async fn main() {
@@ -48,6 +50,7 @@ async fn main() {
     let state = AppState {
         db: db.clone(),
         config: config.clone(),
+        software: software_service(),
     };
 
     let web_root = config.web_root.clone();
