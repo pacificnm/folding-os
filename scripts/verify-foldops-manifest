@@ -17,7 +17,8 @@ ROOTFS_MANIFEST = "usr/share/foldingos/manifests/foldops.toml"
 ROOTFS_KEYRING = "usr/share/keyrings/foldops.gpg"
 PLACEHOLDER = "REQUIRED_BEFORE_RELEASE"
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
-APPROVED_ORIGIN = "deb.folding-os.com"
+APPROVED_PACKAGES_ORIGIN = "packages.folding-os.com"
+APPROVED_DEB_ORIGIN = "deb.folding-os.com"
 REQUIRED_PACKAGES = {
     "foldops-agent": {"agent", "supervisor"},
     "foldops-supervisor": {"supervisor"},
@@ -61,7 +62,26 @@ def validate_roles(package_name, roles):
         )
 
 
-def validate_package(package):
+def approved_origin(artifact_format):
+    if artifact_format == "layout-tar-zst":
+        return APPROVED_PACKAGES_ORIGIN
+    if artifact_format == "deb":
+        return APPROVED_DEB_ORIGIN
+    fail(f"unsupported artifact_format: {artifact_format}")
+
+
+def validate_artifact_url_path(artifact_format, path, package_name):
+    if artifact_format == "deb":
+        if f"/{package_name}/" not in path and not path.endswith(f"{package_name}_"):
+            fail(f"package {package_name} artifact_url must reference the {package_name} pool artifact")
+    elif artifact_format == "layout-tar-zst":
+        if package_name not in path:
+            fail(f"package {package_name} artifact_url must reference the {package_name} layout bundle")
+    else:
+        fail(f"unsupported artifact_format: {artifact_format}")
+
+
+def validate_package(package, artifact_format):
     if not isinstance(package, dict):
         fail("each packages entry must be a table")
 
@@ -88,15 +108,15 @@ def validate_package(package):
 
     artifact_url = package["artifact_url"]
     parsed = urlparse(artifact_url)
-    if parsed.scheme != "https" or parsed.netloc != APPROVED_ORIGIN:
+    expected_origin = approved_origin(artifact_format)
+    if parsed.scheme != "https" or parsed.netloc != expected_origin:
         fail(
             f"package {name} artifact_url must use HTTPS from the approved official "
-            f"origin: {APPROVED_ORIGIN}"
+            f"origin: {expected_origin}"
         )
     if parsed.path.endswith("/latest.deb") or parsed.path.endswith("latest.deb"):
         fail(f"package {name} artifact_url must not reference an unpinned latest artifact")
-    if f"/{name}/" not in parsed.path and not parsed.path.endswith(f"{name}_"):
-        fail(f"package {name} artifact_url must reference the {name} pool artifact")
+    validate_artifact_url_path(artifact_format, parsed.path, name)
 
     verification_path = package["verification_path"]
     expected_prefix = f"/data/apps/foldops/current/{name}/"
@@ -104,6 +124,11 @@ def validate_package(package):
         fail(
             f"package {name} verification_path must remain under {expected_prefix}"
         )
+
+    if artifact_format == "layout-tar-zst":
+        install_prefix = package.get("install_prefix")
+        if not isinstance(install_prefix, str) or install_prefix != name:
+            fail(f"package {name} install_prefix must match package name")
 
     validate_roles(name, package.get("roles"))
 
@@ -120,12 +145,19 @@ def validate_manifest(manifest):
         if not isinstance(value, str) or not value.strip():
             fail(f"manifest field {field} must be a non-empty string")
 
-    if manifest.get("schema_version") != 1:
-        fail("manifest schema_version must be 1")
+    schema_version = manifest.get("schema_version")
+    artifact_format = manifest["artifact_format"]
+    if schema_version == 2:
+        if artifact_format != "layout-tar-zst":
+            fail("schema_version 2 manifests must use artifact_format layout-tar-zst")
+    elif schema_version == 1:
+        if artifact_format != "deb":
+            fail("schema_version 1 manifests must use artifact_format deb")
+    else:
+        fail("manifest schema_version must be 1 or 2")
+
     if manifest.get("architecture") != "x86_64":
         fail("manifest architecture must be x86_64")
-    if manifest.get("artifact_format") != "deb":
-        fail("manifest artifact_format must be deb")
     if manifest.get("minimum_foldingos_version") != "0.1.0":
         fail("manifest minimum_foldingos_version must be 0.1.0")
 
@@ -135,7 +167,7 @@ def validate_manifest(manifest):
 
     seen_names = set()
     for package in packages:
-        validate_package(package)
+        validate_package(package, artifact_format)
         name = package["name"]
         if name in seen_names:
             fail(f"duplicate package name in manifest: {name}")
@@ -144,6 +176,9 @@ def validate_manifest(manifest):
     missing = set(REQUIRED_PACKAGES) - seen_names
     if missing:
         fail(f"manifest is missing required packages: {', '.join(sorted(missing))}")
+
+    if schema_version == 2 and artifact_format == "layout-tar-zst":
+        approved_origin(artifact_format)
 
 
 def validate_keyring_bytes(data, label):
@@ -164,6 +199,10 @@ def read_overlay_manifest(path):
         fail(f"manifest does not exist: {path}")
     manifest = load_manifest_bytes(path.read_bytes())
     validate_manifest(manifest)
+    if manifest.get("schema_version") != 2:
+        fail("embedded appliance manifest must use schema_version 2")
+    if manifest.get("artifact_format") != "layout-tar-zst":
+        fail("embedded appliance manifest must use layout-tar-zst")
     return manifest
 
 

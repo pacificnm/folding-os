@@ -8,8 +8,9 @@
 #   manifest.toml
 #   SHA256SUMS
 #
-# Does not modify the OS image overlay manifest (Milestone 3 deb/schema v1).
-# foldingosctl layout-tar-zst acquire is implemented in issue #84.
+# Does not modify the OS image overlay manifest automatically.
+# After building, copy manifest.toml to overlay/usr/share/foldingos/manifests/foldops.toml
+# or run with --sync-overlay.
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -25,6 +26,7 @@ Build FoldOps layout bundles for packages.folding-os.com publication.
 Options:
   --manifest-release <id>   Manifest release directory name (default: <version>-1)
   --skip-web                Skip dashboard npm build (requires existing web/dist/)
+  --sync-overlay            Copy manifest.toml into overlay after build
   --dry-run                 Print planned actions without building bundles
   -h, --help                Show this help
 
@@ -46,6 +48,7 @@ require_command() {
 
 MANIFEST_RELEASE=""
 SKIP_WEB=0
+SYNC_OVERLAY=0
 DRY_RUN=0
 
 while [ "$#" -gt 0 ]; do
@@ -56,6 +59,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --skip-web)
       SKIP_WEB=1
+      shift
+      ;;
+    --sync-overlay)
+      SYNC_OVERLAY=1
       shift
       ;;
     --dry-run)
@@ -259,6 +266,12 @@ write_manifest \
 )
 
 rm -rf "${STAGING_ROOT}"
+
+if [ "${SYNC_OVERLAY}" -eq 1 ]; then
+  OVERLAY_MANIFEST="${PROJECT_ROOT}/overlay/usr/share/foldingos/manifests/foldops.toml"
+  install -D -m 0644 "${OUTPUT_DIR}/manifest.toml" "${OVERLAY_MANIFEST}"
+  echo "Synced overlay manifest: ${OVERLAY_MANIFEST}"
+fi
 
 echo ""
 echo "FoldOps layout bundles ready:"
