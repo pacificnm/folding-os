@@ -13,7 +13,8 @@ use crate::foldops::extract::{
 };
 use crate::foldops::provision::start_foldops_provision_service;
 use crate::foldops::util::{
-    foldops_downloads_dir, foldops_staged_artifact_path, remove_tree, resolve_effective_foldops_manifest,
+    embedded_bootstrap_cache_available, embedded_foldops_bundle_path, foldops_downloads_dir,
+    foldops_staged_artifact_path, remove_tree, resolve_effective_foldops_manifest,
     validate_foldingos_compatibility,
 };
 use crate::foldops::verify::{foldops_installation_verified, normalize_install_tree, verify_foldops_package_tree_at_root};
@@ -66,10 +67,22 @@ pub fn foldops_acquire(paths: &AppliancePaths) -> Result<serde_json::Value, Stri
         ));
     }
 
-    if let Err(error) = require_foldops_acquisition_prerequisites() {
+    if let Err(error) = require_foldops_acquisition_prerequisites(
+        paths,
+        &manifest_release,
+        &manifest.artifact_format,
+        &manifest.architecture,
+        &packages,
+    ) {
         record_foldops_acquisition_failure(paths, &error)?;
     }
-    if let Err(error) = download_and_stage_foldops_packages(paths, &manifest.artifact_format, &packages) {
+    if let Err(error) = download_and_stage_foldops_packages(
+        paths,
+        &manifest_release,
+        &manifest.artifact_format,
+        &manifest.architecture,
+        &packages,
+    ) {
         record_foldops_acquisition_failure(paths, &error)?;
     }
     let release_dir = extract_and_install_foldops_packages(
@@ -93,7 +106,7 @@ pub fn foldops_acquire(paths: &AppliancePaths) -> Result<serde_json::Value, Stri
     }
     refresh_commissioning_display(paths);
 
-    Ok(foldops_acquire_result(
+    let result = foldops_acquire_result(
         &manifest_release,
         &package_names,
         true,
@@ -103,7 +116,11 @@ pub fn foldops_acquire(paths: &AppliancePaths) -> Result<serde_json::Value, Stri
             "Installed and verified FoldOps release {manifest_release} at {}.",
             release_dir.display()
         ),
-    ))
+    );
+    if let Err(error) = crate::foldops::provision::restart_foldops_runtime_services(paths) {
+        return Err(error);
+    }
+    Ok(result)
 }
 
 fn foldops_acquire_result(
@@ -166,7 +183,22 @@ fn has_verified_active_release(
     foldops_installation_verified(paths, release, role, packages)
 }
 
-fn require_foldops_acquisition_prerequisites() -> Result<(), String> {
+fn require_foldops_acquisition_prerequisites(
+    paths: &AppliancePaths,
+    manifest_release: &str,
+    artifact_format: &str,
+    architecture: &str,
+    packages: &[FoldOpsPackage],
+) -> Result<(), String> {
+    if embedded_bootstrap_cache_available(
+        paths,
+        manifest_release,
+        artifact_format,
+        architecture,
+        packages,
+    ) {
+        return Ok(());
+    }
     if run_command("systemctl", &["is-active", "--quiet", "network-online.target"]).is_err() {
         return Err("network is not online".into());
     }
@@ -184,20 +216,30 @@ fn ntp_synchronized_from_timedatectl() -> Result<bool, String> {
 
 fn download_and_stage_foldops_packages(
     paths: &AppliancePaths,
+    manifest_release: &str,
     artifact_format: &str,
+    architecture: &str,
     packages: &[FoldOpsPackage],
 ) -> Result<(), String> {
     fs::create_dir_all(foldops_downloads_dir(paths))
         .map_err(|error| format!("create downloads directory: {error}"))?;
     for pkg in packages {
-        download_and_stage_foldops_package(paths, artifact_format, pkg)?;
+        download_and_stage_foldops_package(
+            paths,
+            manifest_release,
+            artifact_format,
+            architecture,
+            pkg,
+        )?;
     }
     Ok(())
 }
 
 fn download_and_stage_foldops_package(
     paths: &AppliancePaths,
+    manifest_release: &str,
     artifact_format: &str,
+    architecture: &str,
     pkg: &FoldOpsPackage,
 ) -> Result<(), String> {
     fs::create_dir_all(foldops_downloads_dir(paths))
@@ -215,7 +257,14 @@ fn download_and_stage_foldops_package(
             .map_err(|error| format!("remove stale staged artifact: {error}"))?;
     }
 
-    if let Err(error) = download_foldops_package(pkg, partial_path) {
+    if let Err(error) = stage_foldops_package(
+        paths,
+        manifest_release,
+        artifact_format,
+        architecture,
+        pkg,
+        partial_path,
+    ) {
         let _ = fs::remove_file(partial_path);
         return Err(error);
     }
@@ -234,6 +283,34 @@ fn download_and_stage_foldops_package(
         staged_path.display()
     );
     Ok(())
+}
+
+fn stage_foldops_package(
+    paths: &AppliancePaths,
+    manifest_release: &str,
+    _artifact_format: &str,
+    architecture: &str,
+    pkg: &FoldOpsPackage,
+    destination: &std::path::Path,
+) -> Result<(), String> {
+    let embedded = embedded_foldops_bundle_path(paths, manifest_release, architecture, pkg);
+    if embedded.is_file() {
+        verify_foldops_artifact_file(&embedded, pkg)?;
+        fs::copy(&embedded, destination).map_err(|error| {
+            format!(
+                "copy embedded {} artifact from {}: {error}",
+                pkg.name,
+                embedded.display()
+            )
+        })?;
+        println!(
+            "Using embedded bootstrap {} artifact from {}.",
+            pkg.name,
+            embedded.display()
+        );
+        return Ok(());
+    }
+    download_foldops_package(pkg, destination)
 }
 
 fn download_foldops_package(pkg: &FoldOpsPackage, destination: &std::path::Path) -> Result<(), String> {

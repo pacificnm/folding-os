@@ -1,4 +1,7 @@
-use crate::assignments::apply_supervisor_local_assignments_if_needed;
+use crate::assignments::{
+    apply_assigned_foldops_manifest_for_release, apply_assigned_tools_version_for_release,
+    apply_supervisor_local_assignments_if_needed,
+};
 use crate::automation_policy::require_supervisor_automation_mutation;
 use crate::enrollment::{load_enrollment_record, load_enrollment_records_sorted, save_enrollment_record};
 use crate::fs_atomic::contains_string;
@@ -20,6 +23,38 @@ pub fn list_enrollments(paths: &AppliancePaths) -> Result<serde_json::Value, Str
     require_supervisor_role(paths)?;
     let records = load_enrollment_records_sorted(paths)?;
     Ok(serde_json::json!({ "enrollments": records }))
+}
+
+pub fn assign_local(paths: &AppliancePaths, args: &[String]) -> Result<serde_json::Value, String> {
+    let update = parse_assign_update_args(args)?;
+    require_supervisor_role(paths)?;
+    require_supervisor_automation_mutation(paths, "provision", "assign-local")?;
+    validate_assignment_update(paths, &update)?;
+
+    if let Some(release) = update.foldops_manifest_release.as_ref() {
+        let release = release.trim();
+        if !release.is_empty() {
+            apply_assigned_foldops_manifest_for_release(paths, release)?;
+        }
+    }
+    if let Some(version) = update.tools_version.as_ref() {
+        let version = version.trim();
+        if !version.is_empty() {
+            apply_assigned_tools_version_for_release(paths, version)?;
+        }
+    }
+
+    let mut result = serde_json::json!({
+        "scope": "local",
+        "updated_count": 1,
+    });
+    if let Some(release) = update.foldops_manifest_release.as_ref() {
+        result["foldops_manifest_release"] = serde_json::Value::String(release.trim().to_string());
+    }
+    if let Some(version) = update.tools_version.as_ref() {
+        result["tools_version"] = serde_json::Value::String(version.trim().to_string());
+    }
+    Ok(result)
 }
 
 pub fn assign(paths: &AppliancePaths, args: &[String]) -> Result<serde_json::Value, String> {
@@ -51,6 +86,47 @@ struct ParsedAssign {
     scope: String,
     node_id: String,
     update: AssignmentUpdate,
+}
+
+fn parse_assign_update_args(args: &[String]) -> Result<AssignmentUpdate, String> {
+    let mut update = AssignmentUpdate::default();
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--version" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "missing value for --version".to_string())?;
+                update.image_version = Some(value.clone());
+                index += 2;
+            }
+            "--foldops-manifest" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "missing value for --foldops-manifest".to_string())?;
+                update.foldops_manifest_release = Some(value.clone());
+                index += 2;
+            }
+            "--tools-version" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "missing value for --tools-version".to_string())?;
+                update.tools_version = Some(value.clone());
+                index += 2;
+            }
+            other => return Err(format!("unknown assign option \"{other}\"")),
+        }
+    }
+    if update.image_version.is_none()
+        && update.foldops_manifest_release.is_none()
+        && update.tools_version.is_none()
+    {
+        return Err(
+            "assignment requires at least one of --version, --foldops-manifest, or --tools-version"
+                .into(),
+        );
+    }
+    Ok(update)
 }
 
 fn parse_assign_args(args: &[String]) -> Result<ParsedAssign, String> {

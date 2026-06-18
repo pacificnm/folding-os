@@ -1,7 +1,9 @@
 mod upstream;
 mod apply;
+mod assign_local;
 
 pub use apply::{apply_local, fleet_apply_foldops, fleet_apply_tools, ApplyLocalRequest, FleetSoftwareApplyRequest};
+pub use assign_local::{assign_local, ensure_foldops_release_imported, AssignLocalBody};
 
 use std::sync::Arc;
 
@@ -64,6 +66,11 @@ pub async fn build_updates_response(
 
     let supervisor_hostname = node
         .get("hostname")
+        .and_then(|value| value.as_str())
+        .unwrap_or("")
+        .to_string();
+    let supervisor_node_id = node
+        .get("node_id")
         .and_then(|value| value.as_str())
         .unwrap_or("")
         .to_string();
@@ -168,10 +175,19 @@ pub async fn build_updates_response(
         "upstream": upstream_json(&upstream),
         "supervisor": {
             "hostname": supervisor_hostname,
+            "node_id": empty_as_null(&supervisor_node_id),
             "active_foldops_manifest_release": empty_as_null(&supervisor_active_foldops),
             "assigned_foldops_manifest_release": empty_as_null(&supervisor_assigned_foldops),
             "active_tools_version": empty_as_null(&supervisor_active_tools),
             "assigned_tools_version": empty_as_null(&supervisor_assigned_tools),
+            "foldops_apply_pending": apply_pending(
+                &supervisor_assigned_foldops,
+                &supervisor_active_foldops,
+            ),
+            "tools_apply_pending": apply_pending(
+                &supervisor_assigned_tools,
+                &supervisor_active_tools,
+            ),
             "foldops_update_available": update_available(
                 &upstream_latest_foldops(&upstream),
                 &supervisor_active_foldops,

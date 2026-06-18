@@ -22,6 +22,7 @@ pub fn run(paths: &AppliancePaths, subcommand: &str, args: &[String]) -> Result<
     match subcommand {
         "list-enrollments" => assign::list_enrollments(paths),
         "assign" => assign::assign(paths, args),
+        "assign-local" => assign::assign_local(paths, args),
         "list-allow-boot" => boot::list_allow_boot(paths),
         "allow-boot" => boot::allow_boot(paths, args),
         "ssh" => ssh::provision_ssh(paths),

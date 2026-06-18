@@ -67,8 +67,55 @@ pub fn registry_import_foldops_manifest(
     args: &[String],
 ) -> Result<(), String> {
     require_supervisor_role(paths)?;
-    let manifest_path = parse_manifest_flag(args)?;
-    let content = fs::read_to_string(&manifest_path)
+    let (manifest_path, cleanup) = resolve_foldops_manifest_import_source(args)?;
+    let result = import_foldops_manifest_file(paths, &manifest_path);
+    if cleanup {
+        let _ = fs::remove_file(&manifest_path);
+    }
+    result
+}
+
+fn resolve_foldops_manifest_import_source(args: &[String]) -> Result<(PathBuf, bool), String> {
+    let mut manifest_path = None;
+    let mut manifest_url = None;
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--manifest" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "missing value for --manifest".to_string())?;
+                manifest_path = Some(PathBuf::from(value));
+                index += 2;
+            }
+            "--url" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "missing value for --url".to_string())?;
+                manifest_url = Some(value.clone());
+                index += 2;
+            }
+            other => return Err(format!("unknown import-foldops-manifest option {other:?}")),
+        }
+    }
+    if manifest_path.is_some() && manifest_url.is_some() {
+        return Err("import-foldops-manifest requires either --manifest or --url, not both".into());
+    }
+    if let Some(path) = manifest_path {
+        return Ok((path, false));
+    }
+    let url = manifest_url.ok_or_else(|| "import-foldops-manifest requires --manifest or --url".to_string())?;
+    let content = fetch_https_text(&url, "FoldOps manifest")?;
+    let temp_path = std::env::temp_dir().join(format!(
+        "foldingos-foldops-manifest-import-{}.toml",
+        std::process::id()
+    ));
+    fs::write(&temp_path, content).map_err(|error| format!("write temporary manifest: {error}"))?;
+    Ok((temp_path, true))
+}
+
+fn import_foldops_manifest_file(paths: &AppliancePaths, manifest_path: &Path) -> Result<(), String> {
+    let content = fs::read_to_string(manifest_path)
         .map_err(|error| format!("read manifest: {error}"))?;
     let manifest = parse_foldops_manifest(&content)?;
     validate_foldops_manifest(&manifest)?;
@@ -85,6 +132,33 @@ pub fn registry_import_foldops_manifest(
         entry.manifest_release
     );
     Ok(())
+}
+
+fn fetch_https_text(url: &str, label: &str) -> Result<String, String> {
+    use std::io::Read;
+
+    let url = url.trim();
+    if !url.starts_with("https://") {
+        return Err(format!("{label} URL must use HTTPS"));
+    }
+    let agent = ureq::AgentBuilder::new().redirects(0).build();
+    let response = agent
+        .get(url)
+        .call()
+        .map_err(|error| format!("download {label}: {error}"))?;
+    if response.status() != 200 {
+        return Err(format!(
+            "{label} download failed with status {}",
+            response.status()
+        ));
+    }
+    let mut body = String::new();
+    response
+        .into_reader()
+        .take(1 << 20)
+        .read_to_string(&mut body)
+        .map_err(|error| format!("read {label}: {error}"))?;
+    Ok(body)
 }
 
 pub fn list_tools_version_registry(paths: &AppliancePaths) -> Result<(), String> {
@@ -142,24 +216,6 @@ pub fn registry_import_tools_release(
     save_tools_version_registry_entry(paths, entry)?;
     println!("Imported foldingosctl tools release {version:?} into the supervisor registry.");
     Ok(())
-}
-
-fn parse_manifest_flag(args: &[String]) -> Result<PathBuf, String> {
-    let mut manifest_path = None;
-    let mut index = 0;
-    while index < args.len() {
-        match args[index].as_str() {
-            "--manifest" => {
-                let value = args
-                    .get(index + 1)
-                    .ok_or_else(|| "missing value for --manifest".to_string())?;
-                manifest_path = Some(PathBuf::from(value));
-                index += 2;
-            }
-            other => return Err(format!("unknown import-foldops-manifest option {other:?}")),
-        }
-    }
-    manifest_path.ok_or_else(|| "import-foldops-manifest requires --manifest".into())
 }
 
 fn parse_tools_release_args(args: &[String]) -> Result<(PathBuf, String), String> {

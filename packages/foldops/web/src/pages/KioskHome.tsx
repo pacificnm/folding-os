@@ -52,9 +52,14 @@ export function KioskHome() {
           <span>{machines.length}</span>
           <span className="kiosk-summary-label"> online</span>
         </p>
-        <Link to="/dashboard" className="kiosk-dashboard-link">
-          Full dashboard →
-        </Link>
+        <div className="kiosk-header-links">
+          <Link to="/admin/recovery" className="kiosk-dashboard-link">
+            Backup
+          </Link>
+          <Link to="/dashboard" className="kiosk-dashboard-link">
+            Dashboard
+          </Link>
+        </div>
       </header>
 
       <main className="kiosk-main">

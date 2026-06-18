@@ -57,6 +57,13 @@
   font-weight: 500;
 }
 
+.kiosk-header-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem 0.85rem;
+}
+
 .kiosk-dashboard-link {
   font-size: 0.8rem;
   font-weight: 600;

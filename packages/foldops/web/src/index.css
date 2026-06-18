@@ -967,6 +967,248 @@ body {
   color: var(--danger);
 }
 
+.admin-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.admin-nav-link {
+  color: var(--muted);
+  text-decoration: none;
+  padding: 0.45rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.9rem;
+}
+
+.admin-nav-link:hover {
+  color: var(--accent);
+  border-color: var(--accent-dim);
+}
+
+.admin-nav-link--active {
+  color: var(--text);
+  background: var(--surface-2);
+  border-color: var(--accent-dim);
+}
+
+.admin-intro {
+  color: var(--muted);
+  line-height: 1.55;
+  max-width: 72ch;
+  margin: 0 0 1.25rem;
+}
+
+.admin-intro code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+}
+
+.admin-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.admin-muted {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.admin-status {
+  color: var(--ok);
+}
+
+.admin-section {
+  margin-bottom: 2rem;
+}
+
+.admin-upstream-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.admin-upstream-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1rem 1.1rem;
+}
+
+.admin-upstream-card h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.admin-upstream-card p {
+  margin: 0.25rem 0 0;
+}
+
+.admin-assign-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.admin-assign-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.admin-input {
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.45rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.admin-input:focus {
+  outline: 2px solid var(--accent-dim);
+  outline-offset: 1px;
+}
+
+.admin-table td,
+.admin-table th {
+  vertical-align: top;
+}
+
+.admin-pending {
+  color: var(--warn);
+}
+
+.admin-token-form {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 36rem;
+  margin-bottom: 1.25rem;
+}
+
+.admin-token-form label {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.admin-token-saved {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.admin-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  color: var(--muted);
+}
+
+.admin-export-meta {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+}
+
+.admin-export-meta div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.admin-export-meta dt {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.admin-export-meta dd {
+  margin: 0;
+  word-break: break-all;
+}
+
+.admin-backup-cta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem 1.5rem;
+  margin-bottom: 1.5rem;
+  padding: 1.1rem 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+}
+
+.admin-backup-cta-title {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.admin-backup-cta-text {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  max-width: 42ch;
+}
+
+.admin-backup-panel {
+  max-width: 36rem;
+}
+
+.deploy-btn--large {
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+}
+
+.admin-advanced-toggle {
+  margin-top: 1rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.88rem;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.admin-advanced-toggle:hover {
+  color: var(--accent);
+}
+
+.admin-advanced-panel {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.deploy-host-status--success {
+  color: var(--ok);
+}
+
+.deploy-host-status--skipped {
+  color: var(--muted);
+}
+
 .footer a {
   color: var(--accent);
   font-weight: 600;

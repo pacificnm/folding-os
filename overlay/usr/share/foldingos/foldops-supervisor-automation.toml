@@ -11,6 +11,10 @@ name = "assign"
 
 [[commands]]
 group = "provision"
+name = "assign-local"
+
+[[commands]]
+group = "provision"
 name = "allow-boot"
 
 [[commands]]

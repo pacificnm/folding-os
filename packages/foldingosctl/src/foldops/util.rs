@@ -103,6 +103,38 @@ pub fn foldops_staged_artifact_path(
     foldops_downloads_dir(paths).join(format!("{}_{}{suffix}", pkg.name, pkg.version))
 }
 
+pub fn embedded_foldops_bundle_path(
+    paths: &AppliancePaths,
+    manifest_release: &str,
+    architecture: &str,
+    pkg: &FoldOpsPackage,
+) -> PathBuf {
+    paths
+        .foldops_embedded_cache_root
+        .join(manifest_release)
+        .join(format!("{}-{}.tar.zst", pkg.name, architecture))
+}
+
+pub fn embedded_bootstrap_cache_available(
+    paths: &AppliancePaths,
+    manifest_release: &str,
+    artifact_format: &str,
+    architecture: &str,
+    packages: &[FoldOpsPackage],
+) -> bool {
+    if artifact_format != "layout-tar-zst" {
+        return false;
+    }
+    if validate_foldops_release_label(manifest_release).is_err() {
+        return false;
+    }
+    packages.iter().all(|pkg| {
+        let path = embedded_foldops_bundle_path(paths, manifest_release, architecture, pkg);
+        path.is_file()
+            && crate::foldops::extract::verify_foldops_artifact_file(&path, pkg).is_ok()
+    })
+}
+
 pub fn file_exists(path: &Path) -> bool {
     fs::metadata(path)
         .map(|info| !info.is_dir())

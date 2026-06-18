@@ -259,6 +259,46 @@ pub async fn show_registry(
     Ok(serde_json::from_value(data)?)
 }
 
+#[derive(Debug, Clone)]
+pub struct AssignLocalRequest {
+    pub foldops_manifest_release: Option<String>,
+    pub tools_version: Option<String>,
+}
+
+pub async fn provision_assign_local(
+    config: FleetDelegateConfig<'_>,
+    request: AssignLocalRequest,
+) -> Result<AssignResult, FleetCommandError> {
+    let mut args = vec!["provision", "assign-local"];
+    if let Some(release) = request.foldops_manifest_release.as_deref() {
+        args.push("--foldops-manifest");
+        args.push(release);
+    }
+    if let Some(version) = request.tools_version.as_deref() {
+        args.push("--tools-version");
+        args.push(version);
+    }
+
+    let data = run_automation(config.foldingosctl_path, &args).await?;
+    Ok(serde_json::from_value(data)?)
+}
+
+pub async fn registry_import_foldops_manifest_url(
+    config: FleetDelegateConfig<'_>,
+    url: &str,
+) -> Result<(), FleetCommandError> {
+    run_plain_command(
+        config.foldingosctl_path,
+        &[
+            "registry",
+            "import-foldops-manifest",
+            "--url",
+            url,
+        ],
+    )
+    .await
+}
+
 pub async fn provision_assign(
     config: FleetDelegateConfig<'_>,
     request: AssignRequest,
@@ -285,6 +325,24 @@ pub async fn provision_assign(
 
     let data = run_automation(config.foldingosctl_path, &args).await?;
     Ok(serde_json::from_value(data)?)
+}
+
+async fn run_plain_command(foldingosctl_path: &Path, command_args: &[&str]) -> Result<(), FleetCommandError> {
+    let output = tokio::process::Command::new(foldingosctl_path)
+        .args(command_args)
+        .output()
+        .await?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let message = if stderr.is_empty() { stdout } else { stderr };
+        return Err(FleetCommandError::CommandFailed {
+            status: output.status.code().unwrap_or(-1),
+            message,
+        });
+    }
+    Ok(())
 }
 
 async fn run_automation(

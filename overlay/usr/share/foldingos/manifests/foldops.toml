@@ -1,5 +1,5 @@
 schema_version = 2
-manifest_release = "0.1.0-2"
+manifest_release = "0.1.0-5"
 architecture = "x86_64"
 artifact_format = "layout-tar-zst"
 minimum_foldingos_version = "0.1.0"
@@ -9,9 +9,9 @@ name = "foldops-agent"
 version = "0.1.0"
 roles = ["agent", "supervisor"]
 install_prefix = "foldops-agent"
-artifact_url = "https://packages.folding-os.com/foldops/0.1.0-2/foldops-agent-x86_64.tar.zst"
-artifact_size = 3784343
-sha256 = "d826ad59dd9df0f2be3ed67e00d3d02dc0a72cff2ebc9ba8a86c8f4931447bb2"
+artifact_url = "https://packages.folding-os.com/foldops/0.1.0-5/foldops-agent-x86_64.tar.zst"
+artifact_size = 3793639
+sha256 = "9d92741314f128fcf1c5dcd35aed0c09dd853a4dddb8d0006b0c2f4cd77a89f6"
 verification_path = "/data/apps/foldops/current/foldops-agent/usr/bin/foldops-agent"
 
 [[packages]]
@@ -19,9 +19,9 @@ name = "foldops-supervisor"
 version = "0.1.0"
 roles = ["supervisor"]
 install_prefix = "foldops-supervisor"
-artifact_url = "https://packages.folding-os.com/foldops/0.1.0-2/foldops-supervisor-x86_64.tar.zst"
-artifact_size = 3809087
-sha256 = "d7f9b184ac068dfd042104a05df79c09dbe13e8662de13694b574b92e6a2e051"
+artifact_url = "https://packages.folding-os.com/foldops/0.1.0-5/foldops-supervisor-x86_64.tar.zst"
+artifact_size = 3898551
+sha256 = "6e518334773f047dfceb83cc1eceb6e744d6ce2d76529c197220e754b156ca0c"
 verification_path = "/data/apps/foldops/current/foldops-supervisor/usr/bin/foldops-supervisor"
 
 [[packages]]
@@ -29,7 +29,7 @@ name = "foldops-web"
 version = "0.1.0"
 roles = ["supervisor"]
 install_prefix = "foldops-web"
-artifact_url = "https://packages.folding-os.com/foldops/0.1.0-2/foldops-web-x86_64.tar.zst"
-artifact_size = 173977
-sha256 = "27f3362895205998bedfe6874af17a104c3914a9a5cb8527037e637db47e8543"
+artifact_url = "https://packages.folding-os.com/foldops/0.1.0-5/foldops-web-x86_64.tar.zst"
+artifact_size = 177531
+sha256 = "58a32b152130fb9efbbc862ba4441662044ae5c89be8ba73ffd3a21292d12c20"
 verification_path = "/data/apps/foldops/current/foldops-web/usr/share/foldops/web/index.html"

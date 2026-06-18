@@ -1,0 +1,5 @@
+# FoldOps service user runs recovery export/import via delegated root so
+# protected supervisor state under /data remains root-owned.
+foldops ALL=(root) NOPASSWD: /usr/bin/foldingosctl recovery export *
+foldops ALL=(root) NOPASSWD: /usr/bin/foldingosctl recovery import *
+foldops ALL=(root) NOPASSWD: /usr/bin/foldingosctl foldops provision
