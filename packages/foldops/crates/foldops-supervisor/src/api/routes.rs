@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
+use axum::body::Body;
 use axum::extract::{Path, Query, State};
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -24,6 +25,7 @@ use crate::deploy::db::{get_deploy_run, list_deploy_runs};
 use crate::deploy::start_agent_deploy;
 use crate::fah_projects::fetch_fah_project;
 use crate::foldingos::{self, AllowBootRequest, AssignRequest, FleetCommandError, FleetDelegateConfig};
+use crate::recovery::{self, BACKUPS_DIR};
 use crate::software::{self, apply_local, fleet_apply_foldops, fleet_apply_tools, ApplyLocalRequest, FleetSoftwareApplyRequest, SoftwareService};
 
 #[derive(Clone)]
@@ -63,6 +65,8 @@ pub fn router(state: AppState) -> Router {
         .route("/fleet/software/apply-tools", post(fleet_software_apply_tools))
         .route("/software/updates", get(software_updates))
         .route("/software/apply-local", post(software_apply_local))
+        .route("/recovery/export", post(recovery_export_create))
+        .route("/recovery/export/latest", get(recovery_export_latest))
         .with_state(state)
 }
 
@@ -1105,6 +1109,94 @@ async fn software_apply_local(
         Ok(body) => Json(body).into_response(),
         Err(error) => (StatusCode::BAD_REQUEST, Json(json!({ "error": error }))).into_response(),
     }
+}
+
+#[derive(Debug, Deserialize)]
+struct RecoveryExportBody {
+    #[serde(default)]
+    include_secrets: bool,
+}
+
+async fn recovery_export_create(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<RecoveryExportBody>,
+) -> Response {
+    if let Err(resp) = require_auth(&headers, &state.config.ingest_token) {
+        return resp;
+    }
+    if !state.config.uses_supervisor_fleet_delegation() {
+        return fleet_delegation_unavailable();
+    }
+
+    match recovery::create_export(&state.config, body.include_secrets).await {
+        Ok(body) => Json(body).into_response(),
+        Err(error) => {
+            tracing::error!(error = %error, "recovery export failed");
+            if error.contains("foldingosctl") {
+                return (
+                    StatusCode::BAD_GATEWAY,
+                    Json(json!({ "error": error })),
+                )
+                    .into_response();
+            }
+            (StatusCode::BAD_REQUEST, Json(json!({ "error": error }))).into_response()
+        }
+    }
+}
+
+async fn recovery_export_latest(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    if let Err(resp) = require_auth(&headers, &state.config.ingest_token) {
+        return resp;
+    }
+    if !state.config.uses_supervisor_fleet_delegation() {
+        return fleet_delegation_unavailable();
+    }
+
+    let backups_dir = std::path::Path::new(BACKUPS_DIR);
+    let path = match recovery::latest_backup_path(backups_dir) {
+        Ok(path) => path,
+        Err(error) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": error })),
+            )
+                .into_response();
+        }
+    };
+
+    let filename = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("foldingos-supervisor-backup.tar.zst");
+    let file = match tokio::fs::File::open(&path).await {
+        Ok(file) => file,
+        Err(error) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": format!("open backup archive: {error}") })),
+            )
+                .into_response();
+        }
+    };
+    let stream = tokio_util::io::ReaderStream::new(file);
+    let body = Body::from_stream(stream);
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "application/zstd")
+        .header(
+            header::CONTENT_DISPOSITION,
+            format!("attachment; filename=\"{filename}\""),
+        )
+        .body(body)
+        .unwrap_or_else(|error| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": format!("build download response: {error}") })),
+            )
+                .into_response()
+        })
 }
 
 pub fn spawn_alert_eval(state: AppState) {

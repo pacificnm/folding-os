@@ -20,3 +20,11 @@ name = "acquire"
 [[commands]]
 group = "tools"
 name = "acquire"
+
+[[commands]]
+group = "recovery"
+name = "export"
+
+[[commands]]
+group = "recovery"
+name = "import"

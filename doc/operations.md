@@ -595,6 +595,65 @@ References:
 - [ADR-0029](adr/0029-packages-channel-publication-via-rclone.md)
 - [Milestone 5 engineering spec](milestone/5-engineering-spec.md)
 
+## Supervisor recovery export and restore (Milestone 5)
+
+Supervisor nodes hold fleet-critical state: FoldOps SQLite database, configuration,
+enrollment records, and assigned software pins. Before risky updates or migration,
+create an on-demand backup and download it through the HTTPS API or `foldingosctl`.
+
+### Create and download a backup
+
+Via HTTPS API (Bearer ingest token):
+
+```bash
+curl -k -X POST https://127.0.0.1:3443/api/recovery/export \
+  -H "Authorization: Bearer $(sudo cat /data/config/foldops/ingest-token)" \
+  -H "Content-Type: application/json" \
+  -d '{"include_secrets": false}'
+
+curl -k -L -o foldingos-supervisor-backup.tar.zst \
+  -H "Authorization: Bearer $(sudo cat /data/config/foldops/ingest-token)" \
+  https://127.0.0.1:3443/api/recovery/export/latest
+```
+
+Via SSH:
+
+```bash
+sudo foldingosctl recovery export
+sudo foldingosctl recovery export --output /tmp/supervisor-backup.tar.zst
+```
+
+Exports are retained under `/data/foldops/backups/` (last three archives). Private
+TLS keys under `/data/foldops/tls/` are excluded unless the operator passes
+`--include-secrets` or `"include_secrets": true` in the API request.
+
+### Restore from a backup
+
+Restore is operator-guided and fail-closed: manifest validation must pass before
+any file is overwritten.
+
+1. Copy the `.tar.zst` archive to the supervisor.
+2. Validate without writing:
+
+```bash
+sudo foldingosctl recovery import /path/to/archive.tar.zst --dry-run
+```
+
+3. Restore and restart supervisor services:
+
+```bash
+sudo foldingosctl recovery import /path/to/archive.tar.zst
+```
+
+4. Confirm FoldOps supervisor, provisioning, and HTTPS services are healthy:
+
+```bash
+systemctl status foldingos-foldops-supervisor.service
+curl -k https://127.0.0.1:3443/
+```
+
+See [ADR-0030](adr/0030-supervisor-recovery-backup-and-export.md).
+
 ---
 
 # Diagnostics

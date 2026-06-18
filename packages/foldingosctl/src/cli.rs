@@ -10,12 +10,13 @@ use crate::identity::ensure_identity;
 use crate::inspect;
 use crate::paths::AppliancePaths;
 use crate::provision;
+use crate::recovery::{recovery_export, recovery_import, ImportOptions};
 use crate::registry_cmd::{self, RegistryOutput};
 use crate::storage::expand_data;
 use crate::tools;
 
 const USAGE: &str =
-    "usage: foldingosctl <boot|config|fah|foldops|identity|inspect|provision|registry|storage|tools> <command> [arguments]";
+    "usage: foldingosctl <boot|config|fah|foldops|identity|inspect|provision|recovery|registry|storage|tools> <command> [arguments]";
 
 const PROVISION_JSON_COMMANDS: &[&str] = &[
     "list-enrollments",
@@ -188,6 +189,89 @@ pub fn dispatch(mut args: Vec<String>) -> Result<(), CliError> {
         };
     }
 
+    if args[0] == "recovery" {
+        if args.len() < 2 {
+            return Err(CliError::Usage);
+        }
+        let subcommand = args[1].clone();
+        let extra = args[2..].to_vec();
+        let command = format_automation_command(&["recovery", &subcommand]);
+        let ctx = AutomationContext::new(format, command);
+        return match subcommand.as_str() {
+            "export" => {
+                let mut include_secrets = false;
+                let mut output_path = None;
+                let mut index = 0;
+                while index < extra.len() {
+                    match extra[index].as_str() {
+                        "--include-secrets" => include_secrets = true,
+                        "--output" => {
+                            index += 1;
+                            let Some(path) = extra.get(index) else {
+                                return publish_failure(
+                                    &ctx,
+                                    "recovery export --output requires a path".into(),
+                                );
+                            };
+                            output_path = Some(std::path::PathBuf::from(path));
+                        }
+                        other => {
+                            return publish_failure(
+                                &ctx,
+                                format!("unknown recovery export option {other:?}"),
+                            );
+                        }
+                    }
+                    index += 1;
+                }
+                match recovery_export(
+                    &paths,
+                    output_path.as_deref(),
+                    include_secrets,
+                ) {
+                    Ok(data) => publish_success(&ctx, data, &subcommand),
+                    Err(message) => publish_failure(&ctx, message),
+                }
+            }
+            "import" => {
+                let mut dry_run = false;
+                let mut archive_path = None;
+                for arg in &extra {
+                    match arg.as_str() {
+                        "--dry-run" => dry_run = true,
+                        other if archive_path.is_none() => {
+                            archive_path = Some(std::path::PathBuf::from(other));
+                        }
+                        other => {
+                            return publish_failure(
+                                &ctx,
+                                format!("unknown recovery import option {other:?}"),
+                            );
+                        }
+                    }
+                }
+                let Some(archive_path) = archive_path else {
+                    return publish_failure(
+                        &ctx,
+                        "recovery import requires an archive path".into(),
+                    );
+                };
+                match recovery_import(
+                    &paths,
+                    &archive_path,
+                    ImportOptions { dry_run },
+                ) {
+                    Ok(data) => publish_success(&ctx, data, &subcommand),
+                    Err(message) => publish_failure(&ctx, message),
+                }
+            }
+            _ => publish_failure(
+                &ctx,
+                format!("unknown recovery subcommand {subcommand:?}"),
+            ),
+        };
+    }
+
     let command = infer_command_name(&args);
     let ctx = AutomationContext::new(format, command);
     publish_failure(
@@ -322,6 +406,30 @@ fn print_human_summary(data: &serde_json::Value, subcommand: &str) {
     }
     if subcommand == "validate" || subcommand == "effective" {
         if data.get("valid").and_then(|value| value.as_bool()) == Some(true) {
+            return;
+        }
+    }
+    if subcommand == "export" {
+        if let Some(path) = data.get("path").and_then(|value| value.as_str()) {
+            println!("Recovery export written to {path}");
+            if let Some(size) = data.get("size_bytes").and_then(|value| value.as_u64()) {
+                println!("size_bytes={size}");
+            }
+            if let Some(digest) = data.get("sha256").and_then(|value| value.as_str()) {
+                println!("sha256={digest}");
+            }
+            return;
+        }
+    }
+    if subcommand == "import" {
+        if data.get("dry_run").and_then(|value| value.as_bool()) == Some(true) {
+            if let Some(count) = data.get("restored_files").and_then(|value| value.as_u64()) {
+                println!("Dry run: {count} file(s) would be restored.");
+                return;
+            }
+        }
+        if let Some(count) = data.get("restored_files").and_then(|value| value.as_u64()) {
+            println!("Restored {count} file(s) from recovery archive.");
             return;
         }
     }

@@ -62,6 +62,10 @@ pub struct AppliancePaths {
     pub shared_update_initramfs: PathBuf,
     pub foldops_ingest_token: PathBuf,
     pub foldops_tls_dir: PathBuf,
+    pub foldops_db: PathBuf,
+    pub foldops_backups_dir: PathBuf,
+    pub foldops_config_dir: PathBuf,
+    pub data_root: PathBuf,
 }
 
 impl Default for AppliancePaths {
@@ -131,6 +135,10 @@ impl Default for AppliancePaths {
             ),
             foldops_ingest_token: PathBuf::from("/data/config/foldops/ingest-token"),
             foldops_tls_dir: PathBuf::from("/data/foldops/tls"),
+            foldops_db: PathBuf::from("/data/foldops/foldops.db"),
+            foldops_backups_dir: PathBuf::from("/data/foldops/backups"),
+            foldops_config_dir: PathBuf::from("/data/config/foldops"),
+            data_root: PathBuf::from("/data"),
         }
     }
 }

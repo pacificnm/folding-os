@@ -195,6 +195,21 @@ pub async fn tools_acquire(
     run_automation(config.foldingosctl_path, &["tools", "acquire"]).await
 }
 
+pub async fn recovery_export(
+    config: FleetDelegateConfig<'_>,
+    include_secrets: bool,
+) -> Result<Value, FleetCommandError> {
+    if include_secrets {
+        run_automation(
+            config.foldingosctl_path,
+            &["recovery", "export", "--include-secrets"],
+        )
+        .await
+    } else {
+        run_automation(config.foldingosctl_path, &["recovery", "export"]).await
+    }
+}
+
 pub async fn list_allow_boot(
     config: FleetDelegateConfig<'_>,
 ) -> Result<Vec<AllowBootDevice>, FleetCommandError> {
