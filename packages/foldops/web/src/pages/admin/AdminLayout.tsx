@@ -2,11 +2,11 @@ import { Link, Outlet, useLocation } from "react-router-dom";
 import { PageLayout } from "../../components/PageLayout";
 
 const NAV = [
-  { href: "/admin/machines", label: "Network install" },
-  { href: "/admin/folding", label: "Folding@home" },
+  { href: "/admin/folding", label: "Folding@Home" },
+  { href: "/admin/machines", label: "Network Install" },
+  { href: "/admin/software", label: "Software Updates" },
   { href: "/admin/services", label: "Services" },
   { href: "/admin/logs", label: "Logs" },
-  { href: "/admin/software", label: "Software updates" },
   { href: "/admin/recovery", label: "Backup" },
 ] as const;
 
