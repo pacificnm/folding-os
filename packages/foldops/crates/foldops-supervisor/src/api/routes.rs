@@ -339,6 +339,22 @@ async fn machine_logs(
                 .into_response();
             }
             Err(live_error) => {
+                if is_expected_missing_live_log(source, &live_error) {
+                    tracing::info!(hostname = %ctx.hostname, source = source_str, error = %live_error, "live log not available yet");
+                    let slice = ctx.cached_lines
+                        [ctx.cached_lines.len().saturating_sub(lines as usize)..]
+                        .to_vec();
+                    return Json(json!({
+                        "hostname": ctx.hostname,
+                        "source": source_str,
+                        "lines": slice,
+                        "path": ctx.cached_path,
+                        "updated_at": ctx.updated_at,
+                        "live": false,
+                        "online": true,
+                    }))
+                    .into_response();
+                }
                 tracing::warn!(hostname = %ctx.hostname, source = source_str, error = %live_error, "live log fetch failed");
                 let slice = ctx.cached_lines
                     [ctx.cached_lines.len().saturating_sub(lines as usize)..]
@@ -371,6 +387,10 @@ async fn machine_logs(
         "online": ctx.online,
     }))
     .into_response()
+}
+
+fn is_expected_missing_live_log(source: LogSource, error: &str) -> bool {
+    source == LogSource::Fah && error.eq_ignore_ascii_case("FAH log not readable")
 }
 
 #[axum::debug_handler]

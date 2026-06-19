@@ -13,8 +13,23 @@ function nextAttemptLabel(unix?: number | null): string | null {
   }
 }
 
+function hasClientInspection(fah: FahPayload): boolean {
+  return (
+    fah.activeClientVersion != null ||
+    fah.expectedClientVersion != null ||
+    fah.clientInstalled != null ||
+    fah.clientVerified != null ||
+    fah.acquisitionFailures != null ||
+    fah.acquisitionNextAttemptUnix != null ||
+    fah.acquisitionLastFailureReason != null ||
+    fah.logPath != null ||
+    fah.logReadable != null
+  );
+}
+
 export function fahClientLabel(fah?: FahPayload | null): string {
   if (!fah) return "—";
+  if (!hasClientInspection(fah)) return "unknown";
   const version = fah.activeClientVersion ?? fah.expectedClientVersion ?? null;
   if (fah.clientVerified) {
     return version ? `${version} verified` : "verified";
@@ -29,6 +44,7 @@ export function fahClientLabel(fah?: FahPayload | null): string {
 }
 
 export function fahClientClass(fah?: FahPayload | null): string {
+  if (fah && !hasClientInspection(fah)) return "status-unknown";
   if (fah?.clientVerified) return "status-active";
   if ((fah?.acquisitionFailures ?? 0) > 0) return "status-failed";
   if (fah?.clientInstalled) return "warn-text";
@@ -37,6 +53,7 @@ export function fahClientClass(fah?: FahPayload | null): string {
 
 export function fahAcquisitionLabel(fah?: FahPayload | null): string {
   if (!fah) return "—";
+  if (!hasClientInspection(fah)) return "no report";
   const failures = fah.acquisitionFailures ?? 0;
   if (failures > 0) {
     return "retry scheduled";
@@ -48,6 +65,9 @@ export function fahAcquisitionLabel(fah?: FahPayload | null): string {
 
 export function fahAcquisitionTitle(fah?: FahPayload | null): string | undefined {
   if (!fah) return undefined;
+  if (!hasClientInspection(fah)) {
+    return "FAH client install status was not reported by this agent. Update FoldOps agent and foldingosctl tools, or check foldingosctl inspect fah on the node.";
+  }
   const parts: string[] = [];
   if (fah.expectedClientVersion) {
     parts.push(`Expected ${fah.expectedClientVersion}`);

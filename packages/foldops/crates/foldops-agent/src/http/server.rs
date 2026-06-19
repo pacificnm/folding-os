@@ -125,14 +125,12 @@ async fn logs_fah(State(state): State<AppState>, Query(q): Query<LogQuery>) -> R
             "lines": tail.lines,
         }))
         .into_response(),
-        None => (
-            StatusCode::NOT_FOUND,
-            Json(serde_json::json!({
-                "error": "FAH log not readable",
-                "path": state.config.fah_log_path,
-            })),
-        )
-            .into_response(),
+        None => Json(serde_json::json!({
+            "source": "fah",
+            "path": state.config.fah_log_path,
+            "lines": [],
+        }))
+        .into_response(),
     }
 }
 

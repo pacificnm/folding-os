@@ -7,7 +7,17 @@ This workflow does three things:
 
 1. Builds and pins the FoldOps runtime bundles into the FoldingOS overlay.
 2. Publishes those FoldOps bundles to the live packages channel.
-3. Builds the FoldingOS image and writes a bootable supervisor USB stick.
+3. Optionally builds and publishes a `foldingosctl` tools release without a
+   full image rebuild.
+4. Builds the FoldingOS image and writes a bootable supervisor USB stick.
+
+Project memory note: `foldingosctl` tools releases are built and published
+independently of OS image builds. Use
+`./scripts/build-foldingosctl-release --version <tools-version> --sync-overlay`
+to produce the tools artifact and update
+`overlay/usr/share/foldingos/manifests/tools.json` so the next
+`./scripts/build` embeds that tools pin. Publishing the tools artifact itself
+does not require `./scripts/build`.
 
 For implementation-agent subsystem orientation, see
 [doc/agent-subsystems.md](doc/agent-subsystems.md). That guide maps affected
@@ -20,6 +30,7 @@ Set these values before running the commands:
 
 ```bash
 FOLDOPS_RELEASE="0.1.0-<version>"
+TOOLS_RELEASE="${FOLDOPS_RELEASE}"
 USB_DEVICE="/dev/sdb"
 SSH_PUBLIC_KEY="${HOME}/.ssh/id_ed25519.pub"
 FOLDOPS_INGEST_TOKEN="/tmp/foldops-ingest-token"
@@ -30,6 +41,7 @@ Replace `<version>` with the release suffix being published, for example:
 
 ```bash
 FOLDOPS_RELEASE="0.1.0-67"
+TOOLS_RELEASE="0.1.0-67"
 ```
 
 Before writing USB media, confirm `USB_DEVICE` is the whole disk for the target
@@ -64,7 +76,33 @@ Publish the same bundle release to the live packages channel:
 
 This requires `rclone` to be configured for the FoldingOS packages bucket.
 
-## 3. Build The FoldingOS Image
+## 3. Build And Publish foldingosctl Tools
+
+Build and publish a `foldingosctl` tools release when the running fleet needs a
+CLI/control-plane fix before the next OS image is rebuilt:
+
+```bash
+./scripts/build-foldingosctl-release \
+  --version "${TOOLS_RELEASE}" \
+  --sync-overlay
+
+./scripts/publish-foldingos-tools "${TOOLS_RELEASE}"
+```
+
+`--sync-overlay` writes the bootstrap tools assignment for the next image build.
+It is not an image build step and does not require `./scripts/build` before
+publishing to `packages.folding-os.com/foldingos-tools/`.
+
+For a dry run through the umbrella publisher:
+
+```bash
+./scripts/publish-packages-release \
+  --tools "${TOOLS_RELEASE}" \
+  --build \
+  --dry-run
+```
+
+## 4. Build The FoldingOS Image
 
 Build the release image:
 
@@ -78,7 +116,7 @@ Expected image output:
 build/output/images/foldingos-x86_64-0.1.0.img
 ```
 
-## 4. Write The Supervisor USB
+## 5. Write The Supervisor USB
 
 Run the USB writer as root. This is destructive to the selected device.
 
@@ -97,7 +135,7 @@ The command stages:
 - the fixed `supervisor` installation role
 - the FoldOps ingest token for supervisor bootstrap
 
-## 5. Flush And Power Off USB
+## 6. Flush And Power Off USB
 
 Flush pending writes:
 

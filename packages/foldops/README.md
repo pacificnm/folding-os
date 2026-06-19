@@ -51,10 +51,10 @@ From the repository root:
 cd packages/foldops && cargo test --workspace
 
 # Layout bundles + schema v2 manifest (build/output/foldops/<release>/)
-./scripts/build-foldops-bundles
+./scripts/build-foldops-bundles --manifest-release 0.1.0-1 --sync-overlay
 
 # foldingosctl binary for tools publication channel
-./scripts/build-foldingosctl-release
+./scripts/build-foldingosctl-release --version 0.1.1 --sync-overlay
 
 # Upload to packages.folding-os.com (when rclone is configured)
 ./scripts/publish-foldops-bundles 0.1.0-1
@@ -62,9 +62,9 @@ cd packages/foldops && cargo test --workspace
 ./scripts/publish-packages-release --foldops 0.1.0-1 --tools 0.1.1 --build
 ```
 
-The OS image build (`./scripts/build`) does **not** compile FoldOps. The embedded
-bootstrap manifest in the overlay remains schema v1 until issue #84 lands
-layout-tar-zst acquisition in `foldingosctl`.
+Publishing FoldOps bundles or `foldingosctl` tools does **not** require an OS
+image build. The `--sync-overlay` flag updates the overlay bootstrap pins so the
+next `./scripts/build` embeds the latest package-channel assignments.
 
 ## Related documents
 

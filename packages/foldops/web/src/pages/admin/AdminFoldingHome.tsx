@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchMachines, pushFoldinghomeConfig } from "../../api";
+import {
+  fahAcquisitionLabel,
+  fahAcquisitionTitle,
+  fahClientClass,
+  fahClientLabel,
+} from "../../components/FahClientStatus";
 import { formatPasskeyError, normalizePasskeyInput } from "../../fahPasskey";
 import {
   displayConfiguredDonor,
@@ -342,6 +348,8 @@ export function AdminFoldingHome() {
                   <th aria-label="Select" />
                   <th>Host</th>
                   <th>Status</th>
+                  <th>Client</th>
+                  <th>Acquire</th>
                   <th>FAH settings</th>
                   <th>Donor</th>
                   <th>Team</th>
@@ -369,6 +377,18 @@ export function AdminFoldingHome() {
                         >
                           {machine.online ? "online" : "offline"}
                         </span>
+                      </td>
+                      <td
+                        className={`mono ${fahClientClass(fah)}`}
+                        title={fahAcquisitionTitle(fah)}
+                      >
+                        {fahClientLabel(fah)}
+                      </td>
+                      <td
+                        className={`mono ${fahClientClass(fah)}`}
+                        title={fahAcquisitionTitle(fah)}
+                      >
+                        {fahAcquisitionLabel(fah)}
                       </td>
                       <td>
                         <span

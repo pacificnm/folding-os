@@ -554,14 +554,21 @@ config file per [ADR-0029](adr/0029-packages-channel-publication-via-rclone.md).
 Build only:
 
 ```bash
-./scripts/build-foldops-bundles --manifest-release 0.1.0-2
-./scripts/build-foldingosctl-release --version 0.1.1
+./scripts/build-foldops-bundles --manifest-release 0.1.0-2 --sync-overlay
+./scripts/build-foldingosctl-release --version 0.1.1 --sync-overlay
 ```
 
 Publish one channel:
 
 ```bash
 ./scripts/publish-foldops-bundles 0.1.0-2
+./scripts/publish-foldingos-tools 0.1.1
+```
+
+Build and publish a tools-only update:
+
+```bash
+./scripts/build-foldingosctl-release --version 0.1.1 --sync-overlay
 ./scripts/publish-foldingos-tools 0.1.1
 ```
 
@@ -585,9 +592,10 @@ Each publication refreshes the channel **`index.json`** at:
 Supervisor “check for updates” reads these indexes per
 [ADR-0028](adr/0028-supervisor-fleet-software-update-workflow.md).
 
-Publishing a new FoldOps release does **not** require an immediate OS image rebuild.
-The embedded bootstrap manifest in the OS image remains the floor; supervisor
-assignment overrides the floor on running nodes per
+Publishing a new FoldOps or `foldingosctl` tools release does **not** require an
+immediate OS image rebuild. `--sync-overlay` updates the repository overlay pin
+so the next `./scripts/build` embeds the current bootstrap manifest or tools
+assignment, while supervisor assignment overrides the floor on running nodes per
 [ADR-0023](adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md).
 
 References:
