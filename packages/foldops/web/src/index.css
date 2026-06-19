@@ -1136,7 +1136,7 @@ body {
 
 .admin-detail {
   display: grid;
-  gap: 1.25rem;
+  gap: 1.5rem;
 }
 
 .admin-detail-header {
@@ -1173,13 +1173,13 @@ body {
 .admin-detail-summary {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
 .admin-detail-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
 .admin-detail-card,
@@ -1223,11 +1223,19 @@ body {
 }
 
 .admin-machine-tabs .tabs-panel {
+  display: grid;
+  gap: 1.35rem;
+  align-content: start;
   min-height: 16rem;
 }
 
+.admin-machine-tabs .range-bar,
+.admin-machine-tabs .project-panel {
+  margin-bottom: 0;
+}
+
 .admin-detail-charts {
-  margin-top: 1rem;
+  margin-top: 0;
 }
 
 .admin-detail-placeholder p {
