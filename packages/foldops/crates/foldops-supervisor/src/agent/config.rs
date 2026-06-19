@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use foldops_types::IngestPayload;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -77,6 +78,12 @@ pub struct FoldinghomeConfigResult {
     pub domain: String,
     pub candidate: String,
     pub activated: bool,
+    #[serde(default)]
+    pub ingested: Option<bool>,
+    #[serde(default)]
+    pub ingest_error: Option<String>,
+    #[serde(default)]
+    pub snapshot: Option<IngestPayload>,
 }
 
 pub async fn push_foldinghome_config(

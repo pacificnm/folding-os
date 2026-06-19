@@ -435,7 +435,11 @@ export function AdminFoldingHome() {
                     <td>
                       {result.ok
                         ? result.activated
-                          ? "Activated"
+                          ? result.ingested
+                            ? "Activated and refreshed"
+                            : result.ingest_error
+                              ? `Activated; refresh failed: ${result.ingest_error}`
+                              : "Activated"
                           : "Applied"
                         : (result.error ?? "Failed")}
                     </td>

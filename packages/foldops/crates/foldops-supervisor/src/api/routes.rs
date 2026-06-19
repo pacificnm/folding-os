@@ -559,13 +559,47 @@ async fn foldinghome_config(
         }
     };
 
-    let passkey_secret = if !passkey.is_empty() {
+    let proxy = {
+        let conn = state.db.lock();
+        let Some(machine) = db::get_machine(&conn, &name).ok().flatten() else {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": "Machine not found" })),
+            )
+                .into_response();
+        };
+        if !db::is_online(&machine.last_seen, state.config.offline_threshold_ms) {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({ "error": "Node offline" })),
+            )
+                .into_response();
+        }
+        let passkey_configured = db::get_latest_snapshot(&conn, &machine.hostname)
+            .ok()
+            .flatten()
+            .and_then(|snapshot| parse_payload(&snapshot))
+            .and_then(|payload| payload.fah.configPasskeyConfigured)
+            .unwrap_or(false);
+        (
+            machine.hostname.clone(),
+            state.config.agent_http_port,
+            state.config.ingest_token.clone(),
+            passkey_configured,
+        )
+    };
+
+    let mut passkey_secret = if !passkey.is_empty() {
         "fah-passkey".to_string()
     } else {
         body.passkey_secret.trim().to_string()
     };
+    let preserving_existing_passkey = passkey.is_empty() && passkey_secret.is_empty() && proxy.3;
+    if preserving_existing_passkey {
+        passkey_secret = "fah-passkey".to_string();
+    }
 
-    let validation_secret = if passkey.is_empty() {
+    let validation_secret = if passkey.is_empty() && !preserving_existing_passkey {
         passkey_secret.as_str()
     } else {
         ""
@@ -594,29 +628,6 @@ async fn foldinghome_config(
     let config_toml =
         build_foldinghome_candidate_toml(username, body.team, passkey_secret.as_str());
 
-    let proxy = {
-        let conn = state.db.lock();
-        let Some(machine) = db::get_machine(&conn, &name).ok().flatten() else {
-            return (
-                StatusCode::NOT_FOUND,
-                Json(json!({ "error": "Machine not found" })),
-            )
-                .into_response();
-        };
-        if !db::is_online(&machine.last_seen, state.config.offline_threshold_ms) {
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({ "error": "Node offline" })),
-            )
-                .into_response();
-        }
-        (
-            machine.hostname.clone(),
-            state.config.agent_http_port,
-            state.config.ingest_token.clone(),
-        )
-    };
-
     tracing::info!(hostname = %proxy.0, "proxying foldinghome config push to agent");
 
     match push_foldinghome_config(
@@ -632,14 +643,47 @@ async fn foldinghome_config(
     )
     .await
     {
-        Ok(result) => Json(json!({
-            "hostname": proxy.0,
-            "ok": result.ok,
-            "domain": result.domain,
-            "candidate": result.candidate,
-            "activated": result.activated,
-        }))
-        .into_response(),
+        Ok(result) => {
+            let direct_ingest = if let Some(snapshot) = result.snapshot.as_ref() {
+                let conn = state.db.lock();
+                match db::ingest_snapshot(&conn, snapshot) {
+                    Ok(()) => Some(Ok(())),
+                    Err(error) => Some(Err(error.to_string())),
+                }
+            } else {
+                None
+            };
+            let direct_ingested = direct_ingest
+                .as_ref()
+                .map(|result| result.is_ok())
+                .unwrap_or(false);
+            let ingest_error = direct_ingest
+                .as_ref()
+                .and_then(|result| result.as_ref().err().cloned())
+                .or(result.ingest_error.clone());
+
+            if let Some(error) = direct_ingest
+                .as_ref()
+                .and_then(|result| result.as_ref().err())
+            {
+                tracing::warn!(
+                    hostname = %proxy.0,
+                    error = %error,
+                    "failed to store post-config snapshot returned by agent"
+                );
+            }
+
+            Json(json!({
+                "hostname": proxy.0,
+                "ok": result.ok,
+                "domain": result.domain,
+                "candidate": result.candidate,
+                "activated": result.activated,
+                "ingested": direct_ingested || result.ingested.unwrap_or(false),
+                "ingest_error": ingest_error,
+            }))
+            .into_response()
+        }
         Err(msg) => (StatusCode::BAD_GATEWAY, Json(json!({ "error": msg }))).into_response(),
     }
 }

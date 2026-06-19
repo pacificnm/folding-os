@@ -24,6 +24,7 @@ use crate::node_control::{
     execute_control_action, get_control_status, schedule_agent_self_restart, ControlContext,
 };
 use crate::update::{is_update_in_flight, run_agent_update, schedule_post_update_restart};
+use foldops_types::IngestPayload;
 
 #[derive(Clone)]
 struct AppState {
@@ -54,6 +55,10 @@ struct FoldinghomeConfigResponse {
     domain: &'static str,
     candidate: String,
     activated: bool,
+    ingested: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ingest_error: Option<String>,
+    snapshot: IngestPayload,
 }
 
 pub async fn start_agent_http(config: Arc<Config>, ingest: Arc<IngestClient>) {
@@ -259,14 +264,23 @@ async fn foldinghome_config(
                 activated,
                 "foldinghome config activate succeeded"
             );
-            if let Err(error) = state.ingest.collect_and_post().await {
-                tracing::warn!(error = %error, "post-config ingest failed");
-            }
+            let snapshot = state.ingest.collect_payload().await;
+            let ingest_result = state.ingest.post_snapshot(&snapshot).await;
+            let (ingested, ingest_error) = match ingest_result {
+                Ok(()) => (true, None),
+                Err(error) => {
+                    tracing::warn!(error = %error, "post-config ingest failed");
+                    (false, Some(error))
+                }
+            };
             Json(FoldinghomeConfigResponse {
                 ok: true,
                 domain: "foldinghome",
                 candidate,
                 activated,
+                ingested,
+                ingest_error,
+                snapshot,
             })
             .into_response()
         }

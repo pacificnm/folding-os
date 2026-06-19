@@ -376,6 +376,7 @@ export interface FoldinghomeConfigRequest {
   username: string;
   team: number;
   passkey?: string;
+  passkey_secret?: string;
 }
 
 export interface FoldinghomeConfigResponse {
@@ -384,6 +385,8 @@ export interface FoldinghomeConfigResponse {
   domain?: string;
   candidate?: string;
   activated?: boolean;
+  ingested?: boolean;
+  ingest_error?: string | null;
   error?: string;
 }
 
