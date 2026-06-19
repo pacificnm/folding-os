@@ -1,29 +1,37 @@
 use std::fs::{self, File};
 use std::io::{Read, Write};
 
-use sha2::{Digest, Sha256};
-use crate::automation_policy::require_acquire_automation_mutation;
+use crate::automation_policy::{
+    require_acquire_automation_mutation, sync_automation_policies_to_system_share,
+};
+use crate::boot_cmd::refresh_commissioning_display;
 use crate::foldops::acquire_state::{
-    clear_foldops_acquire_state, defer_foldops_acquisition_attempt, record_foldops_acquisition_failure,
+    clear_foldops_acquire_state, defer_foldops_acquisition_attempt,
+    record_foldops_acquisition_failure,
 };
 use crate::foldops::activate::{foldops_activate, write_foldops_verified_marker};
-use crate::boot_cmd::refresh_commissioning_display;
 use crate::foldops::extract::{
     extract_foldops_deb_data, extract_foldops_layout_bundle, verify_foldops_artifact_file,
 };
-use crate::foldops::provision::{restart_foldops_runtime_services, start_foldops_provision_service, foldops_provisioned};
+use crate::foldops::provision::{
+    foldops_provisioned, restart_foldops_runtime_services, start_foldops_provision_service,
+};
 use crate::foldops::util::{
     embedded_bootstrap_cache_available, embedded_foldops_bundle_path, foldops_downloads_dir,
     foldops_staged_artifact_path, remove_tree, resolve_effective_foldops_manifest,
     validate_foldingos_compatibility,
 };
-use crate::foldops::verify::{foldops_installation_verified, normalize_install_tree, verify_foldops_package_tree_at_root};
+use crate::foldops::verify::{
+    foldops_installation_verified, normalize_install_tree, verify_foldops_package_tree_at_root,
+};
 use crate::foldops_manifest::{foldops_packages_for_role, FoldOpsPackage};
 use crate::paths::AppliancePaths;
 use crate::process::{command_output, run_command};
+use sha2::{Digest, Sha256};
 
 pub fn foldops_acquire(paths: &AppliancePaths) -> Result<serde_json::Value, String> {
     require_acquire_automation_mutation(paths, "foldops")?;
+    crate::assignments::sync_enrolled_agent_software_assignments(paths)?;
 
     let manifest = resolve_effective_foldops_manifest(paths)?;
     validate_foldingos_compatibility(&manifest.minimum_foldingos_version)?;
@@ -33,6 +41,7 @@ pub fn foldops_acquire(paths: &AppliancePaths) -> Result<serde_json::Value, Stri
     let manifest_release = manifest.manifest_release.clone();
 
     if has_verified_active_release(paths, &manifest_release, &role, &packages)? {
+        sync_automation_policies_to_system_share(paths)?;
         clear_foldops_acquire_state(paths)?;
         let result = foldops_acquire_result(
             &manifest_release,
@@ -45,7 +54,6 @@ pub fn foldops_acquire(paths: &AppliancePaths) -> Result<serde_json::Value, Stri
             ),
         );
         refresh_commissioning_display(paths);
-        restart_foldops_after_acquire(paths)?;
         return Ok(result);
     }
 
@@ -100,6 +108,7 @@ pub fn foldops_acquire(paths: &AppliancePaths) -> Result<serde_json::Value, Stri
     if let Err(error) = foldops_activate(paths, &manifest_release) {
         record_foldops_acquisition_failure(paths, &error)?;
     }
+    sync_automation_policies_to_system_share(paths)?;
     clear_foldops_acquire_state(paths)?;
     refresh_commissioning_display(paths);
 
@@ -202,7 +211,12 @@ fn require_foldops_acquisition_prerequisites(
     ) {
         return Ok(());
     }
-    if run_command("systemctl", &["is-active", "--quiet", "network-online.target"]).is_err() {
+    if run_command(
+        "systemctl",
+        &["is-active", "--quiet", "network-online.target"],
+    )
+    .is_err()
+    {
         return Err("network is not online".into());
     }
     let synchronized = ntp_synchronized_from_timedatectl()?;
@@ -316,7 +330,10 @@ fn stage_foldops_package(
     download_foldops_package(pkg, destination)
 }
 
-fn download_foldops_package(pkg: &FoldOpsPackage, destination: &std::path::Path) -> Result<(), String> {
+fn download_foldops_package(
+    pkg: &FoldOpsPackage,
+    destination: &std::path::Path,
+) -> Result<(), String> {
     let agent = ureq::AgentBuilder::new().redirects(0).build();
     let response = agent
         .get(&pkg.artifact_url)
@@ -336,8 +353,8 @@ fn download_foldops_package(pkg: &FoldOpsPackage, destination: &std::path::Path)
         ));
     }
     let mut reader = response.into_reader();
-    let mut file = File::create(destination)
-        .map_err(|error| format!("open partial download: {error}"))?;
+    let mut file =
+        File::create(destination).map_err(|error| format!("open partial download: {error}"))?;
     let mut hasher = Sha256::new();
     let mut written = 0u64;
     let mut buffer = [0u8; 8192];
@@ -389,7 +406,10 @@ fn extract_and_install_foldops_packages(
         if release_dir.is_dir() {
             remove_tree(&release_dir)?;
         } else {
-            return Err(format!("{} exists but is not a directory", release_dir.display()));
+            return Err(format!(
+                "{} exists but is not a directory",
+                release_dir.display()
+            ));
         }
     }
 
@@ -426,7 +446,10 @@ fn extract_foldops_package(
         "deb" => {
             let staged_artifact = foldops_staged_artifact_path(paths, artifact_format, pkg);
             if !staged_artifact.exists() {
-                return Err(format!("staged deb artifact is missing: {}", staged_artifact.display()));
+                return Err(format!(
+                    "staged deb artifact is missing: {}",
+                    staged_artifact.display()
+                ));
             }
             let package_root = staging_root.join(&pkg.name);
             extract_foldops_deb_data(&staged_artifact, &package_root)

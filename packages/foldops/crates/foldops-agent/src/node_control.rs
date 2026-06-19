@@ -1,7 +1,9 @@
 use foldops_types::ControlAction;
 use serde::Serialize;
 
+use crate::fah::query_fah_websocket_activity;
 use crate::fah::{send_fah_finish, send_fah_pause, send_fah_resume};
+use crate::foldingos::{FAH_CLIENT_UNIT, FOLDOPS_AGENT_UNIT};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ControlResult {
@@ -16,6 +18,11 @@ pub struct ControlResult {
 pub struct ControlStatus {
     pub foldops_agent: String,
     pub fah_client: String,
+    pub fah_folding_state: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fah_unit_state: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fah_folding_detail: Option<String>,
 }
 
 pub struct ControlContext {
@@ -24,10 +31,94 @@ pub struct ControlContext {
     pub fah_ws_port: u16,
 }
 
-pub async fn get_control_status() -> ControlStatus {
+pub async fn get_control_status(ctx: &ControlContext) -> ControlStatus {
+    let foldops_agent = systemd_is_active(FOLDOPS_AGENT_UNIT).await;
+    let fah_client = systemd_is_active(FAH_CLIENT_UNIT).await;
+    let (fah_folding_state, fah_unit_state, fah_folding_detail) = if fah_client == "active" {
+        summarize_fah_folding(query_fah_websocket_activity(&ctx.fah_ws_host, ctx.fah_ws_port).await)
+    } else {
+        (
+            "stopped".into(),
+            None,
+            Some("FAH service is not running".into()),
+        )
+    };
+
     ControlStatus {
-        foldops_agent: systemd_is_active("foldops-agent").await,
-        fah_client: systemd_is_active("fah-client").await,
+        foldops_agent,
+        fah_client,
+        fah_folding_state,
+        fah_unit_state,
+        fah_folding_detail,
+    }
+}
+
+fn summarize_fah_folding(
+    activity: Option<crate::fah::FahWsActivity>,
+) -> (String, Option<String>, Option<String>) {
+    let Some(activity) = activity else {
+        return (
+            "unreachable".into(),
+            None,
+            Some("FAH WebSocket unavailable on port 7396".into()),
+        );
+    };
+
+    let unit_state = activity.unit_state.trim().to_uppercase();
+    let detail = activity
+        .detail
+        .clone()
+        .or_else(|| format_fah_activity_detail(&activity));
+    let fah_folding_state = match unit_state.as_str() {
+        "RUN" if activity.project.is_some() => "folding".to_string(),
+        "RUN" => "waiting".to_string(),
+        "PAUSE" => "paused".to_string(),
+        "FINISH" => "finishing".to_string(),
+        "DOWNLOAD" | "UPLOAD" | "READY" | "CORE" => unit_state.to_lowercase(),
+        "" => "idle".to_string(),
+        other => other.to_lowercase(),
+    };
+
+    (
+        fah_folding_state,
+        if unit_state.is_empty() {
+            None
+        } else {
+            Some(unit_state)
+        },
+        detail,
+    )
+}
+
+fn format_fah_activity_detail(activity: &crate::fah::FahWsActivity) -> Option<String> {
+    let mut parts = Vec::new();
+    if let Some(project) = activity.project.as_deref() {
+        parts.push(format!("project {project}"));
+    }
+    if let Some(progress) = activity.progress {
+        parts.push(format!("{progress:.1}%"));
+    }
+    if let Some(ppd) = activity.ppd {
+        parts.push(format!("{} PPD", format_ppd(ppd)));
+    }
+    if parts.is_empty() {
+        if activity.unit_state.eq_ignore_ascii_case("RUN") {
+            Some("No work unit assigned".into())
+        } else {
+            None
+        }
+    } else {
+        Some(parts.join(" · "))
+    }
+}
+
+fn format_ppd(ppd: f64) -> String {
+    if ppd >= 1_000_000.0 {
+        format!("{:.2}M", ppd / 1_000_000.0)
+    } else if ppd >= 1_000.0 {
+        format!("{:.0}k", ppd / 1_000.0)
+    } else {
+        format!("{ppd:.0}")
     }
 }
 
@@ -67,7 +158,7 @@ pub async fn execute_control_action(action: ControlAction, ctx: &ControlContext)
     };
 
     match action {
-        ControlAction::AgentStart => match run_systemctl("start", "foldops-agent").await {
+        ControlAction::AgentStart => match run_systemctl("start", FOLDOPS_AGENT_UNIT).await {
             Ok((stdout, stderr)) => ControlResult {
                 ok: true,
                 action: action_str,
@@ -77,7 +168,7 @@ pub async fn execute_control_action(action: ControlAction, ctx: &ControlContext)
             },
             Err(e) => fail(e, String::new(), String::new()),
         },
-        ControlAction::AgentStop => match run_systemctl("stop", "foldops-agent").await {
+        ControlAction::AgentStop => match run_systemctl("stop", FOLDOPS_AGENT_UNIT).await {
             Ok((stdout, stderr)) => ControlResult {
                 ok: true,
                 action: action_str,
@@ -94,7 +185,7 @@ pub async fn execute_control_action(action: ControlAction, ctx: &ControlContext)
             stdout: String::new(),
             stderr: String::new(),
         },
-        ControlAction::FahStart => match run_systemctl("start", "fah-client").await {
+        ControlAction::FahStart => match run_systemctl("start", FAH_CLIENT_UNIT).await {
             Ok((stdout, stderr)) => ControlResult {
                 ok: true,
                 action: action_str,
@@ -104,7 +195,7 @@ pub async fn execute_control_action(action: ControlAction, ctx: &ControlContext)
             },
             Err(e) => fail(e, String::new(), String::new()),
         },
-        ControlAction::FahStop => match run_systemctl("stop", "fah-client").await {
+        ControlAction::FahStop => match run_systemctl("stop", FAH_CLIENT_UNIT).await {
             Ok((stdout, stderr)) => ControlResult {
                 ok: true,
                 action: action_str,
@@ -114,7 +205,7 @@ pub async fn execute_control_action(action: ControlAction, ctx: &ControlContext)
             },
             Err(e) => fail(e, String::new(), String::new()),
         },
-        ControlAction::FahRestart => match run_systemctl("restart", "fah-client").await {
+        ControlAction::FahRestart => match run_systemctl("restart", FAH_CLIENT_UNIT).await {
             Ok((stdout, stderr)) => ControlResult {
                 ok: true,
                 action: action_str,

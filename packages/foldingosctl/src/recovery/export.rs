@@ -74,12 +74,7 @@ pub fn recovery_export(
         .map(Path::to_path_buf)
         .unwrap_or_else(|| paths.foldops_backups_dir.join(&filename));
 
-    if let Err(error) = write_tar_zst_archive(
-        &output,
-        &manifest,
-        &files,
-        db_backup.as_deref(),
-    ) {
+    if let Err(error) = write_tar_zst_archive(&output, &manifest, &files, db_backup.as_deref()) {
         cleanup_db_backup(db_backup.as_deref());
         let _ = fs::remove_file(&output);
         return Err(error);
@@ -115,10 +110,8 @@ fn backup_foldops_db(paths: &AppliancePaths) -> Result<Option<PathBuf>, String> 
     if !paths.foldops_db.is_file() {
         return Ok(None);
     }
-    let destination = std::env::temp_dir().join(format!(
-        "foldingos-recovery-db-{}",
-        std::process::id()
-    ));
+    let destination =
+        std::env::temp_dir().join(format!("foldingos-recovery-db-{}", std::process::id()));
     if destination.exists() {
         fs::remove_file(&destination).map_err(|error| error.to_string())?;
     }
@@ -159,12 +152,8 @@ fn prune_old_backups(backups_dir: &Path) -> Result<(), String> {
     });
     while archives.len() > BACKUP_RETENTION {
         let oldest = archives.remove(0);
-        fs::remove_file(oldest.path()).map_err(|error| {
-            format!(
-                "remove old backup {}: {error}",
-                oldest.path().display()
-            )
-        })?;
+        fs::remove_file(oldest.path())
+            .map_err(|error| format!("remove old backup {}: {error}", oldest.path().display()))?;
     }
     Ok(())
 }

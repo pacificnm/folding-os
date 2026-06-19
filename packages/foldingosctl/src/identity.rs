@@ -19,8 +19,8 @@ static UUID_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 pub fn read_node_id(paths: &AppliancePaths) -> Result<String, String> {
-    let content = fs::read(paths.node_id_path())
-        .map_err(|error| format!("read node id: {error}"))?;
+    let content =
+        fs::read(paths.node_id_path()).map_err(|error| format!("read node id: {error}"))?;
     parse_node_id_file(&content)
 }
 
@@ -35,9 +35,7 @@ pub fn ensure_identity(paths: &AppliancePaths) -> Result<(), String> {
     if hostname.is_empty() {
         let compact: String = node_id.replace('-', "");
         hostname = format!("folding-{}", &compact[..compact.len().min(6)]);
-        let generated = format!(
-            "schema_version = 1\n\n[identity]\nhostname = {hostname:?}\n"
-        );
+        let generated = format!("schema_version = 1\n\n[identity]\nhostname = {hostname:?}\n");
         atomic_write(&paths.system_config_path(), generated.as_bytes(), 0o644)?;
         effective_config(paths, "system", true)?;
     }
@@ -53,31 +51,19 @@ fn ensure_node_id_file(paths: &AppliancePaths) -> Result<String, String> {
         Ok(content) => match parse_node_id_file(&content) {
             Ok(node_id) => {
                 if String::from_utf8_lossy(&content).trim() != node_id {
-                    atomic_write(
-                        &node_id_path,
-                        format!("{node_id}\n").as_bytes(),
-                        0o644,
-                    )?;
+                    atomic_write(&node_id_path, format!("{node_id}\n").as_bytes(), 0o644)?;
                 }
                 Ok(node_id)
             }
             Err(_) => {
                 let node_id = new_uuid()?;
-                atomic_write(
-                    &node_id_path,
-                    format!("{node_id}\n").as_bytes(),
-                    0o644,
-                )?;
+                atomic_write(&node_id_path, format!("{node_id}\n").as_bytes(), 0o644)?;
                 Ok(node_id)
             }
         },
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             let node_id = new_uuid()?;
-            atomic_write(
-                &node_id_path,
-                format!("{node_id}\n").as_bytes(),
-                0o644,
-            )?;
+            atomic_write(&node_id_path, format!("{node_id}\n").as_bytes(), 0o644)?;
             Ok(node_id)
         }
         Err(error) => Err(error.to_string()),
@@ -143,10 +129,12 @@ pub fn collect_mac_addresses() -> Result<Vec<String>, String> {
     collect_mac_addresses_from_sys_class_net(std::path::Path::new("/sys/class/net"))
 }
 
-fn collect_mac_addresses_from_sys_class_net(net_dir: &std::path::Path) -> Result<Vec<String>, String> {
+fn collect_mac_addresses_from_sys_class_net(
+    net_dir: &std::path::Path,
+) -> Result<Vec<String>, String> {
     let mut addresses = Vec::new();
-    let entries = fs::read_dir(net_dir)
-        .map_err(|error| format!("list network interfaces: {error}"))?;
+    let entries =
+        fs::read_dir(net_dir).map_err(|error| format!("list network interfaces: {error}"))?;
     for entry in entries {
         let entry = entry.map_err(|error| format!("list network interfaces: {error}"))?;
         let name = entry.file_name().to_string_lossy().into_owned();
@@ -154,8 +142,7 @@ fn collect_mac_addresses_from_sys_class_net(net_dir: &std::path::Path) -> Result
             continue;
         }
         let interface_dir = entry.path();
-        let operstate = fs::read_to_string(interface_dir.join("operstate"))
-            .unwrap_or_default();
+        let operstate = fs::read_to_string(interface_dir.join("operstate")).unwrap_or_default();
         if operstate.trim() != "up" {
             continue;
         }
@@ -304,10 +291,8 @@ mod tests {
 
     #[test]
     fn collect_mac_addresses_reads_up_interfaces_from_sysfs() {
-        let root = std::env::temp_dir().join(format!(
-            "foldingosctl-mac-collect-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("foldingosctl-mac-collect-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
         write_interface(&root, "lo", "unknown", "00:00:00:00:00:00");
@@ -322,10 +307,8 @@ mod tests {
 
     #[test]
     fn collect_mac_addresses_rejects_empty_allowlist() {
-        let root = std::env::temp_dir().join(format!(
-            "foldingosctl-mac-empty-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("foldingosctl-mac-empty-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
         write_interface(&root, "eth0", "down", "52:54:00:12:34:56");

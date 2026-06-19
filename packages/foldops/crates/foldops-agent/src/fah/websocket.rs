@@ -76,35 +76,183 @@ fn unit_to_state(raw: &WsUnit) -> Option<FahLogState> {
     })
 }
 
-fn pick_best_unit(units: &[WsUnit]) -> Option<FahLogState> {
-    let mut best: Option<(FahLogState, f64)> = None;
+fn empty_fah_log_state() -> FahLogState {
+    FahLogState {
+        project: None,
+        run: None,
+        clone: None,
+        gen: None,
+        progress: None,
+        ppd: None,
+        tpf: None,
+        recent_errors: vec![],
+    }
+}
+
+fn unit_status(raw: &WsUnit) -> String {
+    raw.state
+        .as_ref()
+        .and_then(|s| s.state.as_deref())
+        .unwrap_or("")
+        .to_string()
+}
+
+fn score_ws_unit(parsed: &FahLogState, status: &str) -> f64 {
+    let mut score = parsed.progress.unwrap_or(0.0);
+    if parsed.ppd.is_some() {
+        score += 200.0;
+    }
+    if status == "RUN" {
+        score += 1000.0;
+    } else if status == "CORE" {
+        score += 300.0;
+    } else if status == "PAUSE" {
+        score += 400.0;
+    }
+    score
+}
+
+fn pick_best_unit(units: &[WsUnit]) -> Option<(FahLogState, String)> {
+    let mut best: Option<(FahLogState, String, f64)> = None;
 
     for raw in units {
         let parsed = unit_to_state(raw)?;
-        let status = raw
-            .state
-            .as_ref()
-            .and_then(|s| s.state.as_deref())
-            .unwrap_or("");
-        let mut score = parsed.progress.unwrap_or(0.0);
-        if parsed.ppd.is_some() {
-            score += 200.0;
-        }
-        if status == "RUN" {
-            score += 1000.0;
-        } else if status == "CORE" {
-            score += 300.0;
-        }
+        let status = unit_status(raw);
+        let score = score_ws_unit(&parsed, &status);
 
-        if best.as_ref().is_none_or(|(_, s)| score > *s) {
-            best = Some((parsed, score));
+        if best.as_ref().is_none_or(|(_, _, s)| score > *s) {
+            best = Some((parsed, status, score));
         }
     }
 
-    best.map(|(s, _)| s)
+    best.map(|(state, status, _)| (state, status))
+}
+
+fn pick_best_unit_relaxed(units: &[WsUnit]) -> Option<(FahLogState, String)> {
+    let mut best: Option<(FahLogState, String, f64)> = None;
+
+    for raw in units {
+        let status = unit_status(raw);
+        if status.is_empty() {
+            continue;
+        }
+        let parsed = unit_to_state(raw).unwrap_or_else(|| empty_fah_log_state());
+        let score = score_ws_unit(&parsed, &status);
+
+        if best.as_ref().is_none_or(|(_, _, s)| score > *s) {
+            best = Some((parsed, status, score));
+        }
+    }
+
+    best.map(|(state, status, _)| (state, status))
+}
+
+fn activity_from_groups(
+    parsed: &serde_json::Value,
+) -> Option<(FahLogState, String, Option<String>)> {
+    let groups = parsed.get("groups")?.as_object()?;
+
+    for group in groups.values() {
+        let config = group.get("config")?;
+        let paused = config
+            .get("paused")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let finish = config
+            .get("finish")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let failed = group
+            .get("failed")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string();
+
+        if paused {
+            let detail = group
+                .get("wait")
+                .and_then(|w| w.as_str())
+                .filter(|w| !w.is_empty())
+                .map(|w| format!("Paused until {w}"));
+            return Some((empty_fah_log_state(), "PAUSE".into(), detail));
+        }
+        if finish {
+            return Some((
+                empty_fah_log_state(),
+                "FINISH".into(),
+                Some("Completing current work unit".into()),
+            ));
+        }
+        if !failed.is_empty() {
+            return Some((
+                FahLogState {
+                    recent_errors: vec![failed],
+                    ..empty_fah_log_state()
+                },
+                "RUN".into(),
+                None,
+            ));
+        }
+
+        return Some((empty_fah_log_state(), "RUN".into(), None));
+    }
+
+    None
+}
+
+fn activity_from_websocket_message(
+    parsed: &serde_json::Value,
+) -> Option<(FahLogState, String, Option<String>)> {
+    let units = parsed.get("units")?.as_array()?;
+    let typed: Vec<WsUnit> = units
+        .iter()
+        .filter_map(|u| serde_json::from_value(u.clone()).ok())
+        .collect();
+
+    if let Some((state, status)) = pick_best_unit(&typed).or_else(|| pick_best_unit_relaxed(&typed))
+    {
+        return Some((state, status, None));
+    }
+
+    if typed.is_empty() {
+        return activity_from_groups(parsed);
+    }
+
+    None
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct FahWsActivity {
+    pub unit_state: String,
+    pub project: Option<String>,
+    pub progress: Option<f64>,
+    pub ppd: Option<f64>,
+    pub detail: Option<String>,
+}
+
+pub async fn query_fah_websocket_activity(host: &str, port: u16) -> Option<FahWsActivity> {
+    parse_fah_websocket_with_unit_state(host, port)
+        .await
+        .map(|(state, unit_state, detail)| FahWsActivity {
+            unit_state,
+            project: state.project,
+            progress: state.progress,
+            ppd: state.ppd,
+            detail,
+        })
 }
 
 pub async fn parse_fah_websocket(host: &str, port: u16) -> Option<FahLogState> {
+    parse_fah_websocket_with_unit_state(host, port)
+        .await
+        .map(|(state, _, _)| state)
+}
+
+async fn parse_fah_websocket_with_unit_state(
+    host: &str,
+    port: u16,
+) -> Option<(FahLogState, String, Option<String>)> {
     let url = format!("ws://{host}:{port}{WS_PATH}");
 
     let connect = tokio::time::timeout(DEFAULT_TIMEOUT, connect_async(&url));
@@ -133,12 +281,7 @@ pub async fn parse_fah_websocket(host: &str, port: u16) -> Option<FahLogState> {
             let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&text) else {
                 continue;
             };
-            let units = parsed.get("units").and_then(|u| u.as_array())?;
-            let typed: Vec<WsUnit> = units
-                .iter()
-                .filter_map(|u| serde_json::from_value(u.clone()).ok())
-                .collect();
-            if let Some(state) = pick_best_unit(&typed) {
+            if let Some(state) = activity_from_websocket_message(&parsed) {
                 let _ = ws.close(None).await;
                 return Some(state);
             }
@@ -148,6 +291,51 @@ pub async fn parse_fah_websocket(host: &str, port: u16) -> Option<FahLogState> {
     .await;
 
     read.unwrap_or(None)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn paused_with_empty_units_reports_pause_state() {
+        let msg = json!({
+            "groups": {
+                "": {
+                    "config": { "paused": true, "finish": false },
+                    "wait": "2026-06-19T12:59:55Z"
+                }
+            },
+            "units": []
+        });
+        let (state, unit_state, detail) = activity_from_websocket_message(&msg).unwrap();
+        assert_eq!(unit_state, "PAUSE");
+        assert!(state.project.is_none());
+        assert_eq!(detail.as_deref(), Some("Paused until 2026-06-19T12:59:55Z"));
+    }
+
+    #[test]
+    fn running_with_empty_units_reports_run_state() {
+        let msg = json!({
+            "groups": { "": { "config": { "paused": false, "finish": false } } },
+            "units": []
+        });
+        let (_, unit_state, _) = activity_from_websocket_message(&msg).unwrap();
+        assert_eq!(unit_state, "RUN");
+    }
+
+    #[test]
+    fn run_unit_without_assignment_is_readable() {
+        let msg = json!({
+            "groups": { "": { "config": { "paused": false, "finish": false } } },
+            "units": [{
+                "state": { "state": "RUN" }
+            }]
+        });
+        let (_, unit_state, _) = activity_from_websocket_message(&msg).unwrap();
+        assert_eq!(unit_state, "RUN");
+    }
 }
 
 pub type FahWsCommand = &'static str;

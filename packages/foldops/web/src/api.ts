@@ -10,8 +10,6 @@ import type {
   ControlAction,
   ControlResult,
   ControlStatus,
-  DeployRun,
-  DeployRunsResponse,
   FahProjectInfo,
   FleetAssignRequest,
   FleetAssignResponse,
@@ -73,44 +71,6 @@ export async function runMachineControl(
     throw new Error(body.error ?? `Control failed (${res.status})`);
   }
   return body;
-}
-
-export async function fetchDeployRuns(): Promise<DeployRunsResponse> {
-  const res = await fetch("/api/deploy/runs");
-  if (!res.ok) {
-    throw new Error(`Failed to load deploy history (${res.status})`);
-  }
-  return res.json() as Promise<DeployRunsResponse>;
-}
-
-export async function fetchDeployRun(id: string): Promise<DeployRun> {
-  const res = await fetch(`/api/deploy/runs/${encodeURIComponent(id)}`);
-  if (!res.ok) {
-    throw new Error(`Failed to load deploy run (${res.status})`);
-  }
-  return res.json() as Promise<DeployRun>;
-}
-
-export async function startAgentDeploy(
-  hostnames?: string[],
-): Promise<{ run_id: string; status: string }> {
-  const res = await fetch("/api/deploy/agents", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(hostnames?.length ? { hostnames } : {}),
-  });
-  const body = (await res.json().catch(() => ({}))) as {
-    error?: string;
-    run_id?: string;
-    status?: string;
-  };
-  if (!res.ok) {
-    throw new Error(body.error ?? `Deploy failed (${res.status})`);
-  }
-  if (!body.run_id) {
-    throw new Error("Deploy started but no run id returned");
-  }
-  return { run_id: body.run_id, status: body.status ?? "running" };
 }
 
 export async function fetchAlerts(): Promise<AlertsResponse> {
@@ -477,11 +437,31 @@ export async function fetchServices(): Promise<ServicesResponse> {
 export async function restartService(
   unit: string,
 ): Promise<ServiceRestartResponse> {
+  const dashboardRestart =
+    unit === "foldingos-foldops-supervisor.service" ||
+    unit === "foldingos-foldops-serve-https.service";
   const res = await fetch("/api/services/restart", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ unit }),
+  }).catch((error) => {
+    if (dashboardRestart) {
+      return null;
+    }
+    throw error;
   });
+  if (!res) {
+    return {
+      unit,
+      name:
+        unit === "foldingos-foldops-supervisor.service"
+          ? "FoldOps supervisor (loopback)"
+          : "FoldOps HTTPS (port 3443)",
+      restarted: true,
+      scheduled: true,
+      message: "Restart started. The dashboard may reconnect briefly.",
+    };
+  }
   if (!res.ok) {
     throw new Error(await readApiError(res, "Service restart failed"));
   }

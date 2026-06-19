@@ -51,15 +51,13 @@ impl Config {
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(60_000),
             fah_log_path: PathBuf::from(
-                std::env::var("FAH_LOG_PATH")
-                    .unwrap_or_else(|_| "/var/log/fah-client/log.txt".into()),
+                std::env::var("FAH_LOG_PATH").unwrap_or_else(|_| "/data/fah/log.txt".into()),
             ),
             fah_db_path: PathBuf::from(
-                std::env::var("FAH_DB_PATH")
-                    .unwrap_or_else(|_| "/var/lib/fah-client/client.db".into()),
+                std::env::var("FAH_DB_PATH").unwrap_or_else(|_| "/data/fah/client.db".into()),
             ),
             fah_work_dir: PathBuf::from(
-                std::env::var("FAH_WORK_DIR").unwrap_or_else(|_| "/var/lib/fah-client/work".into()),
+                std::env::var("FAH_WORK_DIR").unwrap_or_else(|_| "/data/fah/work".into()),
             ),
             fah_ws_host: std::env::var("FAH_WS_HOST").unwrap_or_else(|_| "127.0.0.1".into()),
             fah_ws_port: std::env::var("FAH_WS_PORT")
@@ -81,7 +79,10 @@ impl Config {
             foldops_root,
             update_script,
             update_enabled: env_flag("UPDATE_ENABLED"),
-            controls_enabled: appliance_feature_enabled("CONTROLS_ENABLED", &installation_role_path),
+            controls_enabled: appliance_feature_enabled(
+                "CONTROLS_ENABLED",
+                &installation_role_path,
+            ),
             controls_allow_reboot: env_flag("CONTROLS_ALLOW_REBOOT"),
             config_enabled: appliance_feature_enabled("CONFIG_ENABLED", &installation_role_path),
             foldingosctl_path: crate::foldingos::default_foldingosctl_path(),

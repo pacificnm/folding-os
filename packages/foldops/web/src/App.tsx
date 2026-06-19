@@ -10,7 +10,6 @@ import { AdminSoftwareUpdates } from "./pages/admin/AdminSoftwareUpdates";
 import { Dashboard } from "./pages/Dashboard";
 import { KioskHome } from "./pages/KioskHome";
 import { AlertHistory } from "./pages/AlertHistory";
-import { Deploy } from "./pages/Deploy";
 import { MachineDetail } from "./pages/MachineDetail";
 
 export default function App() {
@@ -27,7 +26,6 @@ export default function App() {
         <Route path="services" element={<AdminServices />} />
         <Route path="recovery" element={<AdminRecovery />} />
       </Route>
-      <Route path="/deploy" element={<Deploy />} />
       <Route path="/alerts" element={<AlertHistory />} />
       <Route path="/machine/:hostname" element={<MachineDetail />} />
       <Route path="*" element={<Navigate to="/" replace />} />

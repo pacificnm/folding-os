@@ -41,7 +41,8 @@ pub fn load_fah_acquire_state(paths: &AppliancePaths) -> Result<FahAcquireState,
         }
         Err(error) => return Err(format!("read acquisition retry state: {error}")),
     };
-    parse_fah_acquire_state(&content).map_err(|error| format!("parse acquisition retry state: {error}"))
+    parse_fah_acquire_state(&content)
+        .map_err(|error| format!("parse acquisition retry state: {error}"))
 }
 
 pub fn parse_fah_acquire_state(content: &str) -> Result<FahAcquireState, String> {
@@ -76,7 +77,10 @@ pub fn parse_fah_acquire_state(content: &str) -> Result<FahAcquireState, String>
     Ok(state)
 }
 
-pub fn save_fah_acquire_state(paths: &AppliancePaths, state: &FahAcquireState) -> Result<(), String> {
+pub fn save_fah_acquire_state(
+    paths: &AppliancePaths,
+    state: &FahAcquireState,
+) -> Result<(), String> {
     let content = format!(
         "consecutive_failures={}\nnext_attempt_unix={}\nlast_failure_reason={}\n",
         state.consecutive_failures, state.next_attempt_unix, state.last_failure_reason
@@ -140,7 +144,11 @@ mod tests {
             (9, Duration::from_secs(6 * 60 * 60)),
         ];
         for (failures, want) in cases {
-            assert_eq!(fah_acquisition_retry_delay(failures), want, "failures={failures}");
+            assert_eq!(
+                fah_acquisition_retry_delay(failures),
+                want,
+                "failures={failures}"
+            );
         }
     }
 

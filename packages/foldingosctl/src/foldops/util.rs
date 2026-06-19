@@ -130,8 +130,7 @@ pub fn embedded_bootstrap_cache_available(
     }
     packages.iter().all(|pkg| {
         let path = embedded_foldops_bundle_path(paths, manifest_release, architecture, pkg);
-        path.is_file()
-            && crate::foldops::extract::verify_foldops_artifact_file(&path, pkg).is_ok()
+        path.is_file() && crate::foldops::extract::verify_foldops_artifact_file(&path, pkg).is_ok()
     })
 }
 
@@ -152,8 +151,7 @@ pub fn load_foldops_manifest_from_allowed_path(
     if path != paths.foldops_embedded_manifest && path != paths.foldops_assigned_manifest {
         return Err("manifest path is not allowed".into());
     }
-    let content =
-        fs::read_to_string(path).map_err(|error| format!("read manifest: {error}"))?;
+    let content = fs::read_to_string(path).map_err(|error| format!("read manifest: {error}"))?;
     if content.contains(FOLDOPS_MANIFEST_PLACEHOLDER) {
         return Err(format!(
             "manifest contains unresolved placeholder \"{FOLDOPS_MANIFEST_PLACEHOLDER}\""
@@ -164,7 +162,9 @@ pub fn load_foldops_manifest_from_allowed_path(
     Ok(manifest)
 }
 
-pub fn resolve_effective_foldops_manifest(paths: &AppliancePaths) -> Result<FoldOpsManifest, String> {
+pub fn resolve_effective_foldops_manifest(
+    paths: &AppliancePaths,
+) -> Result<FoldOpsManifest, String> {
     if assigned_foldops_manifest_present(&paths.foldops_assigned_manifest) {
         load_foldops_manifest_from_allowed_path(paths, &paths.foldops_assigned_manifest)
             .map_err(|error| format!("assigned manifest: {error}"))
@@ -184,7 +184,8 @@ pub fn foldops_supervisor_host_from_url(raw_url: &str) -> Result<String, String>
     if raw_url.is_empty() {
         return Err("supervisor URL is empty".into());
     }
-    let parsed = url::Url::parse(raw_url).map_err(|error| format!("supervisor URL is invalid: {error}"))?;
+    let parsed =
+        url::Url::parse(raw_url).map_err(|error| format!("supervisor URL is invalid: {error}"))?;
     let host = parsed.host_str().unwrap_or_default();
     if host.is_empty() {
         return Err("supervisor URL host is empty".into());
@@ -218,5 +219,6 @@ pub(crate) fn path_with_trailing_sep(path: &Path) -> PathBuf {
 pub(crate) fn path_within_root(root: &Path, candidate: &Path) -> bool {
     let root_clean = clean_path(root);
     let candidate_clean = clean_path(candidate);
-    candidate_clean == root_clean || candidate_clean.starts_with(&path_with_trailing_sep(&root_clean))
+    candidate_clean == root_clean
+        || candidate_clean.starts_with(&path_with_trailing_sep(&root_clean))
 }

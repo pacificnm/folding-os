@@ -18,7 +18,11 @@ pub(crate) mod util;
 
 use crate::paths::AppliancePaths;
 
-pub fn run(paths: &AppliancePaths, subcommand: &str, args: &[String]) -> Result<serde_json::Value, String> {
+pub fn run(
+    paths: &AppliancePaths,
+    subcommand: &str,
+    args: &[String],
+) -> Result<serde_json::Value, String> {
     match subcommand {
         "list-enrollments" => assign::list_enrollments(paths),
         "assign" => assign::assign(paths, args),
@@ -31,6 +35,12 @@ pub fn run(paths: &AppliancePaths, subcommand: &str, args: &[String]) -> Result<
         "serve" => serve::provision_serve(paths),
         "enroll" => enroll::provision_enroll(paths),
         "check-version" => update::provision_check_version_and_stage(paths),
+        "sync-software-assignments" => {
+            crate::assignments::sync_enrolled_agent_software_assignments(paths)?;
+            Ok(serde_json::json!({
+                "synced": true,
+            }))
+        }
         "report-update-status" => update::provision_report_update_status(paths, args),
         "apply-update" => update::provision_apply_update(paths, args),
         "boot" => network_boot::provision_boot(paths),
@@ -142,17 +152,14 @@ mod tests {
 
     #[test]
     fn list_allow_boot_returns_devices() {
-        let root = std::env::temp_dir().join(format!("foldingosctl-boot-list-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("foldingosctl-boot-list-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
         let paths = provision_test_paths(&root);
         write_supervisor_role(&paths);
         set_test_username(Some("foldingos-admin"));
-        allow_boot(
-            &paths,
-            &["00:be:43:e7:59:5e".into()],
-        )
-        .unwrap();
+        allow_boot(&paths, &["00:be:43:e7:59:5e".into()]).unwrap();
         allow_boot(
             &paths,
             &[
@@ -172,7 +179,8 @@ mod tests {
 
     #[test]
     fn allow_boot_normalizes_mac_and_is_idempotent() {
-        let root = std::env::temp_dir().join(format!("foldingosctl-boot-allow-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("foldingosctl-boot-allow-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
         let paths = provision_test_paths(&root);
@@ -191,10 +199,8 @@ mod tests {
 
     #[test]
     fn allow_boot_rejects_invalid_mac() {
-        let root = std::env::temp_dir().join(format!(
-            "foldingosctl-boot-invalid-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("foldingosctl-boot-invalid-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
         let paths = provision_test_paths(&root);
@@ -207,7 +213,8 @@ mod tests {
 
     #[test]
     fn deny_boot_removes_mac_and_install_disk_mapping() {
-        let root = std::env::temp_dir().join(format!("foldingosctl-boot-deny-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("foldingosctl-boot-deny-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
         let paths = provision_test_paths(&root);
@@ -229,8 +236,13 @@ mod tests {
 
         let list = list_allow_boot(&paths).unwrap();
         assert!(list["devices"].as_array().unwrap().is_empty());
-        assert!(!paths.boot_install_disk_allowlist.exists()
-            || fs::read_to_string(&paths.boot_install_disk_allowlist).unwrap().trim().is_empty());
+        assert!(
+            !paths.boot_install_disk_allowlist.exists()
+                || fs::read_to_string(&paths.boot_install_disk_allowlist)
+                    .unwrap()
+                    .trim()
+                    .is_empty()
+        );
 
         let again = deny_boot(&paths, &["52:54:00:12:34:56".into()]).unwrap();
         assert_eq!(again["already_removed"], true);

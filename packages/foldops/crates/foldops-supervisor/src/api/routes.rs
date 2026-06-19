@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use axum::body::Body;
 use axum::extract::{Path, Query, State};
-use axum::http::{HeaderMap, StatusCode, header};
+use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -11,8 +11,8 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 use crate::agent::config::{
-    build_foldinghome_candidate_toml, normalize_passkey_input, push_foldinghome_config, validate_foldinghome_candidate,
-    write_supervisor_candidate, FoldinghomeConfigRequest,
+    build_foldinghome_candidate_toml, normalize_passkey_input, push_foldinghome_config,
+    validate_foldinghome_candidate, write_supervisor_candidate, FoldinghomeConfigRequest,
 };
 use crate::agent::control::{fetch_agent_control_status, push_agent_control};
 use crate::agent::logs::{fetch_live_agent_logs, LogSource};
@@ -24,11 +24,17 @@ use crate::db::{self, Db, MachineRow, SnapshotRow};
 use crate::deploy::db::{get_deploy_run, list_deploy_runs};
 use crate::deploy::start_agent_deploy;
 use crate::fah_projects::fetch_fah_project;
-use crate::foldingos::{self, AllowBootRequest, AssignRequest, FleetCommandError, FleetDelegateConfig};
+use crate::foldingos::{
+    self, AllowBootRequest, AssignRequest, FleetCommandError, FleetDelegateConfig,
+};
 use crate::install_log;
 use crate::recovery::{self, BACKUPS_DIR};
 use crate::services;
-use crate::software::{self, apply_local, ensure_foldops_release_imported, ensure_tools_release_imported, fleet_apply_foldops, fleet_apply_tools, ApplyLocalRequest, FleetSoftwareApplyRequest, SoftwareService};
+use crate::software::{
+    self, apply_local, ensure_foldops_release_imported, ensure_tools_release_imported,
+    fleet_apply_foldops, fleet_apply_tools, ApplyLocalRequest, FleetSoftwareApplyRequest,
+    SoftwareService,
+};
 use crate::supervisor_logs::{fetch_supervisor_logs, SupervisorLogSource};
 
 #[derive(Clone)]
@@ -69,8 +75,14 @@ pub fn router(state: AppState) -> Router {
         .route("/fleet/registry", get(fleet_registry))
         .route("/fleet/registry/{version}", get(fleet_registry_show))
         .route("/fleet/assign", post(fleet_assign))
-        .route("/fleet/software/apply-foldops", post(fleet_software_apply_foldops))
-        .route("/fleet/software/apply-tools", post(fleet_software_apply_tools))
+        .route(
+            "/fleet/software/apply-foldops",
+            post(fleet_software_apply_foldops),
+        )
+        .route(
+            "/fleet/software/apply-tools",
+            post(fleet_software_apply_tools),
+        )
         .route("/software/updates", get(software_updates))
         .route("/software/install-log", get(software_install_log))
         .route("/software/apply-local", post(software_apply_local))
@@ -399,6 +411,9 @@ async fn control_status(State(state): State<AppState>, Path(name): Path<String>)
             "hostname": proxy.0,
             "foldops_agent": status.foldops_agent,
             "fah_client": status.fah_client,
+            "fah_folding_state": status.fah_folding_state,
+            "fah_unit_state": status.fah_unit_state,
+            "fah_folding_detail": status.fah_folding_detail,
         }))
         .into_response(),
         Err(msg) => (StatusCode::BAD_GATEWAY, Json(json!({ "error": msg }))).into_response(),
@@ -520,11 +535,7 @@ async fn foldinghome_config(
     let passkey = match normalize_passkey_input(&body.passkey) {
         Ok(value) => value,
         Err(error) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(json!({ "error": error })),
-            )
-                .into_response();
+            return (StatusCode::BAD_REQUEST, Json(json!({ "error": error }))).into_response();
         }
     };
 
@@ -539,8 +550,7 @@ async fn foldinghome_config(
     } else {
         ""
     };
-    let validation_toml =
-        build_foldinghome_candidate_toml(username, body.team, validation_secret);
+    let validation_toml = build_foldinghome_candidate_toml(username, body.team, validation_secret);
     let candidate_path = match write_supervisor_candidate(&validation_toml) {
         Ok(path) => path,
         Err(error) => {
@@ -600,7 +610,8 @@ async fn foldinghome_config(
             Some(passkey.as_str())
         },
     )
-    .await {
+    .await
+    {
         Ok(result) => Json(json!({
             "hostname": proxy.0,
             "ok": result.ok,
@@ -913,10 +924,107 @@ async fn fleet_allow_boot(State(state): State<AppState>) -> Response {
         foldingosctl_path: &state.config.foldingosctl_path,
     };
 
-    match foldingos::list_allow_boot(config).await {
-        Ok(devices) => Json(json!({ "devices": devices })).into_response(),
-        Err(error) => fleet_command_error(error),
+    let devices = match foldingos::list_allow_boot(config).await {
+        Ok(devices) => devices,
+        Err(error) => return fleet_command_error(error),
+    };
+
+    let enrollments = match foldingos::list_enrollments(config).await {
+        Ok(records) => records,
+        Err(error) => return fleet_command_error(error),
+    };
+
+    let conn = state.db.lock();
+    let correlated = correlate_allow_boot_devices(
+        devices,
+        &enrollments,
+        &conn,
+        state.config.offline_threshold_ms,
+    );
+
+    Json(json!({ "devices": correlated })).into_response()
+}
+
+fn normalize_mac_address(value: &str) -> String {
+    let hex: String = value
+        .chars()
+        .filter(|ch| ch.is_ascii_hexdigit())
+        .collect::<String>()
+        .to_ascii_lowercase();
+    if hex.len() != 12 {
+        return value.trim().to_ascii_lowercase();
     }
+    hex.as_bytes()
+        .chunks(2)
+        .map(|pair| std::str::from_utf8(pair).unwrap_or(""))
+        .collect::<Vec<_>>()
+        .join(":")
+}
+
+fn correlate_allow_boot_devices(
+    devices: Vec<foldingos::AllowBootDevice>,
+    enrollments: &[foldingos::EnrollmentRecord],
+    conn: &rusqlite::Connection,
+    offline_threshold_ms: u64,
+) -> Vec<Value> {
+    let mut mac_to_enrollment: std::collections::HashMap<String, &foldingos::EnrollmentRecord> =
+        std::collections::HashMap::new();
+    for enrollment in enrollments {
+        for mac in &enrollment.mac_addresses {
+            mac_to_enrollment.insert(normalize_mac_address(mac), enrollment);
+        }
+    }
+
+    devices
+        .into_iter()
+        .map(|device| {
+            let mac = normalize_mac_address(&device.mac_address);
+            let enrollment = mac_to_enrollment.get(&mac).copied();
+            let machine = enrollment.and_then(|record| {
+                db::get_machine_by_node_id(conn, &record.node_id)
+                    .ok()
+                    .flatten()
+                    .or_else(|| db::get_machine(conn, &record.hostname).ok().flatten())
+            });
+            let online = machine
+                .as_ref()
+                .map(|row| db::is_online(&row.last_seen, offline_threshold_ms));
+            let primary_ipv4 = machine.as_ref().and_then(|row| {
+                db::get_latest_snapshot(conn, &row.hostname)
+                    .ok()
+                    .flatten()
+                    .and_then(|snapshot| parse_payload(&snapshot))
+                    .and_then(|payload| payload.primaryIpv4.clone())
+            });
+            let install_status = if enrollment.is_some() {
+                "installed"
+            } else {
+                "pending"
+            };
+            let network_status = match (install_status, online) {
+                ("pending", _) => "awaiting_install",
+                (_, Some(true)) => "online",
+                (_, Some(false)) => "offline",
+                _ => "installed",
+            };
+            json!({
+                "mac_address": device.mac_address,
+                "install_disk": device.install_disk,
+                "install_status": install_status,
+                "network_status": network_status,
+                "hostname": enrollment.map(|record| record.hostname.clone()),
+                "node_id": enrollment.map(|record| record.node_id.clone()),
+                "primary_ipv4": primary_ipv4,
+                "online": online,
+                "registered_at": enrollment
+                    .map(|record| empty_as_null(&record.registered_at))
+                    .unwrap_or(Value::Null),
+                "last_seen_at": enrollment
+                    .map(|record| empty_as_null(&record.last_seen_at))
+                    .unwrap_or(Value::Null),
+            })
+        })
+        .collect()
 }
 
 #[derive(Debug, Deserialize)]
@@ -991,12 +1099,7 @@ async fn fleet_allow_boot_delete(
         foldingosctl_path: &state.config.foldingosctl_path,
     };
 
-    match foldingos::provision_deny_boot(
-        config,
-        foldingos::DenyBootRequest { mac_address },
-    )
-    .await
-    {
+    match foldingos::provision_deny_boot(config, foldingos::DenyBootRequest { mac_address }).await {
         Ok(result) => Json(json!({ "ok": true, "result": result })).into_response(),
         Err(error) => fleet_command_error(error),
     }
@@ -1017,7 +1120,10 @@ async fn fleet_registry(State(state): State<AppState>) -> Response {
     }
 }
 
-async fn fleet_registry_show(State(state): State<AppState>, Path(version): Path<String>) -> Response {
+async fn fleet_registry_show(
+    State(state): State<AppState>,
+    Path(version): Path<String>,
+) -> Response {
     if !state.config.uses_supervisor_fleet_delegation() {
         return fleet_delegation_unavailable();
     }
@@ -1051,7 +1157,10 @@ struct FleetAssignBody {
     tools_version: Option<String>,
 }
 
-async fn fleet_assign(State(state): State<AppState>, Json(body): Json<FleetAssignBody>) -> Response {
+async fn fleet_assign(
+    State(state): State<AppState>,
+    Json(body): Json<FleetAssignBody>,
+) -> Response {
     if !state.config.uses_supervisor_fleet_delegation() {
         return fleet_delegation_unavailable();
     }
@@ -1128,9 +1237,7 @@ async fn fleet_assign(State(state): State<AppState>, Json(body): Json<FleetAssig
     });
 
     if let Some(release) = foldops_manifest.as_deref() {
-        if let Err(error) =
-            ensure_foldops_release_imported(&state.config, release).await
-        {
+        if let Err(error) = ensure_foldops_release_imported(&state.config, release).await {
             install_log::append_event(
                 "api",
                 "fleet_assign",
@@ -1142,11 +1249,7 @@ async fn fleet_assign(State(state): State<AppState>, Json(body): Json<FleetAssig
                 "",
                 Some(request_detail.clone()),
             );
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(json!({ "error": error })),
-            )
-                .into_response();
+            return (StatusCode::BAD_REQUEST, Json(json!({ "error": error }))).into_response();
         }
     }
 
@@ -1163,11 +1266,7 @@ async fn fleet_assign(State(state): State<AppState>, Json(body): Json<FleetAssig
                 "",
                 Some(request_detail.clone()),
             );
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(json!({ "error": error })),
-            )
-                .into_response();
+            return (StatusCode::BAD_REQUEST, Json(json!({ "error": error }))).into_response();
         }
     }
 
@@ -1245,13 +1344,7 @@ async fn software_updates(
     }
 
     let refresh = query.refresh.unwrap_or(false);
-    match software::build_updates_response(
-        &state.db,
-        &state.config,
-        &state.software,
-        refresh,
-    )
-    .await
+    match software::build_updates_response(&state.db, &state.config, &state.software, refresh).await
     {
         Ok(body) => Json(body).into_response(),
         Err(error) => (
@@ -1382,11 +1475,7 @@ async fn supervisor_logs(
         .into_response(),
         Err(error) => {
             tracing::warn!(source = source_str, error = %error, "supervisor log fetch failed");
-            (
-                StatusCode::BAD_GATEWAY,
-                Json(json!({ "error": error })),
-            )
-                .into_response()
+            (StatusCode::BAD_GATEWAY, Json(json!({ "error": error }))).into_response()
         }
     }
 }
@@ -1410,11 +1499,7 @@ async fn recovery_export_create(
         Err(error) => {
             tracing::error!(error = %error, "recovery export failed");
             if error.contains("foldingosctl") {
-                return (
-                    StatusCode::BAD_GATEWAY,
-                    Json(json!({ "error": error })),
-                )
-                    .into_response();
+                return (StatusCode::BAD_GATEWAY, Json(json!({ "error": error }))).into_response();
             }
             (StatusCode::BAD_REQUEST, Json(json!({ "error": error }))).into_response()
         }
@@ -1430,11 +1515,7 @@ async fn recovery_export_latest(State(state): State<AppState>) -> Response {
     let path = match recovery::latest_backup_path(backups_dir) {
         Ok(path) => path,
         Err(error) => {
-            return (
-                StatusCode::NOT_FOUND,
-                Json(json!({ "error": error })),
-            )
-                .into_response();
+            return (StatusCode::NOT_FOUND, Json(json!({ "error": error }))).into_response();
         }
     };
 
@@ -1487,11 +1568,7 @@ async fn services_list(State(state): State<AppState>) -> Response {
         Err(error) => {
             tracing::error!(error = %error, "services list failed");
             if error.contains("foldingosctl") {
-                return (
-                    StatusCode::BAD_GATEWAY,
-                    Json(json!({ "error": error })),
-                )
-                    .into_response();
+                return (StatusCode::BAD_GATEWAY, Json(json!({ "error": error }))).into_response();
             }
             (StatusCode::BAD_REQUEST, Json(json!({ "error": error }))).into_response()
         }
@@ -1520,11 +1597,7 @@ async fn services_restart(
         Err(error) => {
             tracing::error!(unit = %unit, error = %error, "service restart failed");
             if error.contains("foldingosctl") {
-                return (
-                    StatusCode::BAD_GATEWAY,
-                    Json(json!({ "error": error })),
-                )
-                    .into_response();
+                return (StatusCode::BAD_GATEWAY, Json(json!({ "error": error }))).into_response();
             }
             (StatusCode::BAD_REQUEST, Json(json!({ "error": error }))).into_response()
         }
@@ -1541,11 +1614,7 @@ async fn services_restart_all(State(state): State<AppState>) -> Response {
         Err(error) => {
             tracing::error!(error = %error, "restart all services failed");
             if error.contains("foldingosctl") {
-                return (
-                    StatusCode::BAD_GATEWAY,
-                    Json(json!({ "error": error })),
-                )
-                    .into_response();
+                return (StatusCode::BAD_GATEWAY, Json(json!({ "error": error }))).into_response();
             }
             (StatusCode::BAD_REQUEST, Json(json!({ "error": error }))).into_response()
         }

@@ -91,8 +91,8 @@ fn extract_foldops_data_tar_xz(reader: &mut dyn Read, destination: &Path) -> Res
 }
 
 fn extract_foldops_data_tar_zst(reader: &mut dyn Read, destination: &Path) -> Result<(), String> {
-    let zstd_reader = ZstdDecoder::new(reader)
-        .map_err(|error| format!("open data.tar.zst stream: {error}"))?;
+    let zstd_reader =
+        ZstdDecoder::new(reader).map_err(|error| format!("open data.tar.zst stream: {error}"))?;
     extract_foldops_tar_archive(zstd_reader, destination)
 }
 
@@ -246,7 +246,10 @@ mod tests {
     }
 }
 
-pub fn verify_foldops_artifact_file(path: &Path, pkg: &crate::foldops_manifest::FoldOpsPackage) -> Result<(), String> {
+pub fn verify_foldops_artifact_file(
+    path: &Path,
+    pkg: &crate::foldops_manifest::FoldOpsPackage,
+) -> Result<(), String> {
     let file = File::open(path).map_err(|error| error.to_string())?;
     let mut hasher = Sha256::new();
     let written = copy(&mut file.take((pkg.artifact_size + 1) as u64), &mut hasher)

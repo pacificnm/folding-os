@@ -79,8 +79,8 @@ pub fn select_provision_install_disk() -> Result<String, String> {
         "lsblk",
         &["-J", "-b", "-d", "-o", "NAME,TYPE,TRAN,SIZE,SERIAL,RM,PATH"],
     )?;
-    let parsed: LsblkOutput = serde_json::from_str(&listing)
-        .map_err(|error| format!("parse lsblk output: {error}"))?;
+    let parsed: LsblkOutput =
+        serde_json::from_str(&listing).map_err(|error| format!("parse lsblk output: {error}"))?;
     for device in parsed.blockdevices {
         let path = device.resolved_path();
         if validate_provision_target_disk(&path).is_ok() {
@@ -122,7 +122,12 @@ fn inspect_provision_target_disk(path: &str) -> Result<ProvisionTargetDisk, Stri
     if !path.starts_with("/dev/") {
         return Err(format!("target disk must be a block device path: {path:?}"));
     }
-    if Path::new(path).file_name().and_then(|name| name.to_str()).unwrap_or("").contains('/') {
+    if Path::new(path)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("")
+        .contains('/')
+    {
         return Err(format!(
             "target disk must be a whole-disk device, not a partition: {path:?}"
         ));
@@ -142,8 +147,8 @@ fn inspect_provision_target_disk(path: &str) -> Result<ProvisionTargetDisk, Stri
         "lsblk",
         &["-J", "-b", "-d", "-o", "NAME,TYPE,TRAN,SIZE,SERIAL,RM,PATH"],
     )?;
-    let parsed: LsblkOutput = serde_json::from_str(&listing)
-        .map_err(|error| format!("parse lsblk output: {error}"))?;
+    let parsed: LsblkOutput =
+        serde_json::from_str(&listing).map_err(|error| format!("parse lsblk output: {error}"))?;
     for device in parsed.blockdevices {
         let device_path = device.resolved_path();
         if device_path != path {
@@ -203,7 +208,10 @@ fn read_provision_target_disk_serial_from_sysfs(device_path: &str) -> String {
     }
     let mut candidates = vec![format!("/sys/block/{name}/device/serial")];
     if name.starts_with("nvme") {
-        let controller = name.rfind('n').filter(|idx| *idx > "nvme".len()).map(|idx| &name[..idx]);
+        let controller = name
+            .rfind('n')
+            .filter(|idx| *idx > "nvme".len())
+            .map(|idx| &name[..idx]);
         if let Some(controller) = controller {
             candidates.push(format!("/sys/class/nvme/{controller}/serial"));
         }
@@ -254,9 +262,7 @@ pub fn clear_grub_next_entry_on_disk(disk: &str, update_grub_env: &Path) -> Resu
     }
     let mount_point = tempfile_mount_dir("foldingos-grubenv-")?;
     let _ = run_mount_umount(&efi_partition, &mount_point, |mount| {
-        crate::provision::grub_env::clear_grub_next_entry(
-            &mount.join("EFI/BOOT/grubenv"),
-        )
+        crate::provision::grub_env::clear_grub_next_entry(&mount.join("EFI/BOOT/grubenv"))
     });
     crate::provision::util::run_command("sync", &[])
 }

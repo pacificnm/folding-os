@@ -48,8 +48,6 @@ export function Dashboard() {
           <Link to="/alerts">Alert history</Link>
           {" · "}
           <Link to="/admin/software">Settings →</Link>
-          {" · "}
-          <Link to="/deploy">Deploy agents →</Link>
         </>
       }
       headerAside={

@@ -34,7 +34,9 @@ fn generate_foldops_self_signed_tls(paths: &AppliancePaths, hostname: &str) -> R
         .map_err(|error| format!("generate TLS certificate params: {error}"))?;
     params
         .subject_alt_names
-        .push(SanType::IpAddress(std::net::IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))));
+        .push(SanType::IpAddress(std::net::IpAddr::V4(Ipv4Addr::new(
+            127, 0, 0, 1,
+        ))));
     if let Some(address) = routable_ipv4_address() {
         if let Ok(ip) = address.parse::<Ipv4Addr>() {
             params
@@ -46,30 +48,43 @@ fn generate_foldops_self_signed_tls(paths: &AppliancePaths, hostname: &str) -> R
     distinguished_name.push(DnType::CommonName, hostname);
     params.distinguished_name = distinguished_name;
 
-    let key_pair = KeyPair::generate().map_err(|error| format!("create TLS certificate: {error}"))?;
+    let key_pair =
+        KeyPair::generate().map_err(|error| format!("create TLS certificate: {error}"))?;
     let cert = params
         .self_signed(&key_pair)
         .map_err(|error| format!("create TLS certificate: {error}"))?;
     let cert_pem = cert.pem();
     let key_pem = key_pair.serialize_pem();
 
-    atomic_write(&paths.foldops_tls_dir.join("cert.pem"), cert_pem.as_bytes(), 0o644)?;
-    atomic_write(&paths.foldops_tls_dir.join("key.pem"), key_pem.as_bytes(), 0o600)?;
-    atomic_write(&paths.foldops_tls_dir.join("ca.pem"), cert_pem.as_bytes(), 0o644)?;
+    atomic_write(
+        &paths.foldops_tls_dir.join("cert.pem"),
+        cert_pem.as_bytes(),
+        0o644,
+    )?;
+    atomic_write(
+        &paths.foldops_tls_dir.join("key.pem"),
+        key_pem.as_bytes(),
+        0o600,
+    )?;
+    atomic_write(
+        &paths.foldops_tls_dir.join("ca.pem"),
+        cert_pem.as_bytes(),
+        0o644,
+    )?;
     Ok(())
 }
 
-pub fn load_foldops_tls_certificate(
-    paths: &AppliancePaths,
-) -> Result<(String, String), String> {
+pub fn load_foldops_tls_certificate(paths: &AppliancePaths) -> Result<(String, String), String> {
     let cert_path = paths.foldops_tls_dir.join("cert.pem");
     let key_path = paths.foldops_tls_dir.join("key.pem");
     for path in [&cert_path, &key_path] {
-        let metadata = fs::metadata(path).map_err(|error| {
-            format!("TLS material is missing at {}: {error}", path.display())
-        })?;
+        let metadata = fs::metadata(path)
+            .map_err(|error| format!("TLS material is missing at {}: {error}", path.display()))?;
         if metadata.is_dir() {
-            return Err(format!("TLS material path is not a file: {}", path.display()));
+            return Err(format!(
+                "TLS material path is not a file: {}",
+                path.display()
+            ));
         }
     }
     Ok((
@@ -85,9 +100,7 @@ pub fn validate_foldops_tls_ready(paths: &AppliancePaths) -> Result<(), String> 
     load_foldops_tls_certificate(paths).map(|_| ())
 }
 
-pub fn load_rustls_config(
-    paths: &AppliancePaths,
-) -> Result<rustls::ServerConfig, String> {
+pub fn load_rustls_config(paths: &AppliancePaths) -> Result<rustls::ServerConfig, String> {
     let cert_path = paths.foldops_tls_dir.join("cert.pem");
     let key_path = paths.foldops_tls_dir.join("key.pem");
     let cert_bytes = fs::read(&cert_path).map_err(|error| error.to_string())?;

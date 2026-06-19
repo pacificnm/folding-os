@@ -37,7 +37,11 @@ impl HttpResponse {
     }
 
     pub fn error(status: u16, message: &str) -> Self {
-        Self::text(status, "text/plain; charset=utf-8", message.as_bytes().to_vec())
+        Self::text(
+            status,
+            "text/plain; charset=utf-8",
+            message.as_bytes().to_vec(),
+        )
     }
 
     pub fn binary(
@@ -100,7 +104,9 @@ fn read_request(stream: &mut TcpStream) -> Result<HttpRequest, String> {
         + 4;
     let header_text = String::from_utf8_lossy(&buffer[..header_end]);
     let mut lines = header_text.lines();
-    let request_line = lines.next().ok_or_else(|| "missing request line".to_string())?;
+    let request_line = lines
+        .next()
+        .ok_or_else(|| "missing request line".to_string())?;
     let mut parts = request_line.split_whitespace();
     let method = parts.next().unwrap_or_default().to_string();
     let target = parts.next().unwrap_or_default();
@@ -113,7 +119,9 @@ fn read_request(stream: &mut TcpStream) -> Result<HttpRequest, String> {
         }
     }
     let mut body = buffer[header_end..].to_vec();
-    if let Some(length) = headers.get("content-length").and_then(|value| value.parse::<usize>().ok())
+    if let Some(length) = headers
+        .get("content-length")
+        .and_then(|value| value.parse::<usize>().ok())
     {
         while body.len() < length {
             let read = stream.read(&mut chunk).map_err(|error| error.to_string())?;
@@ -190,5 +198,9 @@ pub fn header_value<'a>(request: &'a HttpRequest, name: &str) -> &'a str {
 }
 
 pub fn query_value<'a>(request: &'a HttpRequest, name: &str) -> &'a str {
-    request.query.get(name).map(String::as_str).unwrap_or_default()
+    request
+        .query
+        .get(name)
+        .map(String::as_str)
+        .unwrap_or_default()
 }

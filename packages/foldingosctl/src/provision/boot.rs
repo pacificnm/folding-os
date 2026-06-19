@@ -9,9 +9,8 @@ use crate::fs_atomic::atomic_write;
 use crate::paths::AppliancePaths;
 use crate::role::require_supervisor_role;
 
-static MAC_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^([0-9a-f]{2}:){5}[0-9a-f]{2}$").expect("mac pattern compiles")
-});
+static MAC_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^([0-9a-f]{2}:){5}[0-9a-f]{2}$").expect("mac pattern compiles"));
 static DISK_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^/dev/(sd[a-z]+|vd[a-z]+|nvme[0-9]+n[0-9]+)$").expect("disk pattern compiles")
 });
@@ -131,7 +130,9 @@ fn collect_boot_allow_devices(paths: &AppliancePaths) -> Result<Vec<serde_json::
         .into_iter()
         .map(|mac| {
             let mut device = serde_json::json!({ "mac_address": mac });
-            if let Some(disk) = disk_mappings.get(device["mac_address"].as_str().unwrap_or_default()) {
+            if let Some(disk) =
+                disk_mappings.get(device["mac_address"].as_str().unwrap_or_default())
+            {
                 device["install_disk"] = serde_json::Value::String(disk.clone());
             }
             device
@@ -193,10 +194,16 @@ fn read_boot_install_disk_allowlist_entries(
             continue;
         }
         let mut fields = line.split_whitespace();
-        let Some(mac_raw) = fields.next() else { continue };
-        let Some(disk_raw) = fields.next() else { continue };
-        if let (Ok(mac), Ok(disk)) = (parse_mac_address(mac_raw), parse_install_disk_path(disk_raw))
-        {
+        let Some(mac_raw) = fields.next() else {
+            continue;
+        };
+        let Some(disk_raw) = fields.next() else {
+            continue;
+        };
+        if let (Ok(mac), Ok(disk)) = (
+            parse_mac_address(mac_raw),
+            parse_install_disk_path(disk_raw),
+        ) {
             mappings.insert(mac, disk);
         }
     }
@@ -231,7 +238,11 @@ fn write_boot_install_disk_mappings(
     if !lines.is_empty() {
         content.push('\n');
     }
-    atomic_write(&paths.boot_install_disk_allowlist, content.as_bytes(), 0o664)?;
+    atomic_write(
+        &paths.boot_install_disk_allowlist,
+        content.as_bytes(),
+        0o664,
+    )?;
     finalize_boot_allowlist_metadata(&paths.boot_install_disk_allowlist)
 }
 

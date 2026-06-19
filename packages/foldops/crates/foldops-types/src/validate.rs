@@ -76,6 +76,7 @@ mod tests {
             nodeId: None,
             installationRole: None,
             foldingosVersion: None,
+            primaryIpv4: None,
             system: System {
                 uptime: 86400.0,
                 loadAvg: [0.5, 0.4, 0.3],

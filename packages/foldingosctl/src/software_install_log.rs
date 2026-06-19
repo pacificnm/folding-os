@@ -18,8 +18,9 @@ pub fn log_path() -> PathBuf {
 pub fn ensure_ready() -> Result<(), String> {
     let path = log_path();
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|error| format!("create install log directory {}: {error}", parent.display()))?;
+        fs::create_dir_all(parent).map_err(|error| {
+            format!("create install log directory {}: {error}", parent.display())
+        })?;
     }
     OpenOptions::new()
         .create(true)
@@ -40,12 +41,7 @@ pub fn should_log_command(command: &str) -> bool {
     }
 }
 
-pub fn log_automation_outcome(
-    command: &str,
-    ok: bool,
-    data: &Value,
-    error_message: Option<&str>,
-) {
+pub fn log_automation_outcome(command: &str, ok: bool, data: &Value, error_message: Option<&str>) {
     if !should_log_command(command) {
         return;
     }
@@ -56,11 +52,7 @@ pub fn log_automation_outcome(
         "registry" => "import",
         _ => "ctl",
     };
-    let operation = command
-        .split_whitespace()
-        .nth(1)
-        .unwrap_or("")
-        .to_string();
+    let operation = command.split_whitespace().nth(1).unwrap_or("").to_string();
     let message = if ok {
         data.get("message")
             .and_then(|value| value.as_str())
@@ -180,10 +172,8 @@ mod tests {
 
     #[test]
     fn append_and_read_round_trip() {
-        let path = std::env::temp_dir().join(format!(
-            "foldingosctl-install-log-{}",
-            std::process::id()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("foldingosctl-install-log-{}", std::process::id()));
         let _ = fs::remove_file(&path);
         env::set_var("FOLDOPS_SOFTWARE_INSTALL_LOG", &path);
 

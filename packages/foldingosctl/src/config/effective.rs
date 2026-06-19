@@ -5,7 +5,9 @@ use std::path::Path;
 use crate::fs_atomic::atomic_write;
 use crate::paths::AppliancePaths;
 
-use super::parse::{domain_config_to_map, parse_domain, render_domain, validate_domain, DomainConfig};
+use super::parse::{
+    domain_config_to_map, parse_domain, render_domain, validate_domain, DomainConfig,
+};
 
 pub fn load_effective_config_for_domain(
     paths: &AppliancePaths,
@@ -14,12 +16,7 @@ pub fn load_effective_config_for_domain(
     if !valid_domain(domain) {
         return Err(format!("unknown configuration domain {domain:?}"));
     }
-    let mut merged = load_effective(
-        paths,
-        domain,
-        Some(paths.domain_active_path(domain)),
-        true,
-    );
+    let mut merged = load_effective(paths, domain, Some(paths.domain_active_path(domain)), true);
     if merged.is_err() {
         merged = load_effective(
             paths,
@@ -43,12 +40,7 @@ pub fn effective_config(
         return Err(format!("unknown configuration domain {domain:?}"));
     }
 
-    let mut merged = load_effective(
-        paths,
-        domain,
-        Some(paths.domain_active_path(domain)),
-        true,
-    );
+    let mut merged = load_effective(paths, domain, Some(paths.domain_active_path(domain)), true);
     if let Err(error) = &merged {
         eprintln!(
             "foldingosctl: invalid active {domain} configuration, trying last-known-good: {error}"

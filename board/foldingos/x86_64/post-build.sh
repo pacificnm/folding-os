@@ -33,10 +33,6 @@ ln -snf /run/systemd/resolve/stub-resolv.conf "${TARGET_DIR}/etc/resolv.conf"
 # Host keys are generated on the node and must not be embedded in the image.
 rm -f "${TARGET_DIR}"/etc/ssh/ssh_host_*_key*
 chmod 0440 "${TARGET_DIR}/etc/sudoers.d/foldingos-admin"
-if [ -f "${TARGET_DIR}/usr/bin/foldingosctl" ]; then
-  chown root:root "${TARGET_DIR}/usr/bin/foldingosctl"
-  chmod 4755 "${TARGET_DIR}/usr/bin/foldingosctl"
-fi
 
 FOLDOPS_MANIFEST="${PROJECT_ROOT}/overlay/usr/share/foldingos/manifests/foldops.toml"
 if [ ! -f "${FOLDOPS_MANIFEST}" ]; then

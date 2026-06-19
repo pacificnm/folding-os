@@ -8,8 +8,7 @@ use crate::automation_policy::require_supervisor_automation_mutation;
 use crate::fs_atomic::atomic_write;
 use crate::paths::AppliancePaths;
 use crate::recovery::bundle::{
-    hash_file, validate_restore_target, RecoveryManifest, MANIFEST_SCHEMA_VERSION,
-    MAX_EXPORT_BYTES,
+    hash_file, validate_restore_target, RecoveryManifest, MANIFEST_SCHEMA_VERSION, MAX_EXPORT_BYTES,
 };
 use crate::role::require_supervisor_role;
 
@@ -25,10 +24,8 @@ pub fn recovery_import(
     require_supervisor_role(paths)?;
     require_supervisor_automation_mutation(paths, "recovery", "import")?;
 
-    let temp_dir = std::env::temp_dir().join(format!(
-        "foldingos-recovery-import-{}",
-        std::process::id()
-    ));
+    let temp_dir =
+        std::env::temp_dir().join(format!("foldingos-recovery-import-{}", std::process::id()));
     if temp_dir.exists() {
         fs::remove_dir_all(&temp_dir).map_err(|error| error.to_string())?;
     }
@@ -136,8 +133,8 @@ fn validate_manifest(
 }
 
 fn restore_file(staged: &Path, destination: &Path, expected_size: u64) -> Result<(), String> {
-    let content = fs::read(staged)
-        .map_err(|error| format!("read staged {}: {error}", staged.display()))?;
+    let content =
+        fs::read(staged).map_err(|error| format!("read staged {}: {error}", staged.display()))?;
     if content.len() as u64 != expected_size {
         return Err(format!(
             "staged file {} size {} does not match manifest {}",
@@ -231,12 +228,8 @@ mod tests {
             .get("path")
             .and_then(|value| value.as_str())
             .expect("path");
-        let import = recovery_import(
-            &paths,
-            Path::new(archive),
-            ImportOptions { dry_run: true },
-        )
-        .expect("import dry run");
+        let import = recovery_import(&paths, Path::new(archive), ImportOptions { dry_run: true })
+            .expect("import dry run");
         assert_eq!(import.get("dry_run"), Some(&serde_json::Value::Bool(true)));
 
         crate::automation_policy::set_test_username(None);

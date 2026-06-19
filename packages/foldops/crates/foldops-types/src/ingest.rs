@@ -100,5 +100,7 @@ pub struct IngestPayload {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub foldingosVersion: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub primaryIpv4: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub logs: Option<NodeLogs>,
 }

@@ -10,19 +10,20 @@ use crate::provision::authorize::ProvisionAuthorizeResponse;
 use crate::provision::grub_env::clear_grub_next_entry;
 use crate::provision::role_cmd::parse_installation_role_bytes;
 use crate::provision::ssh::validate_authorized_keys;
-use crate::provision::targets::{
-    select_provision_install_disk, validate_provision_target_disk,
-};
+use crate::provision::targets::{select_provision_install_disk, validate_provision_target_disk};
 use crate::provision::util::{
-    empty_human_result, format_install_bytes, http_post_json, install_logf,
-    join_supervisor_url, mounted, partition_device, provision_scratch_dir, read_enrollment_token,
-    read_supervisor_base_url, run_command, DATA_PARTITION_NUMBER, INSTALL_SESSION_HEADER,
-    AGENT_INSTALLATION_ROLE,
+    empty_human_result, format_install_bytes, http_post_json, install_logf, join_supervisor_url,
+    mounted, partition_device, provision_scratch_dir, read_enrollment_token,
+    read_supervisor_base_url, run_command, AGENT_INSTALLATION_ROLE, DATA_PARTITION_NUMBER,
+    INSTALL_SESSION_HEADER,
 };
 
 const INSTALL_PROGRESS_INTERVAL: i64 = 128 * 1024 * 1024;
 
-pub fn provision_install(paths: &AppliancePaths, args: &[String]) -> Result<serde_json::Value, String> {
+pub fn provision_install(
+    paths: &AppliancePaths,
+    args: &[String],
+) -> Result<serde_json::Value, String> {
     let mut disk = String::new();
     let mut version = String::new();
     let mut supervisor_url = String::new();
@@ -101,7 +102,9 @@ pub fn provision_install(paths: &AppliancePaths, args: &[String]) -> Result<serd
     ));
     let mac_addresses = collect_mac_addresses()?;
 
-    install_logf(&format!("Requesting install authorization from {supervisor_url}."));
+    install_logf(&format!(
+        "Requesting install authorization from {supervisor_url}."
+    ));
     let authorize_url = join_supervisor_url(&supervisor_url, "/v1/provision/authorize")?;
     let authorize_body = serde_json::json!({
         "schema_version": 1,
@@ -146,18 +149,18 @@ pub fn provision_install(paths: &AppliancePaths, args: &[String]) -> Result<serd
         &stream_url,
         &[
             ("X-FoldingOS-Enrollment-Token", enrollment_token.as_str()),
-            (INSTALL_SESSION_HEADER, authorization.install_session_id.as_str()),
+            (
+                INSTALL_SESSION_HEADER,
+                authorization.install_session_id.as_str(),
+            ),
         ],
     )?;
     if stream_status != 200 {
         return Err(format!("image stream failed with status {stream_status}"));
     }
 
-    let (digest, written) = write_provision_image_to_disk(
-        &target.path,
-        &mut reader,
-        authorization.image_size_bytes,
-    )?;
+    let (digest, written) =
+        write_provision_image_to_disk(&target.path, &mut reader, authorization.image_size_bytes)?;
     if written != authorization.image_size_bytes {
         return Err(format!(
             "installed image size {written} does not match expected {}",
@@ -172,7 +175,11 @@ pub fn provision_install(paths: &AppliancePaths, args: &[String]) -> Result<serd
         authorization.image_version, target.path, digest
     ));
 
-    relocate_provision_gpt(&target.path, target.size_bytes, authorization.image_size_bytes)?;
+    relocate_provision_gpt(
+        &target.path,
+        target.size_bytes,
+        authorization.image_size_bytes,
+    )?;
     stage_provision_boot_files(
         &target.path,
         &authorization.installation_role,
@@ -215,7 +222,9 @@ fn write_provision_image_to_disk(
     let mut last_report = 0i64;
     while written < size {
         let to_read = std::cmp::min(buffer.len() as i64, size - written) as usize;
-        let read = source.read(&mut buffer[..to_read]).map_err(|error| error.to_string())?;
+        let read = source
+            .read(&mut buffer[..to_read])
+            .map_err(|error| error.to_string())?;
         if read == 0 {
             break;
         }
@@ -276,7 +285,9 @@ fn stage_provision_boot_files(
         if role == AGENT_INSTALLATION_ROLE {
             let token = foldops_ingest_token.trim();
             if token.is_empty() {
-                return Err("supervisor ingest token is invalid: supervisor ingest token is empty".into());
+                return Err(
+                    "supervisor ingest token is invalid: supervisor ingest token is empty".into(),
+                );
             }
             fs::write(
                 provision_dir.join("foldops-ingest-token"),
@@ -287,7 +298,9 @@ fn stage_provision_boot_files(
         clear_grub_next_entry(&root.join("EFI/BOOT/grubenv"))?;
         run_command("sync", &[])
     })?;
-    install_logf(&format!("Staged installation role and SSH keys on {efi_partition}."));
+    install_logf(&format!(
+        "Staged installation role and SSH keys on {efi_partition}."
+    ));
     Ok(())
 }
 
@@ -362,7 +375,10 @@ fn write_provision_persistent_files(
         0o600,
     )?;
     if role == AGENT_INSTALLATION_ROLE {
-        if foldops_supervisor_ca_pem.iter().all(|b| b.is_ascii_whitespace()) {
+        if foldops_supervisor_ca_pem
+            .iter()
+            .all(|b| b.is_ascii_whitespace())
+        {
             return Err("supervisor TLS CA material is empty".into());
         }
         let foldops_config_dir = root.join("config/foldops");
@@ -405,13 +421,24 @@ where
     result
 }
 
-fn mount_and_run_ext4<F>(device: &str, mount_point: &std::path::Path, operation: F) -> Result<(), String>
+fn mount_and_run_ext4<F>(
+    device: &str,
+    mount_point: &std::path::Path,
+    operation: F,
+) -> Result<(), String>
 where
     F: FnOnce(&std::path::Path) -> Result<(), String>,
 {
     run_command(
         "mount",
-        &["-t", "ext4", "-o", "rw", device, &mount_point.to_string_lossy()],
+        &[
+            "-t",
+            "ext4",
+            "-o",
+            "rw",
+            device,
+            &mount_point.to_string_lossy(),
+        ],
     )?;
     let result = operation(mount_point);
     let _ = run_command("umount", &[&mount_point.to_string_lossy()]);

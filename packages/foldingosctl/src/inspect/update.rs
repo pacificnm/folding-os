@@ -77,7 +77,9 @@ pub fn inspect_update(paths: &AppliancePaths) -> Result<serde_json::Value, Strin
     Ok(data)
 }
 
-fn load_staged_update_metadata(path: &std::path::Path) -> Result<StagedUpdateMetadata, std::io::Error> {
+fn load_staged_update_metadata(
+    path: &std::path::Path,
+) -> Result<StagedUpdateMetadata, std::io::Error> {
     let content = fs::read_to_string(path)?;
     let metadata: StagedUpdateMetadata = serde_json::from_str(&content)
         .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
@@ -90,7 +92,9 @@ fn load_staged_update_metadata(path: &std::path::Path) -> Result<StagedUpdateMet
     Ok(metadata)
 }
 
-fn load_pending_update_report(path: &std::path::Path) -> Result<PendingUpdateReport, std::io::Error> {
+fn load_pending_update_report(
+    path: &std::path::Path,
+) -> Result<PendingUpdateReport, std::io::Error> {
     let content = fs::read_to_string(path)?;
     let report: PendingUpdateReport = serde_json::from_str(&content)
         .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
@@ -110,7 +114,10 @@ fn query_desired_image_version(paths: &AppliancePaths) -> Result<String, String>
     }
     let node_id = read_node_id(paths)?;
     let token = read_enrollment_token(paths)?;
-    let endpoint = join_supervisor_url(&supervisor_url, &format!("/v1/agents/desired-version?node_id={node_id}"))?;
+    let endpoint = join_supervisor_url(
+        &supervisor_url,
+        &format!("/v1/agents/desired-version?node_id={node_id}"),
+    )?;
     let response = ureq::get(&endpoint)
         .set("X-FoldingOS-Enrollment-Token", &token)
         .call()
@@ -138,7 +145,8 @@ fn read_supervisor_base_url(paths: &AppliancePaths) -> Result<String, String> {
     if raw.is_empty() {
         return Ok(String::new());
     }
-    let parsed = url::Url::parse(raw).map_err(|error| format!("invalid supervisor url: {error}"))?;
+    let parsed =
+        url::Url::parse(raw).map_err(|error| format!("invalid supervisor url: {error}"))?;
     if parsed.scheme() != "http" && parsed.scheme() != "https" {
         return Err(format!("supervisor url must use http or https: \"{raw}\""));
     }
@@ -159,7 +167,8 @@ fn read_enrollment_token(paths: &AppliancePaths) -> Result<String, String> {
 }
 
 fn join_supervisor_url(base: &str, path: &str) -> Result<String, String> {
-    let parsed = url::Url::parse(base).map_err(|error| format!("invalid supervisor url: {error}"))?;
+    let parsed =
+        url::Url::parse(base).map_err(|error| format!("invalid supervisor url: {error}"))?;
     let joined = parsed
         .join(path)
         .map_err(|error| format!("join supervisor url: {error}"))?;

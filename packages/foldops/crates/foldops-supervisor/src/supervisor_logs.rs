@@ -26,7 +26,14 @@ pub async fn fetch_supervisor_logs(
     lines: u32,
 ) -> Result<(String, Vec<String>), String> {
     let mut cmd = tokio::process::Command::new("/usr/bin/journalctl");
-    cmd.args(["-q", "--no-pager", "-o", "short-iso", "-n", &lines.to_string()]);
+    cmd.args([
+        "-q",
+        "--no-pager",
+        "-o",
+        "short-iso",
+        "-n",
+        &lines.to_string(),
+    ]);
 
     match source {
         SupervisorLogSource::Foldops => {

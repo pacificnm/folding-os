@@ -10,9 +10,23 @@ export interface SupervisorLogsResponse {
   live: boolean;
 }
 
+export type NetworkInstallStatus =
+  | "awaiting_install"
+  | "online"
+  | "offline"
+  | "installed";
+
 export interface AllowBootDevice {
   mac_address: string;
   install_disk?: string | null;
+  install_status?: "pending" | "installed";
+  network_status?: NetworkInstallStatus;
+  hostname?: string | null;
+  node_id?: string | null;
+  primary_ipv4?: string | null;
+  online?: boolean | null;
+  registered_at?: string | null;
+  last_seen_at?: string | null;
 }
 
 export interface AllowBootDevicesResponse {
@@ -167,40 +181,6 @@ export interface AlertsStatusResponse {
   };
 }
 
-export type DeployRunStatus = "running" | "completed" | "failed";
-
-export type DeployHostStatus =
-  | "pending"
-  | "running"
-  | "success"
-  | "failed"
-  | "offline"
-  | "skipped";
-
-export interface DeployHostResult {
-  hostname: string;
-  status: DeployHostStatus;
-  exit_code: number | null;
-  message: string;
-  stdout: string;
-  stderr: string;
-  duration_ms: number | null;
-  started_at: string | null;
-  finished_at: string | null;
-}
-
-export interface DeployRun {
-  id: string;
-  created_at: string;
-  status: DeployRunStatus;
-  hostnames: string[];
-  results: Record<string, DeployHostResult>;
-}
-
-export interface DeployRunsResponse {
-  runs: DeployRun[];
-}
-
 export type ControlAction =
   | "agent.start"
   | "agent.stop"
@@ -217,6 +197,9 @@ export interface ControlStatus {
   hostname?: string;
   foldops_agent: string;
   fah_client: string;
+  fah_folding_state?: string;
+  fah_unit_state?: string | null;
+  fah_folding_detail?: string | null;
 }
 
 export interface ControlResult {
@@ -412,6 +395,7 @@ export interface ServiceRestartResponse {
   unit: string;
   name: string;
   restarted: boolean;
+  scheduled?: boolean;
   message?: string;
 }
 

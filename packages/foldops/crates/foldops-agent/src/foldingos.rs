@@ -106,6 +106,7 @@ pub async fn collect_delegated_snapshot(config: DelegatedCollectConfig<'_>) -> I
         nodeId: node.as_ref().map(|value| value.node_id.clone()),
         installationRole: node.as_ref().map(|value| value.installation_role.clone()),
         foldingosVersion: node.as_ref().map(|value| value.foldingos_version.clone()),
+        primaryIpv4: node.as_ref().and_then(|value| value.primary_ipv4.clone()),
         system: system_payload,
         fah: fah_payload,
         maintenance,
@@ -166,13 +167,14 @@ pub async fn activate_foldinghome_config(
     foldingosctl_path: &Path,
     candidate_path: &Path,
 ) -> Result<Value, AutomationCommandError> {
-    let candidate = candidate_path
-        .to_str()
-        .ok_or_else(|| AutomationCommandError::CommandRejected {
-            command: "config activate foldinghome".into(),
-            code: "invalid_input".into(),
-            message: "candidate path is not valid UTF-8".into(),
-        })?;
+    let candidate =
+        candidate_path
+            .to_str()
+            .ok_or_else(|| AutomationCommandError::CommandRejected {
+                command: "config activate foldinghome".into(),
+                code: "invalid_input".into(),
+                message: "candidate path is not valid UTF-8".into(),
+            })?;
     run_automation(
         foldingosctl_path,
         &["config", "activate", "foldinghome", candidate],
@@ -184,11 +186,7 @@ pub async fn set_fah_passkey(
     foldingosctl_path: &Path,
     passkey: &str,
 ) -> Result<Value, AutomationCommandError> {
-    run_automation(
-        foldingosctl_path,
-        &["config", "set-passkey", passkey],
-    )
-    .await
+    run_automation(foldingosctl_path, &["config", "set-passkey", passkey]).await
 }
 
 pub async fn foldops_acquire(foldingosctl_path: &Path) -> Result<Value, AutomationCommandError> {
@@ -199,23 +197,18 @@ pub async fn tools_acquire(foldingosctl_path: &Path) -> Result<Value, Automation
     run_automation(foldingosctl_path, &["tools", "acquire"]).await
 }
 
-pub async fn try_restart_systemd_unit(unit: &str) -> Result<(), String> {
-    let output = tokio::process::Command::new("systemctl")
-        .args(["try-restart", unit])
-        .output()
-        .await
-        .map_err(|error| error.to_string())?;
-    if output.status.success() {
-        Ok(())
-    } else {
-        Err(format!(
-            "systemctl try-restart {unit} failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        ))
-    }
+pub async fn sync_software_assignments(
+    foldingosctl_path: &Path,
+) -> Result<Value, AutomationCommandError> {
+    run_automation(
+        foldingosctl_path,
+        &["provision", "sync-software-assignments"],
+    )
+    .await
 }
 
 pub const FOLDOPS_AGENT_UNIT: &str = "foldingos-foldops-agent.service";
+pub const FAH_CLIENT_UNIT: &str = "folding-at-home.service";
 
 async fn run_automation(
     foldingosctl_path: &Path,
@@ -231,7 +224,8 @@ async fn run_automation(
         .output()
         .await?;
 
-    let stdout = String::from_utf8(output.stdout).map_err(|_| AutomationCommandError::InvalidUtf8)?;
+    let stdout =
+        String::from_utf8(output.stdout).map_err(|_| AutomationCommandError::InvalidUtf8)?;
     let envelope: AutomationEnvelope = serde_json::from_str(stdout.trim())?;
 
     if !output.status.success() || !envelope.ok {
@@ -248,11 +242,13 @@ async fn run_automation(
         });
     }
 
-    envelope.data.ok_or_else(|| AutomationCommandError::CommandRejected {
-        command: envelope.command,
-        code: "missing_data".into(),
-        message: "automation response did not include data".into(),
-    })
+    envelope
+        .data
+        .ok_or_else(|| AutomationCommandError::CommandRejected {
+            command: envelope.command,
+            code: "missing_data".into(),
+            message: "automation response did not include data".into(),
+        })
 }
 
 #[derive(Debug, Deserialize)]
@@ -275,6 +271,8 @@ struct InspectNodeData {
     hostname: String,
     installation_role: String,
     foldingos_version: String,
+    #[serde(default)]
+    primary_ipv4: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -343,7 +341,10 @@ struct InspectUpdateData {
     reboot_required: bool,
 }
 
-async fn run_inspect(foldingosctl_path: &Path, subcommand: &str) -> Result<Value, InspectCommandError> {
+async fn run_inspect(
+    foldingosctl_path: &Path,
+    subcommand: &str,
+) -> Result<Value, InspectCommandError> {
     let output = tokio::process::Command::new(foldingosctl_path)
         .args(["inspect", subcommand, "--format", "json"])
         .output()
@@ -606,7 +607,10 @@ exit 1
         let data = activate_foldinghome_config(&foldingosctl, &candidate)
             .await
             .expect("activate foldinghome");
-        assert_eq!(data.get("domain").and_then(|value| value.as_str()), Some("foldinghome"));
+        assert_eq!(
+            data.get("domain").and_then(|value| value.as_str()),
+            Some("foldinghome")
+        );
         assert_eq!(
             data.get("activated").and_then(|value| value.as_bool()),
             Some(true)

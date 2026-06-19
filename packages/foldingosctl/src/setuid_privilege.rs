@@ -43,6 +43,7 @@ pub fn command_requires_root_elevation(command_group: &str, command_name: &str) 
             | ("services", "restart-all")
             | ("config", "activate")
             | ("config", "set-passkey")
+            | ("provision", "sync-software-assignments")
     )
 }
 
@@ -63,9 +64,9 @@ pub fn guard_for_parsed_command(
         ElevationOutcome::AlreadyRoot => Ok(PrivilegeGuard::none()),
         ElevationOutcome::Elevated => Ok(PrivilegeGuard::elevated()),
         ElevationOutcome::Unavailable if cfg!(test) => Ok(PrivilegeGuard::none()),
-        ElevationOutcome::Unavailable => Err(
-            "foldingosctl must be installed setuid root (mode 4755) for this command".into(),
-        ),
+        ElevationOutcome::Unavailable => {
+            Err("foldingosctl must be installed setuid root (mode 4755) for this command".into())
+        }
     }
 }
 
@@ -126,7 +127,13 @@ fn authorize_root_elevation(
             require_supervisor_automation_mutation(paths, "services", command_name)
         }
         ("config", "activate") => {
-            require_agent_automation_mutation(paths, "config", "activate")
+            crate::automation_policy::require_config_automation_mutation(paths, "config", "activate")
+        }
+        ("config", "set-passkey") => {
+            crate::automation_policy::require_config_automation_mutation(paths, "config", "set-passkey")
+        }
+        ("provision", "sync-software-assignments") => {
+            require_agent_automation_mutation(paths, "provision", "sync-software-assignments")
         }
         _ => Err(format!(
             "automation policy does not authorize {command_group} {command_name} for the foldops user"
@@ -205,6 +212,10 @@ mod tests {
         assert!(command_requires_root_elevation("provision", "deny-boot"));
         assert!(command_requires_root_elevation("recovery", "export"));
         assert!(!command_requires_root_elevation("provision", "assign"));
+        assert!(command_requires_root_elevation(
+            "provision",
+            "sync-software-assignments"
+        ));
         assert!(!command_requires_root_elevation("inspect", "foldops"));
     }
 }

@@ -85,10 +85,9 @@ impl Config {
             installation_role_path,
             packages_foldops_index_url: std::env::var("PACKAGES_FOLDOPS_INDEX_URL")
                 .unwrap_or_else(|_| "https://packages.folding-os.com/foldops/index.json".into()),
-            packages_tools_index_url: std::env::var("PACKAGES_TOOLS_INDEX_URL")
-                .unwrap_or_else(|_| {
-                    "https://packages.folding-os.com/foldingos-tools/index.json".into()
-                }),
+            packages_tools_index_url: std::env::var("PACKAGES_TOOLS_INDEX_URL").unwrap_or_else(
+                |_| "https://packages.folding-os.com/foldingos-tools/index.json".into(),
+            ),
         })
     }
 

@@ -6,7 +6,7 @@ use nix::sys::statvfs::statvfs;
 use regex::Regex;
 use std::sync::LazyLock;
 
-use crate::identity::{candidate_network_interfaces};
+use crate::identity::candidate_network_interfaces;
 use crate::paths::AppliancePaths;
 
 static TEMP_INPUT_PATTERN: LazyLock<Regex> =
@@ -68,8 +68,8 @@ fn read_uptime_and_load() -> Result<(f64, [f64; 3]), String> {
 }
 
 fn read_memory_usage() -> Result<serde_json::Value, String> {
-    let file = fs::File::open("/proc/meminfo")
-        .map_err(|error| format!("open /proc/meminfo: {error}"))?;
+    let file =
+        fs::File::open("/proc/meminfo").map_err(|error| format!("open /proc/meminfo: {error}"))?;
     let reader = BufReader::new(file);
     let mut total_kb = 0_u64;
     let mut available_kb = 0_u64;
@@ -146,8 +146,8 @@ fn read_primary_network_counters() -> Result<serde_json::Value, String> {
 }
 
 fn read_interface_counters(interface_name: &str) -> Result<(u64, u64), String> {
-    let file = fs::File::open("/proc/net/dev")
-        .map_err(|error| format!("open /proc/net/dev: {error}"))?;
+    let file =
+        fs::File::open("/proc/net/dev").map_err(|error| format!("open /proc/net/dev: {error}"))?;
     let reader = BufReader::new(file);
     let prefix = format!("{interface_name}:");
     for line in reader.lines() {
@@ -156,7 +156,10 @@ fn read_interface_counters(interface_name: &str) -> Result<(u64, u64), String> {
         if !line.starts_with(&prefix) {
             continue;
         }
-        let parts: Vec<&str> = line.trim_start_matches(&prefix).split_whitespace().collect();
+        let parts: Vec<&str> = line
+            .trim_start_matches(&prefix)
+            .split_whitespace()
+            .collect();
         if parts.len() < 9 {
             return Err(format!("invalid /proc/net/dev entry for {interface_name}"));
         }
@@ -168,7 +171,9 @@ fn read_interface_counters(interface_name: &str) -> Result<(u64, u64), String> {
             .map_err(|error| format!("parse tx bytes: {error}"))?;
         return Ok((rx_bytes, tx_bytes));
     }
-    Err(format!("network interface {interface_name} not found in /proc/net/dev"))
+    Err(format!(
+        "network interface {interface_name} not found in /proc/net/dev"
+    ))
 }
 
 fn read_temperatures_from_sysfs() -> (Option<f64>, Option<f64>) {
@@ -230,7 +235,11 @@ fn read_thermal_zone_temperature(match_text: &str) -> Option<f64> {
     let entries = fs::read_dir("/sys/class/thermal").ok()?;
     let match_lower = match_text.to_lowercase();
     for entry in entries.flatten() {
-        if !entry.file_name().to_string_lossy().starts_with("thermal_zone") {
+        if !entry
+            .file_name()
+            .to_string_lossy()
+            .starts_with("thermal_zone")
+        {
             continue;
         }
         let base = entry.path();

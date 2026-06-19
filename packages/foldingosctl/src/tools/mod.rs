@@ -51,10 +51,8 @@ pub fn run(paths: &AppliancePaths, subcommand: &str, args: &[String]) -> Result<
     }
     match subcommand {
         "acquire" => {
-            let data = finalize_tools_acquire(
-                paths,
-                tools_acquire(paths, &ToolsAcquireHooks::default()),
-            )?;
+            let data =
+                finalize_tools_acquire(paths, tools_acquire(paths, &ToolsAcquireHooks::default()))?;
             if let Some(message) = data.get("message").and_then(|value| value.as_str()) {
                 println!("{message}");
             }
@@ -85,8 +83,12 @@ impl Default for ToolsAcquireHooks {
     }
 }
 
-fn tools_acquire(paths: &AppliancePaths, hooks: &ToolsAcquireHooks) -> Result<serde_json::Value, String> {
+fn tools_acquire(
+    paths: &AppliancePaths,
+    hooks: &ToolsAcquireHooks,
+) -> Result<serde_json::Value, String> {
     require_acquire_automation_mutation(paths, "tools")?;
+    crate::assignments::sync_enrolled_agent_software_assignments(paths)?;
 
     let assignment = match resolve_effective_tools_assignment(paths)? {
         Some(assignment) => assignment,
@@ -290,12 +292,12 @@ mod tests {
 
     use sha2::{Digest, Sha256};
 
+    use super::download::write_staged_tools_binary;
     use super::*;
     use crate::inspect::tools::parse_tools_assignment;
     use crate::inspect::{
         save_tools_active_state, validate_tools_assignment_public, ToolsActiveState,
     };
-    use super::download::write_staged_tools_binary;
 
     const VALID_TOOLS_ASSIGNMENT_JSON: &str = r#"{
   "schema_version": 1,
@@ -343,10 +345,8 @@ mod tests {
 
     #[test]
     fn resolve_effective_tools_assignment_prefers_assigned() {
-        let root = std::env::temp_dir().join(format!(
-            "foldingosctl-tools-resolve-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("foldingosctl-tools-resolve-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
         fs::write(
@@ -390,7 +390,8 @@ mod tests {
         fs::create_dir_all(&root).unwrap();
         let paths = test_paths(&root);
         let payload = test_elf_bytes();
-        let mut assignment = parse_tools_assignment(VALID_TOOLS_ASSIGNMENT_JSON.as_bytes()).unwrap();
+        let mut assignment =
+            parse_tools_assignment(VALID_TOOLS_ASSIGNMENT_JSON.as_bytes()).unwrap();
         assignment.artifact_size = payload.len() as i64;
         assignment.sha256 = format!("{:x}", Sha256::digest(&payload));
         fs::write(&paths.tools_binary, &payload).unwrap();
@@ -414,10 +415,8 @@ mod tests {
 
     #[test]
     fn tools_acquire_installs_verified_binary() {
-        let root = std::env::temp_dir().join(format!(
-            "foldingosctl-tools-acquire-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("foldingosctl-tools-acquire-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
 

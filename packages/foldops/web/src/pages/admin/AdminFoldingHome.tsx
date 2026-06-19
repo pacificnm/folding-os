@@ -9,11 +9,73 @@ import {
 } from "../../fahConfig";
 import type { FoldinghomeConfigResponse, MachineSummary } from "../../types";
 
+const FOLDINGHOME_DEFAULTS_KEY = "foldops.foldinghome.defaults.v1";
+
+interface FoldinghomeSavedDefaults {
+  username?: string;
+  team?: string;
+}
+
+function loadSavedDefaults(): FoldinghomeSavedDefaults {
+  try {
+    const raw = window.localStorage.getItem(FOLDINGHOME_DEFAULTS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as FoldinghomeSavedDefaults;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveDefaults(defaults: FoldinghomeSavedDefaults) {
+  try {
+    window.localStorage.setItem(
+      FOLDINGHOME_DEFAULTS_KEY,
+      JSON.stringify(defaults),
+    );
+  } catch {
+    /* Ignore storage failures; config push still proceeds. */
+  }
+}
+
+function mergeAppliedFahConfig(
+  machines: MachineSummary[],
+  hostnames: Set<string>,
+  username: string,
+  team: number,
+  passkeyConfigured: boolean,
+): MachineSummary[] {
+  return machines.map((machine) => {
+    if (!hostnames.has(machine.hostname) || !machine.latest?.payload) {
+      return machine;
+    }
+    const previousFah = machine.latest.payload.fah;
+    return {
+      ...machine,
+      latest: {
+        ...machine.latest,
+        payload: {
+          ...machine.latest.payload,
+          fah: {
+            ...previousFah,
+            configUsername: username,
+            configTeam: team,
+            configPasskeyConfigured: passkeyConfigured
+              ? true
+              : previousFah.configPasskeyConfigured,
+          },
+        },
+      },
+    };
+  });
+}
+
 export function AdminFoldingHome() {
+  const [savedDefaults] = useState(loadSavedDefaults);
   const [machines, setMachines] = useState<MachineSummary[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [username, setUsername] = useState("");
-  const [team, setTeam] = useState("0");
+  const [username, setUsername] = useState(savedDefaults.username ?? "");
+  const [team, setTeam] = useState(savedDefaults.team ?? "0");
   const [passkey, setPasskey] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -92,6 +154,11 @@ export function AdminFoldingHome() {
       return;
     }
 
+    saveDefaults({
+      username: donor,
+      team: String(teamNumber),
+    });
+
     setBusy(true);
     setError(null);
     setStatus(null);
@@ -119,6 +186,21 @@ export function AdminFoldingHome() {
     }
 
     const failures = nextResults.filter((result) => !result.ok);
+    const successfulHosts = new Set(
+      nextResults
+        .filter((result) => result.ok)
+        .map((result) => result.hostname),
+    );
+    setMachines((current) =>
+      mergeAppliedFahConfig(
+        current,
+        successfulHosts,
+        donor,
+        teamNumber,
+        Boolean(passkeyValue),
+      ),
+    );
+
     if (failures.length === 0) {
       setStatus(
         `Applied Folding@home settings to ${nextResults.length} machine${nextResults.length === 1 ? "" : "s"}.`,
@@ -133,7 +215,21 @@ export function AdminFoldingHome() {
     }
 
     setBusy(false);
-    await load();
+    try {
+      const response = await fetchMachines();
+      setMachines((current) =>
+        mergeAppliedFahConfig(
+          response.machines.length > 0 ? response.machines : current,
+          successfulHosts,
+          donor,
+          teamNumber,
+          Boolean(passkeyValue),
+        ),
+      );
+      setError(null);
+    } catch {
+      /* Keep optimistic apply results visible if the refresh misses. */
+    }
   };
 
   return (

@@ -62,9 +62,15 @@ pub enum UpstreamError {
     #[error("index channel mismatch: expected {expected}, got {actual}")]
     ChannelMismatch { expected: String, actual: String },
     #[error("failed to fetch {channel} index: {message}")]
-    FetchFailed { channel: &'static str, message: String },
+    FetchFailed {
+        channel: &'static str,
+        message: String,
+    },
     #[error("failed to parse {channel} index JSON: {message}")]
-    InvalidJson { channel: &'static str, message: String },
+    InvalidJson {
+        channel: &'static str,
+        message: String,
+    },
 }
 
 #[derive(Default)]
@@ -164,10 +170,14 @@ where
             message: error.to_string(),
         })?;
 
-    let response = client.get(url).send().await.map_err(|error| UpstreamError::FetchFailed {
-        channel: channel_name,
-        message: error.to_string(),
-    })?;
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|error| UpstreamError::FetchFailed {
+            channel: channel_name,
+            message: error.to_string(),
+        })?;
 
     if !response.status().is_success() {
         return Err(UpstreamError::FetchFailed {
@@ -176,10 +186,13 @@ where
         });
     }
 
-    let body: Value = response.json().await.map_err(|error| UpstreamError::InvalidJson {
-        channel: channel_name,
-        message: error.to_string(),
-    })?;
+    let body: Value = response
+        .json()
+        .await
+        .map_err(|error| UpstreamError::InvalidJson {
+            channel: channel_name,
+            message: error.to_string(),
+        })?;
 
     parse_channel_index(channel, body)
 }
@@ -381,10 +394,7 @@ mod tests {
             version_cmp("0.1.0-2", "0.1.0-1"),
             std::cmp::Ordering::Greater
         );
-        assert_eq!(
-            version_cmp("0.1.1", "0.1.0"),
-            std::cmp::Ordering::Greater
-        );
+        assert_eq!(version_cmp("0.1.1", "0.1.0"), std::cmp::Ordering::Greater);
     }
 
     #[test]

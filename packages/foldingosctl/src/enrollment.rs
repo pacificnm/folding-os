@@ -52,7 +52,9 @@ impl EnrollmentIndex {
     }
 }
 
-pub fn load_enrollment_records_sorted(paths: &AppliancePaths) -> Result<Vec<EnrollmentRecord>, String> {
+pub fn load_enrollment_records_sorted(
+    paths: &AppliancePaths,
+) -> Result<Vec<EnrollmentRecord>, String> {
     let index = load_enrollment_index(paths)?;
     let mut node_ids = index.node_ids().to_vec();
     node_ids.sort();
@@ -63,7 +65,10 @@ pub fn load_enrollment_records_sorted(paths: &AppliancePaths) -> Result<Vec<Enro
     Ok(records)
 }
 
-pub fn load_enrollment_record(paths: &AppliancePaths, node_id: &str) -> Result<EnrollmentRecord, String> {
+pub fn load_enrollment_record(
+    paths: &AppliancePaths,
+    node_id: &str,
+) -> Result<EnrollmentRecord, String> {
     let content = fs::read_to_string(paths.enrollment_record_path(node_id))
         .map_err(|error| format!("read enrollment record for {node_id}: {error}"))?;
     let record: EnrollmentRecord = serde_json::from_str(&content)
@@ -71,7 +76,10 @@ pub fn load_enrollment_record(paths: &AppliancePaths, node_id: &str) -> Result<E
     validate_enrollment_record(record)
 }
 
-pub fn save_enrollment_record(paths: &AppliancePaths, record: EnrollmentRecord) -> Result<(), String> {
+pub fn save_enrollment_record(
+    paths: &AppliancePaths,
+    record: EnrollmentRecord,
+) -> Result<(), String> {
     let validated = validate_enrollment_record(record)?;
     let content = serde_json::to_string_pretty(&validated)
         .map_err(|error| format!("serialize enrollment record: {error}"))?;
@@ -118,7 +126,11 @@ fn save_enrollment_index(paths: &AppliancePaths, index: &EnrollmentIndex) -> Res
         .map_err(|error| format!("serialize enrollment index: {error}"))?;
     let mut content = content;
     content.push('\n');
-    atomic_write(&paths.provision_enrollments_index, content.as_bytes(), 0o644)
+    atomic_write(
+        &paths.provision_enrollments_index,
+        content.as_bytes(),
+        0o644,
+    )
 }
 
 fn validate_enrollment_record(mut record: EnrollmentRecord) -> Result<EnrollmentRecord, String> {

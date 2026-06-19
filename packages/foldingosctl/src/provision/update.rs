@@ -16,9 +16,10 @@ use crate::provision::release_image::{
 use crate::provision::staged_lock::with_staged_update_lock;
 use crate::provision::targets::{clear_grub_next_entry_on_disk, resolve_host_boot_disk};
 use crate::provision::util::{
-    copy_regular_file, empty_human_result, format_install_bytes, http_post_json, install_logf,
-    join_supervisor_url, new_session_id, partition_device, read_enrollment_token,
-    read_supervisor_base_url, rfc3339_now, run_command, agent_enrollment_node_id, UPDATE_SESSION_HEADER,
+    agent_enrollment_node_id, copy_regular_file, empty_human_result, format_install_bytes,
+    http_post_json, install_logf, join_supervisor_url, new_session_id, partition_device,
+    read_enrollment_token, read_supervisor_base_url, rfc3339_now, run_command,
+    UPDATE_SESSION_HEADER,
 };
 use crate::registry_image::{load_registry_entry, verify_registry_image_file, RegistryEntry};
 use crate::role::require_agent_role;
@@ -125,7 +126,8 @@ pub fn authorize_agent_update(
         return Err("desired image version matches the current image".into());
     }
 
-    let record = load_enrollment_record(paths, node_id).map_err(|_| "agent is not registered".to_string())?;
+    let record = load_enrollment_record(paths, node_id)
+        .map_err(|_| "agent is not registered".to_string())?;
     if record.desired_image_version != desired_version {
         return Err(format!(
             "desired image version {desired_version:?} is not assigned to node {node_id}"
@@ -135,14 +137,21 @@ pub fn authorize_agent_update(
         format!("desired image version {desired_version:?} is not in registry: {error}")
     })?;
     if entry.rollout_state != "ready" {
-        return Err(format!("image version {desired_version:?} is not ready for rollout"));
+        return Err(format!(
+            "image version {desired_version:?} is not ready for rollout"
+        ));
     }
     verify_registry_image_file(
         std::path::Path::new(&entry.local_image_path),
         &entry.image_sha256,
         entry.image_size_bytes,
     )
-    .map_err(|error| format!("registry image for {} is invalid: {error}", entry.foldingos_version))?;
+    .map_err(|error| {
+        format!(
+            "registry image for {} is invalid: {error}",
+            entry.foldingos_version
+        )
+    })?;
 
     let session_id = new_session_id()?;
     let session = UpdateSession {
@@ -209,7 +218,10 @@ pub fn record_agent_update_status(
     message: &str,
 ) -> Result<(), String> {
     let status = status.trim();
-    if !matches!(status, "staging" | "staged" | "applying" | "applied" | "failed") {
+    if !matches!(
+        status,
+        "staging" | "staged" | "applying" | "applied" | "failed"
+    ) {
         return Err(format!("unsupported update status {status:?}"));
     }
     let mut record = load_enrollment_record(paths, node_id)?;
@@ -227,7 +239,10 @@ pub fn record_agent_update_status(
     save_enrollment_record(paths, record)
 }
 
-pub fn handle_update_status(paths: &AppliancePaths, request: UpdateStatusRequest) -> Result<(), String> {
+pub fn handle_update_status(
+    paths: &AppliancePaths,
+    request: UpdateStatusRequest,
+) -> Result<(), String> {
     if request.schema_version != 1 {
         return Err("unsupported update status schema version".into());
     }
@@ -245,7 +260,9 @@ pub fn handle_update_status(paths: &AppliancePaths, request: UpdateStatusRequest
     )
 }
 
-pub fn provision_check_version_and_stage(paths: &AppliancePaths) -> Result<serde_json::Value, String> {
+pub fn provision_check_version_and_stage(
+    paths: &AppliancePaths,
+) -> Result<serde_json::Value, String> {
     require_agent_role(paths)?;
     let _ = flush_pending_update_report(paths);
 
@@ -272,9 +289,12 @@ pub fn provision_check_version_and_stage(paths: &AppliancePaths) -> Result<serde
         }
     };
 
-    if let Err(error) =
-        crate::assignments::sync_local_software_assignments_from_supervisor(paths, &supervisor_url, &node_id, &token)
-    {
+    if let Err(error) = crate::assignments::sync_local_software_assignments_from_supervisor(
+        paths,
+        &supervisor_url,
+        &node_id,
+        &token,
+    ) {
         install_logf(&format!("Software assignment sync failed: {error}"));
     }
 
@@ -351,7 +371,10 @@ pub fn provision_check_version_and_stage(paths: &AppliancePaths) -> Result<serde
     Ok(empty_human_result())
 }
 
-pub fn provision_apply_update(paths: &AppliancePaths, args: &[String]) -> Result<serde_json::Value, String> {
+pub fn provision_apply_update(
+    paths: &AppliancePaths,
+    args: &[String],
+) -> Result<serde_json::Value, String> {
     let mut offline = false;
     let mut exec_condition = false;
     for arg in args {
@@ -429,9 +452,8 @@ pub fn provision_report_update_status(
 }
 
 fn check_apply_update_exec_condition(paths: &AppliancePaths) -> Result<(), String> {
-    let metadata = load_staged_update_metadata(paths).map_err(|_| {
-        "staged update is not schedulable".to_string()
-    })?;
+    let metadata = load_staged_update_metadata(paths)
+        .map_err(|_| "staged update is not schedulable".to_string())?;
     let state = effective_apply_state(&metadata.apply_state);
     if state != APPLY_STATE_STAGED && state != APPLY_STATE_BOOT_SCHEDULED {
         return Err("staged update is not schedulable".into());
@@ -577,15 +599,19 @@ fn apply_staged_update_offline(paths: &AppliancePaths) -> Result<serde_json::Val
     let image_path = paths.staged_update_image.to_string_lossy();
     let target_efi = partition_device(&boot_disk, "1");
     let target_root = partition_device(&boot_disk, "2");
-    if let Err(error) =
-        copy_staged_release_image_efi_partition(&image_path, &target_efi)
-    {
-        return finish_offline_apply_failure(paths, metadata, format!("copy EFI partition: {error}"));
+    if let Err(error) = copy_staged_release_image_efi_partition(&image_path, &target_efi) {
+        return finish_offline_apply_failure(
+            paths,
+            metadata,
+            format!("copy EFI partition: {error}"),
+        );
     }
-    if let Err(error) =
-        copy_staged_release_image_root_partition(&image_path, &target_root)
-    {
-        return finish_offline_apply_failure(paths, metadata, format!("copy root partition: {error}"));
+    if let Err(error) = copy_staged_release_image_root_partition(&image_path, &target_root) {
+        return finish_offline_apply_failure(
+            paths,
+            metadata,
+            format!("copy root partition: {error}"),
+        );
     }
     run_command("sync", &[])?;
 
@@ -596,7 +622,11 @@ fn apply_staged_update_offline(paths: &AppliancePaths) -> Result<serde_json::Val
         "applied",
         "",
     ) {
-        return finish_offline_apply_failure(paths, metadata, format!("record pending applied outcome: {error}"));
+        return finish_offline_apply_failure(
+            paths,
+            metadata,
+            format!("record pending applied outcome: {error}"),
+        );
     }
     clear_staged_update(paths)?;
     println!("Applied staged FoldingOS update; rebooting.");
@@ -699,14 +729,20 @@ fn stage_agent_update_locked(
         &stream_url,
         &[
             ("X-FoldingOS-Enrollment-Token", token),
-            (UPDATE_SESSION_HEADER, authorization.update_session_id.as_str()),
+            (
+                UPDATE_SESSION_HEADER,
+                authorization.update_session_id.as_str(),
+            ),
         ],
     )?;
     if stream_status != 200 {
-        return Err(format!("update image stream failed with status {stream_status}"));
+        return Err(format!(
+            "update image stream failed with status {stream_status}"
+        ));
     }
 
-    let (digest, written) = write_staged_update_image(paths, &mut reader, authorization.image_size_bytes)?;
+    let (digest, written) =
+        write_staged_update_image(paths, &mut reader, authorization.image_size_bytes)?;
     if written != authorization.image_size_bytes {
         return Err(format!(
             "staged update size {written} does not match expected {}",
@@ -731,7 +767,15 @@ fn stage_agent_update_locked(
         boot_schedule_attempts: 0,
     };
     save_staged_update_metadata(paths, &metadata)?;
-    report_agent_update_status(paths, supervisor_url, node_id, token, desired_version, "staged", "")
+    report_agent_update_status(
+        paths,
+        supervisor_url,
+        node_id,
+        token,
+        desired_version,
+        "staged",
+        "",
+    )
 }
 
 fn write_staged_update_image(
@@ -751,7 +795,9 @@ fn write_staged_update_image(
     let mut last_report = 0i64;
     while written < size {
         let to_read = std::cmp::min(buffer.len() as i64, size - written) as usize;
-        let read = source.read(&mut buffer[..to_read]).map_err(|error| error.to_string())?;
+        let read = source
+            .read(&mut buffer[..to_read])
+            .map_err(|error| error.to_string())?;
         if read == 0 {
             break;
         }
@@ -777,15 +823,23 @@ fn write_staged_update_image(
     Ok((format!("{:x}", hasher.finalize()), written))
 }
 
-fn save_staged_update_metadata(paths: &AppliancePaths, metadata: &StagedUpdateMetadata) -> Result<(), String> {
+fn save_staged_update_metadata(
+    paths: &AppliancePaths,
+    metadata: &StagedUpdateMetadata,
+) -> Result<(), String> {
     let content = serde_json::to_string_pretty(metadata).map_err(|error| error.to_string())?;
-    atomic_write(&paths.staged_update_meta, format!("{content}\n").as_bytes(), 0o600)
+    atomic_write(
+        &paths.staged_update_meta,
+        format!("{content}\n").as_bytes(),
+        0o600,
+    )
 }
 
 fn load_staged_update_metadata(paths: &AppliancePaths) -> Result<StagedUpdateMetadata, String> {
-    let content = fs::read_to_string(&paths.staged_update_meta).map_err(|error| error.to_string())?;
-    let metadata: StagedUpdateMetadata =
-        serde_json::from_str(&content).map_err(|error| format!("invalid staged update metadata: {error}"))?;
+    let content =
+        fs::read_to_string(&paths.staged_update_meta).map_err(|error| error.to_string())?;
+    let metadata: StagedUpdateMetadata = serde_json::from_str(&content)
+        .map_err(|error| format!("invalid staged update metadata: {error}"))?;
     if metadata.schema_version != 1 {
         return Err(format!(
             "unsupported staged update schema version {}",
@@ -795,7 +849,10 @@ fn load_staged_update_metadata(paths: &AppliancePaths) -> Result<StagedUpdateMet
     Ok(metadata)
 }
 
-fn verify_staged_update_file(paths: &AppliancePaths, metadata: &StagedUpdateMetadata) -> Result<(), String> {
+fn verify_staged_update_file(
+    paths: &AppliancePaths,
+    metadata: &StagedUpdateMetadata,
+) -> Result<(), String> {
     let mut file = File::open(&paths.staged_update_image).map_err(|error| error.to_string())?;
     let file_size = file.metadata().map_err(|error| error.to_string())?.len() as i64;
     if file_size != metadata.image_size_bytes {
@@ -869,8 +926,8 @@ fn save_update_session(paths: &AppliancePaths, session: &UpdateSession) -> Resul
 fn load_update_session(paths: &AppliancePaths, session_id: &str) -> Result<UpdateSession, String> {
     let content = fs::read_to_string(paths.update_session_path(session_id))
         .map_err(|error| error.to_string())?;
-    let session: UpdateSession =
-        serde_json::from_str(&content).map_err(|error| format!("invalid update session: {error}"))?;
+    let session: UpdateSession = serde_json::from_str(&content)
+        .map_err(|error| format!("invalid update session: {error}"))?;
     if session.schema_version != 1 {
         return Err(format!(
             "unsupported update session schema version {}",
@@ -883,15 +940,23 @@ fn load_update_session(paths: &AppliancePaths, session_id: &str) -> Result<Updat
     Ok(session)
 }
 
-fn save_pending_update_report(paths: &AppliancePaths, report: &PendingUpdateReport) -> Result<(), String> {
+fn save_pending_update_report(
+    paths: &AppliancePaths,
+    report: &PendingUpdateReport,
+) -> Result<(), String> {
     let content = serde_json::to_string_pretty(report).map_err(|error| error.to_string())?;
-    atomic_write(&paths.pending_update_report, format!("{content}\n").as_bytes(), 0o600)
+    atomic_write(
+        &paths.pending_update_report,
+        format!("{content}\n").as_bytes(),
+        0o600,
+    )
 }
 
 fn load_pending_update_report(paths: &AppliancePaths) -> Result<PendingUpdateReport, String> {
-    let content = fs::read_to_string(&paths.pending_update_report).map_err(|error| error.to_string())?;
-    let report: PendingUpdateReport =
-        serde_json::from_str(&content).map_err(|error| format!("invalid pending update report: {error}"))?;
+    let content =
+        fs::read_to_string(&paths.pending_update_report).map_err(|error| error.to_string())?;
+    let report: PendingUpdateReport = serde_json::from_str(&content)
+        .map_err(|error| format!("invalid pending update report: {error}"))?;
     if report.schema_version != 1 {
         return Err(format!(
             "unsupported pending update report schema version {}",
@@ -939,7 +1004,9 @@ fn flush_pending_update_report(paths: &AppliancePaths) -> Result<(), String> {
     };
     let status = report.status.trim();
     if status != "applied" && status != "failed" {
-        return Err(format!("pending update status {status:?} is not deliverable"));
+        return Err(format!(
+            "pending update status {status:?} is not deliverable"
+        ));
     }
     let supervisor_url = read_supervisor_base_url(paths)?;
     if supervisor_url.is_empty() {

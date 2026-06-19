@@ -4,6 +4,51 @@ import {
   runMachineControl,
 } from "../api";
 import type { ControlAction, ControlStatus, MachineSummary } from "../types";
+import { formatPpd } from "../utils/format";
+
+function foldingStateLabel(state: string | undefined): string {
+  switch (state) {
+    case "folding":
+      return "Folding";
+    case "paused":
+      return "Paused";
+    case "waiting":
+      return "Waiting for work";
+    case "finishing":
+      return "Finishing WU";
+    case "stopped":
+      return "Stopped";
+    case "unreachable":
+      return "Unreachable";
+    case "download":
+      return "Downloading WU";
+    case "upload":
+      return "Uploading WU";
+    case "ready":
+      return "Ready";
+    case "core":
+      return "Starting core";
+    case "idle":
+      return "Idle";
+    default:
+      return state?.length ? state : "Unknown";
+  }
+}
+
+function ingestFoldingHint(machine: MachineSummary | null): string | null {
+  const latest = machine?.latest;
+  if (!latest) return null;
+  if (latest.project) {
+    const parts = [`project ${latest.project}`];
+    if (latest.progress != null) parts.push(`${latest.progress.toFixed(1)}%`);
+    if (latest.ppd != null) parts.push(formatPpd(latest.ppd));
+    return `Last ingest: ${parts.join(" · ")}`;
+  }
+  if (latest.fah_status !== "active") {
+    return `Last ingest: FAH service ${latest.fah_status}`;
+  }
+  return "Last ingest: FAH running, no work unit metrics yet";
+}
 
 interface ControlGroup {
   title: string;
@@ -14,7 +59,7 @@ interface ControlGroup {
 const GROUPS: ControlGroup[] = [
   {
     title: "FoldOps agent",
-    description: "foldops-agent systemd service",
+    description: "foldingos-foldops-agent.service",
     buttons: [
       { action: "agent.start", label: "Start" },
       { action: "agent.stop", label: "Stop", variant: "danger" },
@@ -23,7 +68,7 @@ const GROUPS: ControlGroup[] = [
   },
   {
     title: "FAH client",
-    description: "fah-client service and folding state (WebSocket on port 7396)",
+    description: "folding-at-home.service and folding state (WebSocket on port 7396)",
     buttons: [
       { action: "fah.start", label: "Start" },
       { action: "fah.stop", label: "Stop", variant: "danger" },
@@ -110,6 +155,8 @@ export function MachineControlsPanel({
     }
   };
 
+  const ingestHint = ingestFoldingHint(machine);
+
   return (
     <div className="machine-controls">
       <p className="machine-controls-intro">
@@ -122,22 +169,45 @@ export function MachineControlsPanel({
       )}
 
       {status && (
-        <div className="machine-controls-status">
-          <span>
-            foldops-agent:{" "}
-            <strong className="mono">{status.foldops_agent}</strong>
-          </span>
-          <span>
-            fah-client:{" "}
-            <strong className="mono">{status.fah_client}</strong>
-          </span>
-          <button
-            type="button"
-            className="machine-controls-refresh"
-            onClick={loadStatus}
-          >
-            Refresh status
-          </button>
+        <div className="machine-controls-status-wrap">
+          <div className="machine-controls-status">
+            <span>
+              foldops-agent:{" "}
+              <strong className="mono">{status.foldops_agent}</strong>
+            </span>
+            <span>
+              folding-at-home:{" "}
+              <strong className="mono">{status.fah_client}</strong>
+            </span>
+            <button
+              type="button"
+              className="machine-controls-refresh"
+              onClick={loadStatus}
+            >
+              Refresh status
+            </button>
+          </div>
+          <div className="machine-controls-folding">
+            <span className="machine-controls-folding-label">Folding activity</span>
+            <span
+              className={`badge machine-controls-folding-badge machine-controls-folding-badge--${status.fah_folding_state ?? "unknown"}`}
+            >
+              {foldingStateLabel(status.fah_folding_state)}
+            </span>
+            {status.fah_unit_state && (
+              <span className="mono machine-controls-folding-unit">
+                {status.fah_unit_state}
+              </span>
+            )}
+            {status.fah_folding_detail && (
+              <span className="machine-controls-folding-detail">
+                {status.fah_folding_detail}
+              </span>
+            )}
+          </div>
+          {ingestHint && (
+            <p className="machine-controls-ingest-hint">{ingestHint}</p>
+          )}
         </div>
       )}
 

@@ -8,8 +8,8 @@ use std::sync::LazyLock;
 
 use crate::boot_cmd::refresh_commissioning_display;
 use crate::foldops::supervisor_permissions::{
-    ensure_foldops_config_group_readable, ensure_supervisor_database_writable,
-    ensure_supervisor_fleet_automation_permissions,
+    ensure_agent_software_assignment_permissions, ensure_foldops_config_group_readable,
+    ensure_supervisor_database_writable, ensure_supervisor_fleet_automation_permissions,
 };
 use crate::foldops::tls::ensure_foldops_tls_material;
 use crate::foldops::util::{
@@ -43,7 +43,10 @@ pub fn foldops_provision(paths: &AppliancePaths) -> Result<(), String> {
             ensure_supervisor_fleet_automation_permissions(paths)?;
             refresh_supervisor_colocated_env(paths)?;
         }
-        println!("FoldOps is already provisioned for role {}.", provisioned.role);
+        println!(
+            "FoldOps is already provisioned for role {}.",
+            provisioned.role
+        );
         return restart_foldops_runtime_services(paths);
     }
 
@@ -97,7 +100,9 @@ pub fn start_foldops_provision_service() -> Result<(), String> {
 pub fn restart_foldops_runtime_services(paths: &AppliancePaths) -> Result<(), String> {
     refresh_supervisor_colocated_env(paths)?;
     restart_systemd_unit_if_loaded(FOLDOPS_SUPERVISOR_SERVICE)?;
-    restart_systemd_unit_if_loaded(FOLDOPS_AGENT_SERVICE)?;
+    if unit_is_loaded(FOLDOPS_AGENT_SERVICE) {
+        crate::process::schedule_deferred_systemd_restart_after(FOLDOPS_AGENT_SERVICE, 2)?;
+    }
     if unit_is_loaded(FOLDOPS_SERVE_HTTPS_SERVICE) {
         crate::process::schedule_deferred_systemd_restart_after(FOLDOPS_SERVE_HTTPS_SERVICE, 3)?;
     }
@@ -199,8 +204,14 @@ fn provision_foldops_supervisor(
             FOLDOPS_SUPERVISOR_LOOPBACK_PORT.to_string(),
         ),
         ("INGEST_TOKEN".to_string(), token.to_string()),
-        ("DB_PATH".to_string(), "/data/foldops/foldops.db".to_string()),
-        ("WEB_ROOT".to_string(), foldops_web_root(paths).display().to_string()),
+        (
+            "DB_PATH".to_string(),
+            "/data/foldops/foldops.db".to_string(),
+        ),
+        (
+            "WEB_ROOT".to_string(),
+            foldops_web_root(paths).display().to_string(),
+        ),
         ("CONFIG_ENABLED".to_string(), "true".to_string()),
         ("CONTROL_ENABLED".to_string(), "true".to_string()),
     ]);
@@ -247,7 +258,10 @@ pub fn refresh_supervisor_colocated_env(paths: &AppliancePaths) -> Result<(), St
             FOLDOPS_SUPERVISOR_LOOPBACK_PORT.to_string(),
         ),
         ("INGEST_TOKEN".to_string(), token.clone()),
-        ("DB_PATH".to_string(), paths.foldops_db.display().to_string()),
+        (
+            "DB_PATH".to_string(),
+            paths.foldops_db.display().to_string(),
+        ),
         (
             "WEB_ROOT".to_string(),
             foldops_web_root(paths).display().to_string(),
@@ -295,6 +309,7 @@ fn provision_foldops_agent(
     ]);
     write_foldops_env_file(Path::new(FOLDOPS_AGENT_ENV), &agent_env, 0o640)?;
     ensure_foldops_config_group_readable(paths)?;
+    ensure_agent_software_assignment_permissions(paths)?;
     write_foldops_provisioned_marker(paths, "agent", manifest_release)
 }
 

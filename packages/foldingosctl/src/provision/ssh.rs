@@ -53,7 +53,9 @@ fn ensure_host_key(paths: &AppliancePaths) -> Result<(), String> {
         }
     }
 
-    let parent = host_key.parent().ok_or_else(|| "invalid host key path".to_string())?;
+    let parent = host_key
+        .parent()
+        .ok_or_else(|| "invalid host key path".to_string())?;
     fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     #[cfg(unix)]
     {
@@ -62,10 +64,7 @@ fn ensure_host_key(paths: &AppliancePaths) -> Result<(), String> {
             .map_err(|error| error.to_string())?;
     }
 
-    let temp_name = parent.join(format!(
-        ".ssh_host_ed25519_key.tmp-{}",
-        std::process::id()
-    ));
+    let temp_name = parent.join(format!(".ssh_host_ed25519_key.tmp-{}", std::process::id()));
     let _ = fs::remove_file(&temp_name);
     let temp_pub_path = format!("{}.pub", temp_name.display());
     let temp_pub = Path::new(&temp_pub_path);
@@ -90,8 +89,7 @@ fn ensure_host_key(paths: &AppliancePaths) -> Result<(), String> {
         fs::set_permissions(temp_pub, fs::Permissions::from_mode(0o644))
             .map_err(|error| error.to_string())?;
     }
-    fs::rename(temp_pub, paths.ssh_host_key_pub())
-        .map_err(|error| error.to_string())?;
+    fs::rename(temp_pub, paths.ssh_host_key_pub()).map_err(|error| error.to_string())?;
     fs::rename(&temp_name, host_key).map_err(|error| error.to_string())?;
     Ok(())
 }
@@ -121,11 +119,7 @@ pub fn validate_authorized_keys(content: &[u8]) -> Result<Vec<u8>, String> {
                 ));
             }
         }
-        let output = command_input(
-            &format!("{line}\n"),
-            "ssh-keygen",
-            &["-lf", "-"],
-        )?;
+        let output = command_input(&format!("{line}\n"), "ssh-keygen", &["-lf", "-"])?;
         if fields[0] == "ssh-rsa" {
             let details: Vec<&str> = output.split_whitespace().collect();
             let bits = details

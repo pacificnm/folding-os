@@ -4,7 +4,9 @@ use std::os::unix::fs::symlink;
 use crate::paths::AppliancePaths;
 use crate::process::{command_output, run_command};
 
-use super::manifest::{load_fah_manifest, validate_fah_version_label, validate_foldingos_compatibility};
+use super::manifest::{
+    load_fah_manifest, validate_fah_version_label, validate_foldingos_compatibility,
+};
 use super::util::{read_fah_current_version, FAH_SERVICE_NAME};
 use super::verify_install::{fah_installation_verified, verify_fah_installed_version};
 
@@ -38,7 +40,10 @@ pub fn fah_activate(paths: &AppliancePaths, version: &str) -> Result<(), String>
     restart_fah_service_after_activation()
 }
 
-pub(crate) fn activate_fah_current_symlink(paths: &AppliancePaths, version: &str) -> Result<(), String> {
+pub(crate) fn activate_fah_current_symlink(
+    paths: &AppliancePaths,
+    version: &str,
+) -> Result<(), String> {
     if version.contains(std::path::MAIN_SEPARATOR) {
         return Err("activation version must not contain path separators".into());
     }
@@ -71,8 +76,11 @@ pub(crate) fn activate_fah_current_symlink(paths: &AppliancePaths, version: &str
 }
 
 fn restart_fah_service_after_activation() -> Result<(), String> {
-    let state = command_output("systemctl", &["show", "-p", "LoadState", "--value", FAH_SERVICE_NAME])
-        .map_err(|error| format!("inspect {FAH_SERVICE_NAME}: {error}"))?;
+    let state = command_output(
+        "systemctl",
+        &["show", "-p", "LoadState", "--value", FAH_SERVICE_NAME],
+    )
+    .map_err(|error| format!("inspect {FAH_SERVICE_NAME}: {error}"))?;
     if state.trim() != "loaded" {
         return Ok(());
     }
@@ -123,7 +131,8 @@ mod tests {
 
     #[test]
     fn activate_fah_replaces_existing_current_atomically() {
-        let root = std::env::temp_dir().join(format!("fah-activate-replace-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("fah-activate-replace-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         for version in ["8.5.5", "8.5.6"] {
             fs::create_dir_all(root.join(version)).expect("mkdir");

@@ -10,8 +10,8 @@ use ureq::Agent;
 
 use crate::paths::AppliancePaths;
 use crate::registry_image::{
-    current_import_timestamp, load_registry_entry, read_upstream_releases_url,
-    registry_image_path, save_registry_entry, RegistryEntry,
+    current_import_timestamp, load_registry_entry, read_upstream_releases_url, registry_image_path,
+    save_registry_entry, RegistryEntry,
 };
 use crate::role::require_supervisor_role;
 
@@ -63,10 +63,7 @@ pub fn poll(paths: &AppliancePaths) -> Result<(), String> {
 
 fn fetch_upstream_manifest(url: &str) -> Result<UpstreamReleasesManifest, String> {
     let agent = registry_http_agent();
-    let response = agent
-        .get(url)
-        .call()
-        .map_err(|error| error.to_string())?;
+    let response = agent.get(url).call().map_err(|error| error.to_string())?;
     if response.status() != 200 {
         return Err(format!(
             "upstream manifest request failed with status {}",
@@ -90,7 +87,10 @@ fn fetch_upstream_manifest(url: &str) -> Result<UpstreamReleasesManifest, String
     Ok(manifest)
 }
 
-fn import_upstream_release(paths: &AppliancePaths, mut release: UpstreamRelease) -> Result<bool, String> {
+fn import_upstream_release(
+    paths: &AppliancePaths,
+    mut release: UpstreamRelease,
+) -> Result<bool, String> {
     release.foldingos_version = release.foldingos_version.trim().to_string();
     release.git_revision = release.git_revision.trim().to_string();
     release.image_url = release.image_url.trim().to_string();

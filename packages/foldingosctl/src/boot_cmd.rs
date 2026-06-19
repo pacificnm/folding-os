@@ -121,8 +121,8 @@ fn routable_ipv4_error() -> String {
 }
 
 fn os_release_value(key: &str) -> Result<String, String> {
-    let file = fs::File::open(OS_RELEASE_PATH)
-        .map_err(|error| format!("read os-release: {error}"))?;
+    let file =
+        fs::File::open(OS_RELEASE_PATH).map_err(|error| format!("read os-release: {error}"))?;
     let prefix = format!("{key}=");
     for line in BufReader::new(file).lines() {
         let line = line.map_err(|error| error.to_string())?;
@@ -135,9 +135,7 @@ fn os_release_value(key: &str) -> Result<String, String> {
 }
 
 fn format_ready_display(pretty_name: &str, address: &str) -> String {
-    format!(
-        "{pretty_name} ready\nAddress: {address}\nSSH: {ADMIN_SSH_USER}@{address}\n"
-    )
+    format!("{pretty_name} ready\nAddress: {address}\nSSH: {ADMIN_SSH_USER}@{address}\n")
 }
 
 fn format_waiting_display(pretty_name: &str, address: &str) -> String {
@@ -156,7 +154,10 @@ fn evaluate_commissioning_checks(paths: &AppliancePaths, role: &str) -> Vec<Comm
             label: "Network online".into(),
             ready: true,
         },
-        check_systemd_unit("SSH administrator provisioned", "foldingos-ssh-provision.service"),
+        check_systemd_unit(
+            "SSH administrator provisioned",
+            "foldingos-ssh-provision.service",
+        ),
         check_installation_role(role),
         check_foldops_packages(paths),
         check_foldops_provisioned(paths),

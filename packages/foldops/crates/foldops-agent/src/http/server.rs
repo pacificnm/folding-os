@@ -14,7 +14,11 @@ use tokio::net::TcpListener;
 
 use crate::config::Config;
 use crate::fah::get_newest_work_log_path;
-use crate::foldingos::{activate_foldinghome_config, foldops_acquire, set_fah_passkey, tools_acquire, try_restart_systemd_unit, write_foldinghome_candidate, AutomationCommandError, FOLDOPS_AGENT_UNIT};
+use crate::foldingos::{
+    activate_foldinghome_config, foldops_acquire, set_fah_passkey, sync_software_assignments,
+    tools_acquire, write_foldinghome_candidate, AutomationCommandError,
+};
+use crate::ingest::IngestClient;
 use crate::log_tail::read_log_tail_default;
 use crate::node_control::{
     execute_control_action, get_control_status, schedule_agent_self_restart, ControlContext,
@@ -24,6 +28,7 @@ use crate::update::{is_update_in_flight, run_agent_update, schedule_post_update_
 #[derive(Clone)]
 struct AppState {
     config: Arc<Config>,
+    ingest: Arc<IngestClient>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -51,13 +56,14 @@ struct FoldinghomeConfigResponse {
     activated: bool,
 }
 
-pub async fn start_agent_http(config: Arc<Config>) {
+pub async fn start_agent_http(config: Arc<Config>, ingest: Arc<IngestClient>) {
     if config.agent_http_port == 0 {
         return;
     }
 
     let state = AppState {
         config: config.clone(),
+        ingest,
     };
     let app = Router::new()
         .route("/logs/fah", get(logs_fah))
@@ -134,7 +140,7 @@ async fn logs_work(State(state): State<AppState>, Query(q): Query<LogQuery>) -> 
     let lines = clamp_lines(q.lines);
     let work_path = match get_newest_work_log_path(&state.config.fah_work_dir).await {
         Some(p) => p,
-        None => return json_error(StatusCode::NOT_FOUND, "No work unit log found"),
+        None => state.config.fah_log_path.clone(),
     };
 
     match read_log_tail_default(&work_path, lines).await {
@@ -162,7 +168,15 @@ async fn control_status(State(state): State<AppState>) -> Response {
             "Controls disabled (set CONTROLS_ENABLED=true)",
         );
     }
-    Json(get_control_status().await).into_response()
+    Json(
+        get_control_status(&ControlContext {
+            allow_reboot: state.config.controls_allow_reboot,
+            fah_ws_host: state.config.fah_ws_host.clone(),
+            fah_ws_port: state.config.fah_ws_port,
+        })
+        .await,
+    )
+    .into_response()
 }
 
 async fn control_action(State(state): State<AppState>, Json(body): Json<ControlBody>) -> Response {
@@ -203,10 +217,7 @@ async fn foldinghome_config(
     Json(body): Json<FoldinghomeConfigBody>,
 ) -> Response {
     if !state.config.config_enabled {
-        return json_error(
-            StatusCode::FORBIDDEN,
-            "Remote config push disabled",
-        );
+        return json_error(StatusCode::FORBIDDEN, "Remote config push disabled");
     }
 
     if body.config.trim().is_empty() {
@@ -241,12 +252,18 @@ async fn foldinghome_config(
                 .and_then(|value| value.as_str())
                 .unwrap_or(candidate_path.to_str().unwrap_or_default())
                 .to_string();
-            let activated = data.get("activated").and_then(|value| value.as_bool()).unwrap_or(true);
+            let activated = data
+                .get("activated")
+                .and_then(|value| value.as_bool())
+                .unwrap_or(true);
             tracing::info!(
                 candidate = %candidate,
                 activated,
                 "foldinghome config activate succeeded"
             );
+            if let Err(error) = state.ingest.collect_and_post().await {
+                tracing::warn!(error = %error, "post-config ingest failed");
+            }
             Json(FoldinghomeConfigResponse {
                 ok: true,
                 domain: "foldinghome",
@@ -255,7 +272,11 @@ async fn foldinghome_config(
             })
             .into_response()
         }
-        Err(AutomationCommandError::CommandRejected { command, code, message }) => {
+        Err(AutomationCommandError::CommandRejected {
+            command,
+            code,
+            message,
+        }) => {
             tracing::warn!(
                 command = %command,
                 code = %code,
@@ -328,20 +349,14 @@ async fn software_foldops_acquire(State(state): State<AppState>) -> Response {
         );
     }
 
+    if let Err(error) = sync_software_assignments(&state.config.foldingosctl_path).await {
+        return json_error(StatusCode::BAD_GATEWAY, &error.to_string());
+    }
+
     match foldops_acquire(&state.config.foldingosctl_path).await {
         Ok(data) => {
             let acquired = data.get("acquired").and_then(|value| value.as_bool()) == Some(true);
-            let restarted = if acquired {
-                match try_restart_systemd_unit(FOLDOPS_AGENT_UNIT).await {
-                    Ok(()) => Some(true),
-                    Err(error) => {
-                        tracing::error!(error = %error, "foldops acquire succeeded but agent restart failed");
-                        Some(false)
-                    }
-                }
-            } else {
-                None
-            };
+            let restarted = acquired.then_some(true);
             Json(SoftwareAcquireResponse {
                 ok: true,
                 data,
@@ -349,7 +364,11 @@ async fn software_foldops_acquire(State(state): State<AppState>) -> Response {
             })
             .into_response()
         }
-        Err(AutomationCommandError::CommandRejected { command, code, message }) => (
+        Err(AutomationCommandError::CommandRejected {
+            command,
+            code,
+            message,
+        }) => (
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({
                 "error": message,
@@ -370,20 +389,14 @@ async fn software_tools_acquire(State(state): State<AppState>) -> Response {
         );
     }
 
+    if let Err(error) = sync_software_assignments(&state.config.foldingosctl_path).await {
+        return json_error(StatusCode::BAD_GATEWAY, &error.to_string());
+    }
+
     match tools_acquire(&state.config.foldingosctl_path).await {
         Ok(data) => {
             let acquired = data.get("acquired").and_then(|value| value.as_bool()) == Some(true);
-            let restarted = if acquired {
-                match try_restart_systemd_unit(FOLDOPS_AGENT_UNIT).await {
-                    Ok(()) => Some(true),
-                    Err(error) => {
-                        tracing::error!(error = %error, "tools acquire succeeded but agent restart failed");
-                        Some(false)
-                    }
-                }
-            } else {
-                None
-            };
+            let restarted = acquired.then_some(true);
             Json(SoftwareAcquireResponse {
                 ok: true,
                 data,
@@ -391,7 +404,11 @@ async fn software_tools_acquire(State(state): State<AppState>) -> Response {
             })
             .into_response()
         }
-        Err(AutomationCommandError::CommandRejected { command, code, message }) => (
+        Err(AutomationCommandError::CommandRejected {
+            command,
+            code,
+            message,
+        }) => (
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({
                 "error": message,

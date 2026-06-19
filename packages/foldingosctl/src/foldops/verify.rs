@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::foldops::activate::foldops_verification_target_at_root;
-use crate::foldops::util::{FOLDOPS_VERIFIED_MARKER, parse_key_value_lines};
+use crate::foldops::util::{parse_key_value_lines, FOLDOPS_VERIFIED_MARKER};
 use crate::foldops_manifest::FoldOpsPackage;
 use crate::paths::AppliancePaths;
 
@@ -22,7 +22,10 @@ pub fn foldops_installation_verified(
     role: &str,
     packages: &[FoldOpsPackage],
 ) -> Result<bool, String> {
-    let marker_path = paths.foldops_apps_root.join(release).join(FOLDOPS_VERIFIED_MARKER);
+    let marker_path = paths
+        .foldops_apps_root
+        .join(release)
+        .join(FOLDOPS_VERIFIED_MARKER);
     let content = match fs::read_to_string(&marker_path) {
         Ok(content) => content,
         Err(_) => return Ok(false),
@@ -59,9 +62,7 @@ pub fn verify_foldops_package_tree_at_root(
     if metadata.is_dir() {
         return Err(format!("{} verification path must be a file", pkg.name));
     }
-    if target.to_string_lossy().ends_with(".html")
-        || target.to_string_lossy().contains("/web/")
-    {
+    if target.to_string_lossy().ends_with(".html") || target.to_string_lossy().contains("/web/") {
         return Ok(());
     }
     verify_executable_elf(&target)
@@ -131,8 +132,12 @@ pub fn normalize_install_tree(root: &Path) -> Result<(), String> {
         }
         #[cfg(unix)]
         if nix::unistd::geteuid().is_root() {
-            nix::unistd::chown(&entry, Some(nix::unistd::Uid::from_raw(0)), Some(nix::unistd::Gid::from_raw(0)))
-                .map_err(|error| format!("normalize ownership for {}: {error}", entry.display()))?;
+            nix::unistd::chown(
+                &entry,
+                Some(nix::unistd::Uid::from_raw(0)),
+                Some(nix::unistd::Gid::from_raw(0)),
+            )
+            .map_err(|error| format!("normalize ownership for {}: {error}", entry.display()))?;
         }
         let mode = if metadata.is_dir() {
             0o755

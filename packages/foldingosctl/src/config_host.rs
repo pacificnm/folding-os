@@ -1,5 +1,5 @@
-use std::fs;
 use crate::paths::AppliancePaths;
+use std::fs;
 
 pub fn read_hostname(paths: &AppliancePaths) -> Result<String, String> {
     if let Ok(content) = fs::read_to_string(paths.effective_system_path()) {

@@ -117,6 +117,8 @@ pub struct EnrollmentRecord {
     pub node_id: String,
     pub installation_role: String,
     pub hostname: String,
+    #[serde(default)]
+    pub mac_addresses: Vec<String>,
     pub current_image_version: String,
     pub desired_image_version: String,
     #[serde(default)]
@@ -178,33 +180,23 @@ pub async fn list_enrollments(
     Ok(serde_json::from_value(enrollments)?)
 }
 
-pub async fn inspect_node(
-    config: FleetDelegateConfig<'_>,
-) -> Result<Value, FleetCommandError> {
+pub async fn inspect_node(config: FleetDelegateConfig<'_>) -> Result<Value, FleetCommandError> {
     run_automation(config.foldingosctl_path, &["inspect", "node"]).await
 }
 
-pub async fn inspect_foldops(
-    config: FleetDelegateConfig<'_>,
-) -> Result<Value, FleetCommandError> {
+pub async fn inspect_foldops(config: FleetDelegateConfig<'_>) -> Result<Value, FleetCommandError> {
     run_automation(config.foldingosctl_path, &["inspect", "foldops"]).await
 }
 
-pub async fn inspect_tools(
-    config: FleetDelegateConfig<'_>,
-) -> Result<Value, FleetCommandError> {
+pub async fn inspect_tools(config: FleetDelegateConfig<'_>) -> Result<Value, FleetCommandError> {
     run_automation(config.foldingosctl_path, &["inspect", "tools"]).await
 }
 
-pub async fn foldops_acquire(
-    config: FleetDelegateConfig<'_>,
-) -> Result<Value, FleetCommandError> {
+pub async fn foldops_acquire(config: FleetDelegateConfig<'_>) -> Result<Value, FleetCommandError> {
     run_automation(config.foldingosctl_path, &["foldops", "acquire"]).await
 }
 
-pub async fn tools_acquire(
-    config: FleetDelegateConfig<'_>,
-) -> Result<Value, FleetCommandError> {
+pub async fn tools_acquire(config: FleetDelegateConfig<'_>) -> Result<Value, FleetCommandError> {
     run_automation(config.foldingosctl_path, &["tools", "acquire"]).await
 }
 
@@ -223,9 +215,7 @@ pub async fn recovery_export(
     }
 }
 
-pub async fn inspect_services(
-    config: FleetDelegateConfig<'_>,
-) -> Result<Value, FleetCommandError> {
+pub async fn inspect_services(config: FleetDelegateConfig<'_>) -> Result<Value, FleetCommandError> {
     run_automation(config.foldingosctl_path, &["inspect", "services"]).await
 }
 
@@ -233,11 +223,7 @@ pub async fn restart_service(
     config: FleetDelegateConfig<'_>,
     unit: &str,
 ) -> Result<Value, FleetCommandError> {
-    run_automation(
-        config.foldingosctl_path,
-        &["services", "restart", unit],
-    )
-    .await
+    run_automation(config.foldingosctl_path, &["services", "restart", unit]).await
 }
 
 pub async fn restart_all_services(
@@ -250,10 +236,7 @@ pub async fn list_allow_boot(
     config: FleetDelegateConfig<'_>,
 ) -> Result<Vec<AllowBootDevice>, FleetCommandError> {
     let data = run_automation(config.foldingosctl_path, &["provision", "list-allow-boot"]).await?;
-    let devices = data
-        .get("devices")
-        .cloned()
-        .unwrap_or(Value::Array(vec![]));
+    let devices = data.get("devices").cloned().unwrap_or(Value::Array(vec![]));
     Ok(serde_json::from_value(devices)?)
 }
 
@@ -299,11 +282,7 @@ pub async fn show_registry(
     config: FleetDelegateConfig<'_>,
     version: &str,
 ) -> Result<RegistryEntry, FleetCommandError> {
-    let data = run_automation(
-        config.foldingosctl_path,
-        &["registry", "show", version],
-    )
-    .await?;
+    let data = run_automation(config.foldingosctl_path, &["registry", "show", version]).await?;
     Ok(serde_json::from_value(data)?)
 }
 
@@ -315,16 +294,14 @@ pub async fn registry_import_foldops_manifest_url(
         Ok(()) => Ok(()),
         Err(error) => run_plain_command(
             config.foldingosctl_path,
-            &[
-                "registry",
-                "import-foldops-manifest",
-                "--url",
-                url,
-            ],
+            &["registry", "import-foldops-manifest", "--url", url],
         )
         .await
         .map_err(|fallback| {
-            if fallback.to_string().contains("unknown import-foldops-manifest option") {
+            if fallback
+                .to_string()
+                .contains("unknown import-foldops-manifest option")
+            {
                 error
             } else {
                 fallback
@@ -356,7 +333,10 @@ pub async fn registry_import_tools_release_urls(
         )
         .await
         .map_err(|fallback| {
-            if fallback.to_string().contains("unknown import-tools-release option") {
+            if fallback
+                .to_string()
+                .contains("unknown import-tools-release option")
+            {
                 error
             } else {
                 fallback
@@ -369,25 +349,22 @@ async fn import_foldops_manifest_via_download(
     config: FleetDelegateConfig<'_>,
     url: &str,
 ) -> Result<(), FleetCommandError> {
-    let content = download_https_text(url).await.map_err(|message| FleetCommandError::CommandFailed {
-        status: 1,
-        message,
-    })?;
+    let content = download_https_text(url)
+        .await
+        .map_err(|message| FleetCommandError::CommandFailed { status: 1, message })?;
     let path = write_import_candidate(&content, "foldops-manifest-import", "toml")
-        .map_err(|message| FleetCommandError::CommandFailed {
-            status: 1,
-            message,
-        })?;
+        .map_err(|message| FleetCommandError::CommandFailed { status: 1, message })?;
     run_plain_command(
         config.foldingosctl_path,
         &[
             "registry",
             "import-foldops-manifest",
             "--manifest",
-            path.to_str().ok_or_else(|| FleetCommandError::CommandFailed {
-                status: 1,
-                message: "import manifest path is not valid UTF-8".into(),
-            })?,
+            path.to_str()
+                .ok_or_else(|| FleetCommandError::CommandFailed {
+                    status: 1,
+                    message: "import manifest path is not valid UTF-8".into(),
+                })?,
         ],
     )
     .await
@@ -401,14 +378,13 @@ async fn import_tools_release_via_download(
 ) -> Result<(), FleetCommandError> {
     let release_dir = download_tools_release_dir(binary_url, sha256_url)
         .await
-        .map_err(|message| FleetCommandError::CommandFailed {
+        .map_err(|message| FleetCommandError::CommandFailed { status: 1, message })?;
+    let dir = release_dir
+        .to_str()
+        .ok_or_else(|| FleetCommandError::CommandFailed {
             status: 1,
-            message,
+            message: "tools import directory path is not valid UTF-8".into(),
         })?;
-    let dir = release_dir.to_str().ok_or_else(|| FleetCommandError::CommandFailed {
-        status: 1,
-        message: "tools import directory path is not valid UTF-8".into(),
-    })?;
     run_plain_command(
         config.foldingosctl_path,
         &[
@@ -446,7 +422,8 @@ async fn download_https_text(url: &str) -> Result<String, String> {
 
 fn write_import_candidate(content: &str, prefix: &str, suffix: &str) -> Result<PathBuf, String> {
     let dir = PathBuf::from("/data/config/candidates");
-    std::fs::create_dir_all(&dir).map_err(|error| format!("create candidates directory: {error}"))?;
+    std::fs::create_dir_all(&dir)
+        .map_err(|error| format!("create candidates directory: {error}"))?;
     let path = dir.join(format!("{prefix}-{}.{suffix}", std::process::id()));
     std::fs::write(&path, content).map_err(|error| format!("write import candidate: {error}"))?;
     Ok(path)
@@ -551,7 +528,10 @@ pub async fn provision_assign(
     Ok(serde_json::from_value(data)?)
 }
 
-async fn run_plain_command(foldingosctl_path: &Path, command_args: &[&str]) -> Result<(), FleetCommandError> {
+async fn run_plain_command(
+    foldingosctl_path: &Path,
+    command_args: &[&str],
+) -> Result<(), FleetCommandError> {
     let output = tokio::process::Command::new(foldingosctl_path)
         .args(command_args)
         .output()
@@ -562,7 +542,11 @@ async fn run_plain_command(foldingosctl_path: &Path, command_args: &[&str]) -> R
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
 
     if !output.status.success() {
-        let message = if stderr.is_empty() { stdout.clone() } else { stderr.clone() };
+        let message = if stderr.is_empty() {
+            stdout.clone()
+        } else {
+            stderr.clone()
+        };
         install_log::log_command_output(
             command_args,
             exit_code,
@@ -606,7 +590,8 @@ async fn run_automation(
 
     let exit_code = output.status.code();
     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    let stdout_raw = String::from_utf8(output.stdout).map_err(|_| FleetCommandError::InvalidUtf8)?;
+    let stdout_raw =
+        String::from_utf8(output.stdout).map_err(|_| FleetCommandError::InvalidUtf8)?;
     let stdout = stdout_raw.trim();
 
     let envelope_result = serde_json::from_str::<AutomationEnvelope>(stdout);
@@ -630,11 +615,13 @@ async fn run_automation(
                     })
                 }
             } else {
-                envelope.data.ok_or_else(|| FleetCommandError::CommandRejected {
-                    command: envelope.command,
-                    code: "missing_data".into(),
-                    message: "automation response did not include data".into(),
-                })
+                envelope
+                    .data
+                    .ok_or_else(|| FleetCommandError::CommandRejected {
+                        command: envelope.command,
+                        code: "missing_data".into(),
+                        message: "automation response did not include data".into(),
+                    })
             }
         }
         Err(error) => Err(FleetCommandError::InvalidJson(error)),
@@ -642,12 +629,8 @@ async fn run_automation(
 
     let (ok, message, detail) = match &result {
         Ok(data) => (true, "command completed".to_string(), Some(data.clone())),
-        Err(FleetCommandError::CommandRejected { message, .. }) => {
-            (false, message.clone(), None)
-        }
-        Err(FleetCommandError::CommandFailed { message, .. }) => {
-            (false, message.clone(), None)
-        }
+        Err(FleetCommandError::CommandRejected { message, .. }) => (false, message.clone(), None),
+        Err(FleetCommandError::CommandFailed { message, .. }) => (false, message.clone(), None),
         Err(error) => (false, error.to_string(), None),
     };
     install_log::log_command_output(
@@ -718,10 +701,7 @@ exit 1
         .expect("list allow boot");
         assert_eq!(devices.len(), 2);
         assert_eq!(devices[0].mac_address, "00:be:43:e7:59:5e");
-        assert_eq!(
-            devices[1].install_disk.as_deref(),
-            Some("/dev/sda")
-        );
+        assert_eq!(devices[1].install_disk.as_deref(), Some("/dev/sda"));
     }
 
     #[tokio::test]

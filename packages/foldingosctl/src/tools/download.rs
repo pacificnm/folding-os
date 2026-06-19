@@ -73,7 +73,8 @@ pub fn download_tools_binary(
         ));
     }
 
-    let mut file = File::create(destination).map_err(|error| format!("open partial download: {error}"))?;
+    let mut file =
+        File::create(destination).map_err(|error| format!("open partial download: {error}"))?;
     let mut reader = response.into_reader();
     let mut buffer = [0_u8; 8192];
     let mut written = 0_i64;
@@ -108,7 +109,9 @@ pub fn download_tools_binary(
 pub fn verify_tools_artifact_file(path: &Path, assignment: &ToolsAssignment) -> Result<(), String> {
     let digest = hash_file_at_path(path, assignment.artifact_size)?;
     if digest != assignment.sha256 {
-        return Err("foldingosctl artifact SHA-256 digest does not match approved assignment".into());
+        return Err(
+            "foldingosctl artifact SHA-256 digest does not match approved assignment".into(),
+        );
     }
     verify_tools_executable_elf(path)
 }
@@ -147,8 +150,8 @@ mod tests {
         ToolsAssignment {
             schema_version: 1,
             tools_version: "0.2.0".into(),
-            artifact_url: "https://packages.folding-os.com/foldingos-tools/0.2.0/foldingosctl-x86_64"
-                .into(),
+            artifact_url:
+                "https://packages.folding-os.com/foldingos-tools/0.2.0/foldingosctl-x86_64".into(),
             artifact_size: artifact.len() as i64,
             sha256: format!("{:x}", Sha256::digest(artifact)),
         }
@@ -157,18 +160,16 @@ mod tests {
     #[test]
     fn verify_tools_artifact_rejects_bad_hash() {
         let artifact = b"not-the-approved-binary";
-        let root = std::env::temp_dir().join(format!(
-            "foldingosctl-tools-verify-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("foldingosctl-tools-verify-{}", std::process::id()));
         let path = root.join("artifact");
         fs::create_dir_all(&root).unwrap();
         fs::write(&path, artifact).unwrap();
         let assignment = ToolsAssignment {
             schema_version: 1,
             tools_version: "0.2.0".into(),
-            artifact_url: "https://packages.folding-os.com/foldingos-tools/0.2.0/foldingosctl-x86_64"
-                .into(),
+            artifact_url:
+                "https://packages.folding-os.com/foldingos-tools/0.2.0/foldingosctl-x86_64".into(),
             artifact_size: artifact.len() as i64,
             sha256: "9022c393630e11d5cec5794ac77281671c7b0d634d630c92d95ad6de22d2151a".into(),
         };
@@ -213,10 +214,8 @@ mod tests {
     fn write_staged_tools_binary_stages_verified_artifact() {
         let artifact = test_elf_bytes();
         let assignment = assignment_for(&artifact);
-        let root = std::env::temp_dir().join(format!(
-            "foldingosctl-tools-stage-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("foldingosctl-tools-stage-{}", std::process::id()));
         let downloads_dir = root.join(".downloads");
         let staged_path =
             write_staged_tools_binary(&downloads_dir, &assignment, &artifact).unwrap();

@@ -16,7 +16,8 @@ use crate::role::require_supervisor_role;
 const TOOLS_APPROVED_ORIGIN: &str = "packages.folding-os.com";
 const TOOLS_ARTIFACT_BASENAME: &str = "foldingosctl-x86_64";
 pub const FOLDOPS_PACKAGES_INDEX_URL: &str = "https://packages.folding-os.com/foldops/index.json";
-pub const TOOLS_PACKAGES_INDEX_URL: &str = "https://packages.folding-os.com/foldingos-tools/index.json";
+pub const TOOLS_PACKAGES_INDEX_URL: &str =
+    "https://packages.folding-os.com/foldingos-tools/index.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FoldOpsManifestRegistryEntry {
@@ -122,7 +123,8 @@ fn resolve_foldops_manifest_import_source(args: &[String]) -> Result<(PathBuf, b
     if let Some(path) = manifest_path {
         return Ok((path, false));
     }
-    let url = manifest_url.ok_or_else(|| "import-foldops-manifest requires --manifest or --url".to_string())?;
+    let url = manifest_url
+        .ok_or_else(|| "import-foldops-manifest requires --manifest or --url".to_string())?;
     let content = fetch_https_text(&url, "FoldOps manifest")?;
     let temp_path = std::env::temp_dir().join(format!(
         "foldingos-foldops-manifest-import-{}.toml",
@@ -132,9 +134,12 @@ fn resolve_foldops_manifest_import_source(args: &[String]) -> Result<(PathBuf, b
     Ok((temp_path, true))
 }
 
-fn import_foldops_manifest_file(paths: &AppliancePaths, manifest_path: &Path) -> Result<(), String> {
-    let content = fs::read_to_string(manifest_path)
-        .map_err(|error| format!("read manifest: {error}"))?;
+fn import_foldops_manifest_file(
+    paths: &AppliancePaths,
+    manifest_path: &Path,
+) -> Result<(), String> {
+    let content =
+        fs::read_to_string(manifest_path).map_err(|error| format!("read manifest: {error}"))?;
     let manifest = parse_foldops_manifest(&content)?;
     validate_foldops_manifest(&manifest)?;
     let entry = FoldOpsManifestRegistryEntry {
@@ -255,13 +260,14 @@ fn resolve_tools_release_import_source(args: &[String]) -> Result<(PathBuf, Stri
         return Ok((dir, version, false));
     }
 
-    let binary_url = binary_url
-        .ok_or_else(|| "import-tools-release requires --binary-url when --dir is omitted".to_string())?;
-    let sha256_url = sha256_url
-        .ok_or_else(|| "import-tools-release requires --sha256-url when --dir is omitted".to_string())?;
-    let version = version.ok_or_else(|| {
-        "import-tools-release from URLs requires --version".to_string()
+    let binary_url = binary_url.ok_or_else(|| {
+        "import-tools-release requires --binary-url when --dir is omitted".to_string()
     })?;
+    let sha256_url = sha256_url.ok_or_else(|| {
+        "import-tools-release requires --sha256-url when --dir is omitted".to_string()
+    })?;
+    let version =
+        version.ok_or_else(|| "import-tools-release from URLs requires --version".to_string())?;
     let release_dir = download_tools_release_dir(&binary_url, &sha256_url)?;
     Ok((release_dir, version, true))
 }
@@ -332,8 +338,8 @@ fn fetch_https_file(url: &str, destination: &Path, label: &str) -> Result<(), St
             response.status()
         ));
     }
-    let mut file = fs::File::create(destination)
-        .map_err(|error| format!("create {label} file: {error}"))?;
+    let mut file =
+        fs::File::create(destination).map_err(|error| format!("create {label} file: {error}"))?;
     let mut reader = response.into_reader();
     let mut buffer = [0u8; 8192];
     loop {
@@ -420,8 +426,7 @@ fn save_foldops_manifest_registry_index(
     let mut index = index.clone();
     index.schema_version = 1;
     index.releases.sort();
-    let content = serde_json::to_string_pretty(&index)
-        .map_err(|error| error.to_string())?;
+    let content = serde_json::to_string_pretty(&index).map_err(|error| error.to_string())?;
     atomic_write(
         &paths.foldops_registry_index,
         format!("{content}\n").as_bytes(),
@@ -479,8 +484,7 @@ fn save_foldops_manifest_registry_entry(
     entry: FoldOpsManifestRegistryEntry,
 ) -> Result<(), String> {
     let validated = validate_foldops_manifest_registry_entry(entry)?;
-    let content = serde_json::to_string_pretty(&validated)
-        .map_err(|error| error.to_string())?;
+    let content = serde_json::to_string_pretty(&validated).map_err(|error| error.to_string())?;
     let entry_path = paths.foldops_registry_entry_path(&validated.manifest_release);
     if let Some(parent) = entry_path.parent() {
         fs::create_dir_all(parent).map_err(|error| error.to_string())?;
@@ -508,10 +512,12 @@ fn load_tools_version_registry_index(
             }
             Ok(index)
         }
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(ToolsVersionRegistryIndex {
-            schema_version: 1,
-            versions: Vec::new(),
-        }),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            Ok(ToolsVersionRegistryIndex {
+                schema_version: 1,
+                versions: Vec::new(),
+            })
+        }
         Err(error) => Err(error.to_string()),
     }
 }
@@ -523,8 +529,7 @@ fn save_tools_version_registry_index(
     let mut index = index.clone();
     index.schema_version = 1;
     index.versions.sort();
-    let content = serde_json::to_string_pretty(&index)
-        .map_err(|error| error.to_string())?;
+    let content = serde_json::to_string_pretty(&index).map_err(|error| error.to_string())?;
     atomic_write(
         &paths.tools_registry_index,
         format!("{content}\n").as_bytes(),
@@ -575,8 +580,7 @@ fn save_tools_version_registry_entry(
     entry: ToolsVersionRegistryEntry,
 ) -> Result<(), String> {
     let validated = validate_tools_version_registry_entry(entry)?;
-    let content = serde_json::to_string_pretty(&validated)
-        .map_err(|error| error.to_string())?;
+    let content = serde_json::to_string_pretty(&validated).map_err(|error| error.to_string())?;
     let entry_path = paths.tools_registry_entry_path(&validated.tools_version);
     if let Some(parent) = entry_path.parent() {
         fs::create_dir_all(parent).map_err(|error| error.to_string())?;
@@ -594,8 +598,8 @@ fn verify_tools_artifact_digest_matches_checksums(
     digest: &str,
 ) -> Result<(), String> {
     let checksums_path = release_dir.join("SHA256SUMS");
-    let content = fs::read_to_string(&checksums_path)
-        .map_err(|error| format!("read SHA256SUMS: {error}"))?;
+    let content =
+        fs::read_to_string(&checksums_path).map_err(|error| format!("read SHA256SUMS: {error}"))?;
     for line in content.lines() {
         let line = line.trim();
         if line.is_empty() {
@@ -620,7 +624,10 @@ fn verify_tools_artifact_digest_matches_checksums(
 }
 
 fn validate_release_label(release: &str) -> Result<(), String> {
-    if release.is_empty() || release.contains('/') || release.contains('\\') || release.contains("..")
+    if release.is_empty()
+        || release.contains('/')
+        || release.contains('\\')
+        || release.contains("..")
     {
         return Err(
             "release must be non-empty and must not contain path separators or traversal".into(),
@@ -630,7 +637,10 @@ fn validate_release_label(release: &str) -> Result<(), String> {
 }
 
 fn validate_tools_version_label(version: &str) -> Result<(), String> {
-    if version.is_empty() || version.contains('/') || version.contains('\\') || version.contains("..")
+    if version.is_empty()
+        || version.contains('/')
+        || version.contains('\\')
+        || version.contains("..")
     {
         return Err(
             "tools version must be non-empty and must not contain path separators or traversal"
@@ -677,9 +687,11 @@ pub fn ensure_foldops_release_in_registry(
         return load_foldops_registry_entry(paths, release).map(|_| ());
     }
 
-    let index: PackagesFoldopsIndex =
-        serde_json::from_str(&fetch_https_text(FOLDOPS_PACKAGES_INDEX_URL, "FoldOps index")?)
-            .map_err(|error| format!("parse FoldOps packages index: {error}"))?;
+    let index: PackagesFoldopsIndex = serde_json::from_str(&fetch_https_text(
+        FOLDOPS_PACKAGES_INDEX_URL,
+        "FoldOps index",
+    )?)
+    .map_err(|error| format!("parse FoldOps packages index: {error}"))?;
     if index.schema_version != 1 {
         return Err(format!(
             "unsupported FoldOps packages index schema version {}",
@@ -695,10 +707,8 @@ pub fn ensure_foldops_release_in_registry(
             format!("FoldOps release {release} was not found in {FOLDOPS_PACKAGES_INDEX_URL}")
         })?;
 
-    let (manifest_path, cleanup) = resolve_foldops_manifest_import_source(&[
-        "--url".into(),
-        manifest_url,
-    ])?;
+    let (manifest_path, cleanup) =
+        resolve_foldops_manifest_import_source(&["--url".into(), manifest_url])?;
     let result = import_foldops_manifest_file(paths, &manifest_path);
     if cleanup {
         let _ = fs::remove_file(&manifest_path);
@@ -760,10 +770,8 @@ mod tests {
 
     #[test]
     fn parse_tools_sha256sums_extracts_binary_digest() {
-        let digest = parse_tools_sha256sums_digest(
-            "abc123  foldingosctl-x86_64\n",
-        )
-        .expect("digest");
+        let digest =
+            parse_tools_sha256sums_digest("abc123  foldingosctl-x86_64\n").expect("digest");
         assert_eq!(digest, "abc123");
     }
 }

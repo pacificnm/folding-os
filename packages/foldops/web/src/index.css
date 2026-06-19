@@ -1374,17 +1374,81 @@ body {
   font-size: 0.85em;
 }
 
+.machine-controls-status-wrap {
+  margin-bottom: 1rem;
+}
+
 .machine-controls-status {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem 1.25rem;
-  margin-bottom: 1rem;
   padding: 0.55rem 0.75rem;
-  border-radius: 8px;
+  border-radius: 8px 8px 0 0;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  background: var(--surface);
+  font-size: 0.88rem;
+}
+
+.machine-controls-folding {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 0 0 8px 8px;
   border: 1px solid var(--border);
   background: var(--surface);
   font-size: 0.88rem;
+}
+
+.machine-controls-folding-label {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.machine-controls-folding-unit {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.machine-controls-folding-detail {
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.machine-controls-ingest-hint {
+  margin: 0.45rem 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.machine-controls-folding-badge--folding {
+  background: color-mix(in srgb, var(--ok) 18%, transparent);
+  color: var(--ok);
+}
+
+.machine-controls-folding-badge--paused,
+.machine-controls-folding-badge--waiting,
+.machine-controls-folding-badge--idle {
+  background: color-mix(in srgb, var(--warn) 18%, transparent);
+  color: var(--warn);
+}
+
+.machine-controls-folding-badge--stopped,
+.machine-controls-folding-badge--unreachable {
+  background: color-mix(in srgb, var(--danger) 15%, transparent);
+  color: var(--danger);
+}
+
+.machine-controls-folding-badge--finishing,
+.machine-controls-folding-badge--download,
+.machine-controls-folding-badge--upload,
+.machine-controls-folding-badge--ready,
+.machine-controls-folding-badge--core {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
 }
 
 .machine-controls-refresh {

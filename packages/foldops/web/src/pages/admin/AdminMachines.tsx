@@ -4,7 +4,7 @@ import {
   fetchAllowBootDevices,
   removeAllowBootDevice,
 } from "../../api";
-import type { AllowBootDevice } from "../../types";
+import type { AllowBootDevice, NetworkInstallStatus } from "../../types";
 
 const MAC_RE = /^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$/;
 
@@ -14,6 +14,36 @@ function normalizeMac(value: string): string {
     return value.trim();
   }
   return hex.match(/.{1,2}/g)!.join(":");
+}
+
+function networkStatusLabel(status: NetworkInstallStatus | undefined): string {
+  switch (status) {
+    case "awaiting_install":
+      return "Awaiting install";
+    case "online":
+      return "Online";
+    case "offline":
+      return "Offline";
+    case "installed":
+      return "Installed";
+    default:
+      return "Unknown";
+  }
+}
+
+function networkStatusClass(status: NetworkInstallStatus | undefined): string {
+  switch (status) {
+    case "online":
+      return "status-active";
+    case "offline":
+      return "status-inactive";
+    case "awaiting_install":
+      return "status-unknown";
+    case "installed":
+      return "status-active";
+    default:
+      return "status-unknown";
+  }
 }
 
 export function AdminMachines() {
@@ -27,7 +57,6 @@ export function AdminMachines() {
   const [status, setStatus] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    setLoading(true);
     try {
       const response = await fetchAllowBootDevices();
       setDevices(response.devices ?? []);
@@ -41,6 +70,8 @@ export function AdminMachines() {
 
   useEffect(() => {
     load();
+    const id = setInterval(load, 15_000);
+    return () => clearInterval(id);
   }, [load]);
 
   const submit = async (event: React.FormEvent) => {
@@ -99,8 +130,9 @@ export function AdminMachines() {
     <>
       <p className="admin-intro">
         Allow a machine to network-install FoldingOS over PXE/iPXE. Add its MAC
-        address here, then boot the machine from the network. Remove entries
-        when a machine should no longer be allowed to network-install.
+        address here, then boot the machine from the network. After install and
+        agent registration, hostname, IP address, and online status appear
+        automatically. The table refreshes every 15 seconds.
       </p>
 
       {error && <p className="message error">{error}</p>}
@@ -161,6 +193,9 @@ export function AdminMachines() {
               <thead>
                 <tr>
                   <th>MAC address</th>
+                  <th>Hostname</th>
+                  <th>IP address</th>
+                  <th>Network status</th>
                   <th>Install disk</th>
                   <th className="admin-table-actions">Actions</th>
                 </tr>
@@ -169,6 +204,15 @@ export function AdminMachines() {
                 {devices.map((device) => (
                   <tr key={device.mac_address}>
                     <td className="mono">{device.mac_address}</td>
+                    <td className="mono">{device.hostname ?? "—"}</td>
+                    <td className="mono">{device.primary_ipv4 ?? "—"}</td>
+                    <td>
+                      <span
+                        className={networkStatusClass(device.network_status)}
+                      >
+                        {networkStatusLabel(device.network_status)}
+                      </span>
+                    </td>
                     <td className="mono">{device.install_disk ?? "—"}</td>
                     <td className="admin-table-actions">
                       <button

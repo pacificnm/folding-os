@@ -95,12 +95,12 @@ pub fn parse_foldops_manifest(content: &str) -> Result<FoldOpsManifest, String> 
     let mut role_lines = Vec::new();
 
     let flush_package = |line_number: usize,
-                             manifest: &mut FoldOpsManifest,
-                             current: &mut FoldOpsPackage,
-                             package_seen: &mut HashSet<&str>,
-                             in_package: &mut bool,
-                             in_roles: &mut bool,
-                             role_lines: &mut Vec<String>|
+                         manifest: &mut FoldOpsManifest,
+                         current: &mut FoldOpsPackage,
+                         package_seen: &mut HashSet<&str>,
+                         in_package: &mut bool,
+                         in_roles: &mut bool,
+                         role_lines: &mut Vec<String>|
      -> Result<(), String> {
         if !*in_package {
             return Ok(());
@@ -146,7 +146,9 @@ pub fn parse_foldops_manifest(content: &str) -> Result<FoldOpsManifest, String> 
         }
         if line.starts_with("[[") {
             if line != "[[packages]]" {
-                return Err(format!("line {line_number}: unsupported manifest table \"{line}\""));
+                return Err(format!(
+                    "line {line_number}: unsupported manifest table \"{line}\""
+                ));
             }
             flush_package(
                 line_number,
@@ -210,9 +212,9 @@ pub fn parse_foldops_manifest(content: &str) -> Result<FoldOpsManifest, String> 
             package_seen.insert(key);
             match key {
                 "artifact_size" => {
-                    let parsed: i64 = value
-                        .parse()
-                        .map_err(|_| format!("line {line_number}: artifact_size must be a positive integer"))?;
+                    let parsed: i64 = value.parse().map_err(|_| {
+                        format!("line {line_number}: artifact_size must be a positive integer")
+                    })?;
                     if parsed <= 0 {
                         return Err(format!(
                             "line {line_number}: artifact_size must be a positive integer"
@@ -253,7 +255,10 @@ pub fn parse_foldops_manifest(content: &str) -> Result<FoldOpsManifest, String> 
                     format!("line {line_number}: schema_version must be an integer")
                 })?;
             }
-            "manifest_release" | "architecture" | "artifact_format" | "minimum_foldingos_version" => {
+            "manifest_release"
+            | "architecture"
+            | "artifact_format"
+            | "minimum_foldingos_version" => {
                 let parsed = parse_quoted_string(value).map_err(|_| {
                     format!("line {line_number}: \"{key}\" must be a quoted string")
                 })?;
@@ -362,7 +367,10 @@ pub fn validate_foldops_manifest(manifest: &FoldOpsManifest) -> Result<(), Strin
     Ok(())
 }
 
-fn validate_foldops_package(manifest: &FoldOpsManifest, pkg: &FoldOpsPackage) -> Result<(), String> {
+fn validate_foldops_package(
+    manifest: &FoldOpsManifest,
+    pkg: &FoldOpsPackage,
+) -> Result<(), String> {
     let required = required_package_roles();
     let Some(expected_roles) = required.get(pkg.name.as_str()) else {
         return Err(format!("unexpected package name in manifest: {}", pkg.name));
@@ -655,20 +663,16 @@ verification_path = "/data/apps/foldops/current/foldops-web/usr/share/foldops/we
 
     #[test]
     fn reject_unpinned_latest_foldops_artifact_url() {
-        let content = VALID_FOLDOPS_MANIFEST.replace(
-            "foldops-agent_0.1.0-1_amd64.deb\"",
-            "latest.deb\"",
-        );
+        let content =
+            VALID_FOLDOPS_MANIFEST.replace("foldops-agent_0.1.0-1_amd64.deb\"", "latest.deb\"");
         let manifest = parse_foldops_manifest(&content).expect("parse manifest");
         assert!(validate_foldops_manifest(&manifest).is_err());
     }
 
     #[test]
     fn reject_invalid_foldops_origin() {
-        let content = VALID_FOLDOPS_MANIFEST.replace(
-            "https://deb.folding-os.com/",
-            "https://evil.example/",
-        );
+        let content =
+            VALID_FOLDOPS_MANIFEST.replace("https://deb.folding-os.com/", "https://evil.example/");
         let manifest = parse_foldops_manifest(&content).expect("parse manifest");
         assert!(validate_foldops_manifest(&manifest).is_err());
     }
@@ -694,8 +698,7 @@ verification_path = "/data/apps/foldops/current/foldops-web/usr/share/foldops/we
 
     #[test]
     fn reject_schema_v2_layout_missing_install_prefix() {
-        let content =
-            VALID_FOLDOPS_MANIFEST_V2.replace("install_prefix = \"foldops-agent\"\n", "");
+        let content = VALID_FOLDOPS_MANIFEST_V2.replace("install_prefix = \"foldops-agent\"\n", "");
         let manifest = parse_foldops_manifest(&content).expect("parse manifest");
         assert!(validate_foldops_manifest(&manifest).is_err());
     }
@@ -721,10 +724,8 @@ verification_path = "/data/apps/foldops/current/foldops-web/usr/share/foldops/we
 
     #[test]
     fn reject_invalid_foldops_package_roles() {
-        let content = VALID_FOLDOPS_MANIFEST.replace(
-            r#"roles = ["agent", "supervisor"]"#,
-            r#"roles = ["agent"]"#,
-        );
+        let content = VALID_FOLDOPS_MANIFEST
+            .replace(r#"roles = ["agent", "supervisor"]"#, r#"roles = ["agent"]"#);
         let manifest = parse_foldops_manifest(&content).expect("parse manifest");
         assert!(validate_foldops_manifest(&manifest).is_err());
     }

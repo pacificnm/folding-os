@@ -9,6 +9,8 @@ mod run_cmd;
 mod util;
 mod verify_install;
 
+pub(crate) use prepare::fah_prepare_quiet;
+
 use crate::paths::AppliancePaths;
 
 pub fn run(paths: &AppliancePaths, subcommand: &str, args: &[String]) -> Result<(), String> {

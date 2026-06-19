@@ -177,9 +177,7 @@ pub fn format_unix_rfc3339_utc(unix: i64) -> String {
     }
     let day = days + 1;
 
-    format!(
-        "{year:04}-{month:02}-{day:02}T{hours:02}:{minutes:02}:{seconds:02}Z"
-    )
+    format!("{year:04}-{month:02}-{day:02}T{hours:02}:{minutes:02}:{seconds:02}Z")
 }
 
 fn is_leap_year(year: i64) -> bool {
@@ -203,10 +201,7 @@ mod tests {
 
     #[test]
     fn tools_acquisition_retry_delay_uses_backoff_table() {
-        assert_eq!(
-            tools_acquisition_retry_delay(1),
-            Duration::from_secs(60)
-        );
+        assert_eq!(tools_acquisition_retry_delay(1), Duration::from_secs(60));
         assert_eq!(
             tools_acquisition_retry_delay(99),
             ACQUISITION_RETRY_DELAYS[ACQUISITION_RETRY_DELAYS.len() - 1]

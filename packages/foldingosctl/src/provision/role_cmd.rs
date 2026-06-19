@@ -33,8 +33,7 @@ pub fn provision_role(paths: &AppliancePaths) -> Result<serde_json::Value, Strin
             }
         }
         atomic_write(&paths.active_installation_role, role.as_bytes(), 0o644)?;
-        fs::remove_file(&paths.provisioned_installation_role)
-            .map_err(|error| error.to_string())?;
+        fs::remove_file(&paths.provisioned_installation_role).map_err(|error| error.to_string())?;
         println!("Activated provisioned installation role {role:?}.");
         return Ok(empty_human_result());
     } else if let Err(error) = provisioned {

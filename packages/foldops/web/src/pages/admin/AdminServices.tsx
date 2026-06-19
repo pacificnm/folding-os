@@ -62,7 +62,13 @@ export function AdminServices() {
     try {
       const result = await restartService(unit);
       setStatus(result.message ?? `Restarted ${name}.`);
-      await load();
+      if (result.scheduled) {
+        window.setTimeout(() => {
+          load();
+        }, 5_000);
+      } else {
+        await load();
+      }
     } catch (err) {
       setError(
         err instanceof Error ? err.message : `Failed to restart ${name}`,

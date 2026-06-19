@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::foldops::util::{
-    path_within_root, FOLDOPS_VERIFICATION_PATH_PREFIX, validate_foldops_release_label,
+    path_within_root, validate_foldops_release_label, FOLDOPS_VERIFICATION_PATH_PREFIX,
 };
 use crate::foldops_manifest::FoldOpsPackage;
 use crate::fs_atomic::atomic_write;
@@ -26,9 +26,7 @@ pub fn foldops_activate(paths: &AppliancePaths, release: &str) -> Result<(), Str
 
     if let Ok(current_release) = read_foldops_current_release(paths) {
         if current_release == release {
-            crate::automation::say_stdout(format!(
-                "FoldOps release {release} is already active."
-            ));
+            crate::automation::say_stdout(format!("FoldOps release {release} is already active."));
             return Ok(());
         }
     }
@@ -48,19 +46,20 @@ pub fn read_foldops_current_release(paths: &AppliancePaths) -> Result<String, St
     if target.starts_with('/') {
         return Err("current must be a relative symlink".into());
     }
-    let cleaned = Path::new(target.as_ref())
-        .components()
-        .fold(PathBuf::new(), |mut acc, component| {
-            use std::path::Component;
-            match component {
-                Component::Normal(part) => acc.push(part),
-                Component::ParentDir => {
-                    acc.pop();
+    let cleaned =
+        Path::new(target.as_ref())
+            .components()
+            .fold(PathBuf::new(), |mut acc, component| {
+                use std::path::Component;
+                match component {
+                    Component::Normal(part) => acc.push(part),
+                    Component::ParentDir => {
+                        acc.pop();
+                    }
+                    _ => {}
                 }
-                _ => {}
-            }
-            acc
-        });
+                acc
+            });
     if cleaned.to_string_lossy() != target || target.contains("..") {
         return Err("current must not contain path traversal".into());
     }

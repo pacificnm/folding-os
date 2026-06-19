@@ -223,7 +223,10 @@ pub fn get_machine(conn: &Connection, hostname: &str) -> rusqlite::Result<Option
     Ok(None)
 }
 
-pub fn get_machine_by_node_id(conn: &Connection, node_id: &str) -> rusqlite::Result<Option<MachineRow>> {
+pub fn get_machine_by_node_id(
+    conn: &Connection,
+    node_id: &str,
+) -> rusqlite::Result<Option<MachineRow>> {
     let mut stmt = conn.prepare(
         "SELECT hostname, first_seen, last_seen, node_id, installation_role, foldingos_version FROM machines WHERE node_id = ?1",
     )?;

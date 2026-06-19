@@ -48,11 +48,7 @@ fn passkey_format_error(length: usize) -> String {
     )
 }
 
-pub fn build_foldinghome_candidate_toml(
-    username: &str,
-    team: i64,
-    passkey_secret: &str,
-) -> String {
+pub fn build_foldinghome_candidate_toml(username: &str, team: i64, passkey_secret: &str) -> String {
     format!(
         "schema_version = 1\n\n[identity]\nusername = {}\nteam = {team}\npasskey_secret = {}\n\n[resources]\ncpus = 0\ngpus = false\n",
         toml_string(username),
@@ -127,16 +123,25 @@ pub async fn validate_foldinghome_candidate(
         .to_str()
         .ok_or_else(|| "candidate path is not valid UTF-8".to_string())?;
     let output = tokio::process::Command::new(foldingosctl_path)
-        .args(["config", "validate", "foldinghome", candidate, "--format", "json"])
+        .args([
+            "config",
+            "validate",
+            "foldinghome",
+            candidate,
+            "--format",
+            "json",
+        ])
         .output()
         .await
         .map_err(|error| error.to_string())?;
 
-    let stdout = String::from_utf8(output.stdout).map_err(|_| "invalid UTF-8 from foldingosctl".to_string())?;
+    let stdout = String::from_utf8(output.stdout)
+        .map_err(|_| "invalid UTF-8 from foldingosctl".to_string())?;
     let envelope: Value = serde_json::from_str(stdout.trim())
         .map_err(|error| format!("invalid JSON from foldingosctl: {error}"))?;
 
-    if output.status.success() && envelope.get("ok").and_then(|value| value.as_bool()) == Some(true) {
+    if output.status.success() && envelope.get("ok").and_then(|value| value.as_bool()) == Some(true)
+    {
         return Ok(());
     }
 

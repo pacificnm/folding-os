@@ -5,8 +5,8 @@ use std::process::Command;
 use regex::Regex;
 use std::sync::LazyLock;
 
-use crate::role::read_installation_role_for_display;
 use crate::paths::AppliancePaths;
+use crate::role::read_installation_role_for_display;
 
 static MANIFEST_RELEASE_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"(?m)^\s*manifest_release\s*=\s*"([^"]+)""#).expect("manifest pattern compiles")
@@ -15,7 +15,9 @@ static MANIFEST_RELEASE_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
 pub fn inspect_commissioning(paths: &AppliancePaths) -> Result<serde_json::Value, String> {
     let role = read_installation_role_for_display(paths);
     let checks = evaluate_commissioning_checks(paths, &role);
-    let all_ready = checks.iter().all(|check| check["ready"].as_bool() == Some(true));
+    let all_ready = checks
+        .iter()
+        .all(|check| check["ready"].as_bool() == Some(true));
     Ok(serde_json::json!({
         "installation_role": role,
         "all_ready": all_ready,
@@ -26,7 +28,10 @@ pub fn inspect_commissioning(paths: &AppliancePaths) -> Result<serde_json::Value
 fn evaluate_commissioning_checks(paths: &AppliancePaths, role: &str) -> Vec<serde_json::Value> {
     let mut checks = vec![
         serde_json::json!({"label": "Network online", "ready": true}),
-        check_systemd_unit("SSH administrator provisioned", "foldingos-ssh-provision.service"),
+        check_systemd_unit(
+            "SSH administrator provisioned",
+            "foldingos-ssh-provision.service",
+        ),
         check_installation_role(role),
         check_foldops_packages(paths),
         check_foldops_provisioned(paths),
@@ -95,28 +100,29 @@ pub fn parse_manifest_release(content: &str) -> Option<String> {
 
 pub fn read_current_release(apps_root: &Path) -> Result<String, String> {
     let current_path = apps_root.join("current");
-    let target = fs::read_link(&current_path)
-        .map_err(|error| format!("read current symlink: {error}"))?;
+    let target =
+        fs::read_link(&current_path).map_err(|error| format!("read current symlink: {error}"))?;
     let target = target.to_string_lossy();
     if target.starts_with('/') {
         return Err("current must be a relative symlink".into());
     }
-    let cleaned = Path::new(target.as_ref())
-        .components()
-        .fold(String::new(), |mut acc, component| {
-            use std::path::Component;
-            match component {
-                Component::Normal(part) => {
-                    if !acc.is_empty() {
-                        acc.push('/');
+    let cleaned =
+        Path::new(target.as_ref())
+            .components()
+            .fold(String::new(), |mut acc, component| {
+                use std::path::Component;
+                match component {
+                    Component::Normal(part) => {
+                        if !acc.is_empty() {
+                            acc.push('/');
+                        }
+                        acc.push_str(&part.to_string_lossy());
                     }
-                    acc.push_str(&part.to_string_lossy());
+                    Component::ParentDir => acc = String::new(),
+                    _ => {}
                 }
-                Component::ParentDir => acc = String::new(),
-                _ => {}
-            }
-            acc
-        });
+                acc
+            });
     if cleaned.is_empty() || cleaned.contains("..") || cleaned != target {
         return Err("current must not contain path traversal".into());
     }

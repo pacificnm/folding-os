@@ -8,15 +8,19 @@ mod update;
 
 pub use tools::{
     hash_file_at_path, resolve_effective_tools_assignment, save_tools_active_state,
-    tools_installation_verified, validate_tools_assignment_public,
-    ToolsActiveState, ToolsAssignment,
+    tools_installation_verified, validate_tools_assignment_public, ToolsActiveState,
+    ToolsAssignment,
 };
 
 use crate::automation_policy::require_inspectable_role;
 use crate::identity::read_node_identity;
 use crate::paths::AppliancePaths;
 
-pub fn run(paths: &AppliancePaths, subcommand: &str, args: &[String]) -> Result<serde_json::Value, String> {
+pub fn run(
+    paths: &AppliancePaths,
+    subcommand: &str,
+    args: &[String],
+) -> Result<serde_json::Value, String> {
     if !args.is_empty() {
         return Err(format!("unknown inspect option {:?}", args[0]));
     }
@@ -150,7 +154,8 @@ verification_path = "/data/apps/foldops/current/foldops-agent/.foldingos-verifie
 
     #[test]
     fn inspect_foldops_json_matches_golden() {
-        let root = std::env::temp_dir().join(format!("foldingosctl-foldops-test-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("foldingosctl-foldops-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         let paths = setup_runtime_paths(&root);
@@ -161,7 +166,8 @@ verification_path = "/data/apps/foldops/current/foldops-agent/.foldingos-verifie
 
     #[test]
     fn inspect_tools_json_matches_golden() {
-        let root = std::env::temp_dir().join(format!("foldingosctl-tools-test-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("foldingosctl-tools-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         let paths = setup_runtime_paths(&root);

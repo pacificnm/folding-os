@@ -3,8 +3,11 @@ use crate::assignments::{
     apply_supervisor_local_assignments_if_needed,
 };
 use crate::automation_policy::require_supervisor_automation_mutation;
-use crate::enrollment::{load_enrollment_record, load_enrollment_records_sorted, save_enrollment_record};
+use crate::enrollment::{
+    load_enrollment_record, load_enrollment_records_sorted, save_enrollment_record,
+};
 use crate::fs_atomic::contains_string;
+use crate::identity::read_node_id;
 use crate::paths::AppliancePaths;
 use crate::registry_foldops_tools::{
     ensure_foldops_release_in_registry, ensure_tools_release_in_registry,
@@ -13,7 +16,6 @@ use crate::registry_image::{
     is_bootstrap_assignment_label, load_foldops_registry_entry, load_registry_entry,
     load_tools_registry_entry,
 };
-use crate::identity::read_node_id;
 use crate::role::require_supervisor_role;
 
 #[derive(Debug, Default, Clone)]
@@ -286,7 +288,10 @@ fn apply_local_supervisor_assignment(
     Ok(1)
 }
 
-fn validate_assignment_update(paths: &AppliancePaths, update: &AssignmentUpdate) -> Result<(), String> {
+fn validate_assignment_update(
+    paths: &AppliancePaths,
+    update: &AssignmentUpdate,
+) -> Result<(), String> {
     if let Some(version) = update.image_version.as_ref() {
         let version = version.trim();
         if version.is_empty() {

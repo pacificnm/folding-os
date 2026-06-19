@@ -7,7 +7,8 @@ use std::path::Path;
 const FOLDINGOSCTL_INSTALL_MODE: u32 = 0o4755;
 
 pub fn verify_tools_executable_elf(path: &Path) -> Result<(), String> {
-    let header = fs::read(path).map_err(|error| format!("read tools executable ELF header: {error}"))?;
+    let header =
+        fs::read(path).map_err(|error| format!("read tools executable ELF header: {error}"))?;
     if header.len() < 20 {
         return Err("read tools executable ELF header: file too short".into());
     }
@@ -20,7 +21,9 @@ pub fn verify_tools_executable_elf(path: &Path) -> Result<(), String> {
     }
     let machine = u16::from_le_bytes([header[18], header[19]]);
     if machine != 62 {
-        return Err(format!("tools executable architecture {machine} is not x86_64"));
+        return Err(format!(
+            "tools executable architecture {machine} is not x86_64"
+        ));
     }
     Ok(())
 }
@@ -37,12 +40,8 @@ pub fn restore_setuid_install_mode(destination: &Path) -> Result<(), String> {
             return Ok(());
         }
 
-        chown(
-            destination,
-            Some(Uid::from_raw(0)),
-            Some(Gid::from_raw(0)),
-        )
-        .map_err(|error| format!("restore tools binary ownership: {error}"))?;
+        chown(destination, Some(Uid::from_raw(0)), Some(Gid::from_raw(0)))
+            .map_err(|error| format!("restore tools binary ownership: {error}"))?;
 
         let file = OpenOptions::new()
             .read(true)
@@ -105,7 +104,8 @@ pub fn atomic_replace_tools_binary(staged_path: &Path, destination: &Path) -> Re
     let temp_path = parent.join(format!(".{file_name}.tmp-{}", std::process::id()));
     let _ = fs::remove_file(&temp_path);
 
-    let content = fs::read(staged_path).map_err(|error| format!("read staged tools binary: {error}"))?;
+    let content =
+        fs::read(staged_path).map_err(|error| format!("read staged tools binary: {error}"))?;
     {
         let mut temp = File::create(&temp_path)
             .map_err(|error| format!("create temporary tools binary: {error}"))?;
@@ -117,7 +117,8 @@ pub fn atomic_replace_tools_binary(staged_path: &Path, destination: &Path) -> Re
             .map_err(|error| format!("flush temporary tools binary: {error}"))?;
     }
 
-    fs::rename(&temp_path, destination).map_err(|error| format!("replace tools binary: {error}"))?;
+    fs::rename(&temp_path, destination)
+        .map_err(|error| format!("replace tools binary: {error}"))?;
     restore_setuid_install_mode(destination)?;
 
     let dir = OpenOptions::new()
@@ -135,10 +136,8 @@ mod tests {
 
     #[test]
     fn atomic_replace_tools_binary_replaces_destination() {
-        let root = std::env::temp_dir().join(format!(
-            "foldingosctl-tools-replace-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("foldingosctl-tools-replace-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
 

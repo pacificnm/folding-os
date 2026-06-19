@@ -1,9 +1,9 @@
 schema_version = 1
-client_version = "8.5.6"
+client_version = "8.5.5"
 architecture = "x86_64"
-artifact_url = "https://download.foldingathome.org/releases/beta/fah-client/debian-10-64bit/release/fah-client_8.5.6_amd64.deb"
-artifact_size = 3205180
-sha256 = "643de04033a1cb972a81e3a193d710e919a4f34634a987f11adc4cee61fdaefe"
+artifact_url = "https://download.foldingathome.org/releases/public/fah-client/debian-10-64bit/release/fah-client_8.5.5_amd64.deb"
+artifact_size = 3180500
+sha256 = "4f9c8bed9b2893752afb87e2796512ca0ca300ffc3d6035c518d56360370886c"
 artifact_format = "deb"
 minimum_foldingos_version = "0.1.0"
 terms_url = "https://foldingathome.org/faq/opensource/"

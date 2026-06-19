@@ -9,24 +9,29 @@ use crate::inspect::commissioning::read_current_release;
 use crate::paths::AppliancePaths;
 
 static FAH_PROJECT_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)Project:\s*(\d+)\s*\(\s*Run\s*(\d+)\s*,\s*Clone\s*(\d+)\s*,\s*Gen\s*(\d+)\s*\)")
-        .expect("fah project pattern compiles")
+    Regex::new(
+        r"(?i)Project:\s*(\d+)\s*\(\s*Run\s*(\d+)\s*,\s*Clone\s*(\d+)\s*,\s*Gen\s*(\d+)\s*\)",
+    )
+    .expect("fah project pattern compiles")
 });
-static FAH_PROGRESS_PATTERN: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?i)Progress:\s*([\d.]+)\s*%").expect("fah progress pattern compiles"));
+static FAH_PROGRESS_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)Progress:\s*([\d.]+)\s*%").expect("fah progress pattern compiles")
+});
 static FAH_STEPS_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"Completed\s+(\d+)\s+out\s+of\s+(\d+)\s+steps\s+\(([\d.]+)%\)")
         .expect("fah steps pattern compiles")
 });
 static FAH_PPD_PATTERN: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)PPD[:\s]+([\d,.]+)").expect("fah ppd pattern compiles"));
-static FAH_TPF_PATTERN: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?i)TPF[:\s]+([\d:]+(?:\.\d+)?)").expect("fah tpf pattern compiles"));
+static FAH_TPF_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)TPF[:\s]+([\d:]+(?:\.\d+)?)").expect("fah tpf pattern compiles")
+});
 static FAH_ERROR_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)\b(ERROR|FATAL|Exception|failed)\b").expect("fah error pattern compiles")
 });
 static FAH_CLIENT_VERSION_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?m)^\s*client_version\s*=\s*"([^"]+)""#).expect("fah client version pattern compiles")
+    Regex::new(r#"(?m)^\s*client_version\s*=\s*"([^"]+)""#)
+        .expect("fah client version pattern compiles")
 });
 static FAH_SHA256_PATTERN: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[0-9a-f]{64}$").expect("sha256 pattern compiles"));
@@ -44,7 +49,9 @@ pub fn inspect_fah(paths: &AppliancePaths) -> Result<serde_json::Value, String> 
     if let Ok(version) = read_current_release(&paths.fah_apps_root) {
         data["active_client_version"] = serde_json::Value::String(version.clone());
         if let Ok(manifest) = fs::read_to_string(&paths.fah_embedded_manifest) {
-            if let Some(verified) = fah_installation_verified(&paths.fah_apps_root, &version, &manifest) {
+            if let Some(verified) =
+                fah_installation_verified(&paths.fah_apps_root, &version, &manifest)
+            {
                 data["verified"] = serde_json::Value::Bool(verified);
             }
         }
@@ -71,8 +78,8 @@ fn foldinghome_configuration(paths: &AppliancePaths) -> Option<serde_json::Value
         .get("identity.passkey_secret")
         .map(|value| value.text.as_str())
         .unwrap_or_default();
-    let passkey_configured = !passkey_secret.is_empty()
-        && paths.secrets_dir().join(passkey_secret).is_file();
+    let passkey_configured =
+        !passkey_secret.is_empty() && paths.secrets_dir().join(passkey_secret).is_file();
     Some(serde_json::json!({
         "username": username,
         "team": team,
@@ -88,10 +95,16 @@ fn systemd_unit_is_active(unit: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn fah_installation_verified(apps_root: &std::path::Path, version: &str, manifest: &str) -> Option<bool> {
+fn fah_installation_verified(
+    apps_root: &std::path::Path,
+    version: &str,
+    manifest: &str,
+) -> Option<bool> {
     let client_version = parse_fah_client_version(manifest)?;
     let sha256 = parse_fah_sha256(manifest)?;
-    let marker_path = apps_root.join(version).join(crate::paths::FAH_VERIFIED_MARKER);
+    let marker_path = apps_root
+        .join(version)
+        .join(crate::paths::FAH_VERIFIED_MARKER);
     let marker = fs::read_to_string(marker_path).ok()?;
     let values = parse_key_value_lines(&marker);
     if values.get("client_version") != Some(&client_version) {
@@ -101,7 +114,11 @@ fn fah_installation_verified(apps_root: &std::path::Path, version: &str, manifes
         return Some(false);
     }
     let executable_path = parse_fah_executable_path(manifest)?;
-    let executable = apps_root.join(version).join(executable_path.strip_prefix("/data/apps/fah/current/").unwrap_or(&executable_path));
+    let executable = apps_root.join(version).join(
+        executable_path
+            .strip_prefix("/data/apps/fah/current/")
+            .unwrap_or(&executable_path),
+    );
     fs::metadata(executable).ok().map(|meta| meta.is_file())
 }
 
