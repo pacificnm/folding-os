@@ -1,4 +1,7 @@
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static DEFERRED_RESTART_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 pub fn command_output(name: &str, args: &[&str]) -> Result<String, String> {
     let output = Command::new(name)
@@ -49,6 +52,59 @@ pub fn run_fsck_ext4(device: &str, force: bool) -> Result<(), String> {
     } else {
         println!("Checked {device} before data mount.");
     }
+    Ok(())
+}
+
+/// Restart a systemd unit after a short delay so the caller can finish an in-flight HTTP response.
+pub fn schedule_deferred_systemd_restart(unit: &str) -> Result<(), String> {
+    schedule_deferred_systemd_restart_after(unit, 2)
+}
+
+pub fn schedule_deferred_systemd_restart_after(unit: &str, delay_secs: u32) -> Result<(), String> {
+    let unit_slug = unit.replace('.', "-");
+    let script = format!("sleep {delay_secs}; systemctl restart {unit}");
+    schedule_deferred_shell_command(&format!("restart-{unit_slug}"), &script)
+}
+
+/// Run a shell script in the background after the caller returns.
+pub fn schedule_deferred_shell_command(name: &str, script: &str) -> Result<(), String> {
+    let name_slug = name
+        .chars()
+        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '-' })
+        .collect::<String>();
+    let sequence = DEFERRED_RESTART_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let transient_unit = format!(
+        "foldingos-deferred-{}-{}-{}",
+        name_slug,
+        std::process::id(),
+        sequence
+    );
+    if Command::new("systemd-run")
+        .args([
+            "--no-block",
+            "--collect",
+            &format!("--unit={transient_unit}"),
+            "--",
+            "sh",
+            "-c",
+            script,
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+    {
+        return Ok(());
+    }
+
+    Command::new("sh")
+        .arg("-c")
+        .arg(format!("({script}) >/dev/null 2>&1 &"))
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map_err(|error| format!("schedule deferred command {name}: {error}"))?;
     Ok(())
 }
 

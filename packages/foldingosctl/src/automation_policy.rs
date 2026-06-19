@@ -61,7 +61,8 @@ pub fn require_supervisor_automation_mutation(
         return Ok(());
     }
     require_supervisor_role(paths)?;
-    let policy = load_automation_policy(&paths.automation_policy)?;
+    let policy_path = resolve_supervisor_automation_policy_path(paths);
+    let policy = load_automation_policy(&policy_path)?;
     authorize_automation_policy(&policy, "supervisor", command_group, command_name)
 }
 
@@ -74,7 +75,8 @@ pub fn require_agent_automation_mutation(
         return Ok(());
     }
     require_agent_role(paths)?;
-    let policy = load_automation_policy(&paths.agent_automation_policy)?;
+    let policy_path = resolve_agent_automation_policy_path(paths);
+    let policy = load_automation_policy(&policy_path)?;
     authorize_automation_policy(&policy, "agent", command_group, command_name)
 }
 
@@ -122,6 +124,14 @@ fn authorize_automation_policy(
     {
         return Ok(());
     }
+    if command_group == "provision"
+        && command_name == "assign-local"
+        && policy.commands.iter().any(|command| {
+            command.group == "provision" && command.name == "assign"
+        })
+    {
+        return Ok(());
+    }
     Err(format!(
         "automation policy does not authorize {command_group} {command_name} for the foldops user"
     ))
@@ -131,6 +141,74 @@ fn load_automation_policy(path: &std::path::Path) -> Result<AutomationPolicy, St
     let content = fs::read_to_string(path)
         .map_err(|error| format!("automation policy is unavailable: {error}"))?;
     parse_automation_policy(&content)
+}
+
+pub(crate) fn resolve_supervisor_automation_policy_path(
+    paths: &AppliancePaths,
+) -> std::path::PathBuf {
+    let bundled = paths
+        .foldops_apps_root
+        .join("current/foldops-supervisor/usr/share/foldingos/foldops-supervisor-automation.toml");
+    if bundled.is_file() {
+        return bundled;
+    }
+    paths.automation_policy.clone()
+}
+
+pub(crate) fn resolve_agent_automation_policy_path(paths: &AppliancePaths) -> std::path::PathBuf {
+    let bundled = paths
+        .foldops_apps_root
+        .join("current/foldops-agent/usr/share/foldingos/foldops-agent-automation.toml");
+    if bundled.is_file() {
+        return bundled;
+    }
+    paths.agent_automation_policy.clone()
+}
+
+/// Copy bundled automation policy from the active FoldOps release into
+/// `/usr/share/foldingos/` when running with root privileges.
+pub fn sync_automation_policies_to_system_share(paths: &AppliancePaths) -> Result<(), String> {
+    sync_automation_policy_file(
+        resolve_supervisor_automation_policy_path(paths),
+        &paths.automation_policy,
+    )?;
+    sync_automation_policy_file(
+        resolve_agent_automation_policy_path(paths),
+        &paths.agent_automation_policy,
+    )?;
+    Ok(())
+}
+
+fn sync_automation_policy_file(
+    source: std::path::PathBuf,
+    destination: &std::path::Path,
+) -> Result<(), String> {
+    if source == destination || !source.is_file() {
+        return Ok(());
+    }
+    let content = fs::read_to_string(&source)
+        .map_err(|error| format!("read automation policy {}: {error}", source.display()))?;
+    if destination.is_file() {
+        let existing = fs::read_to_string(destination).map_err(|error| {
+            format!(
+                "read installed automation policy {}: {error}",
+                destination.display()
+            )
+        })?;
+        if existing == content {
+            return Ok(());
+        }
+    }
+    if let Some(parent) = destination.parent() {
+        fs::create_dir_all(parent).map_err(|error| {
+            format!(
+                "create automation policy directory {}: {error}",
+                parent.display()
+            )
+        })?;
+    }
+    crate::fs_atomic::atomic_write(destination, content.as_bytes(), 0o644)
+        .map_err(|error| format!("install automation policy {}: {error}", destination.display()))
 }
 
 fn parse_automation_policy(content: &str) -> Result<AutomationPolicy, String> {
@@ -304,6 +382,70 @@ name = "allow-boot"
         set_test_username(Some("foldops"));
         assert!(require_supervisor_automation_mutation(&paths, "provision", "install").is_err());
         assert!(require_supervisor_automation_mutation(&paths, "provision", "assign").is_ok());
+        set_test_username(None);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn prefers_bundled_supervisor_automation_policy_path() {
+        let root = std::env::temp_dir().join(format!(
+            "foldingosctl-bundled-policy-path-test-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(
+            root.join("apps/foldops/current/foldops-supervisor/usr/share/foldingos"),
+        )
+        .unwrap();
+        let bundled = root.join(
+            "apps/foldops/current/foldops-supervisor/usr/share/foldingos/foldops-supervisor-automation.toml",
+        );
+        std::fs::write(&bundled, "schema_version = 1\n").unwrap();
+        let paths = AppliancePaths {
+            foldops_apps_root: root.join("apps/foldops"),
+            automation_policy: root.join("system-share-policy.toml"),
+            ..AppliancePaths::default()
+        };
+        assert_eq!(resolve_supervisor_automation_policy_path(&paths), bundled);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn authorizes_services_restart_from_bundled_supervisor_policy() {
+        const BUNDLED_POLICY: &str = r#"schema_version = 1
+service_user = "foldops"
+installation_role = "supervisor"
+
+[[commands]]
+group = "services"
+name = "restart"
+"#;
+        let root = std::env::temp_dir().join(format!(
+            "foldingosctl-bundled-policy-test-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(
+            root.join("apps/foldops/current/foldops-supervisor/usr/share/foldingos"),
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join("config")).unwrap();
+        std::fs::write(root.join("config/installation-role"), "supervisor").unwrap();
+        std::fs::write(
+            root.join("apps/foldops/current/foldops-supervisor/usr/share/foldingos/foldops-supervisor-automation.toml"),
+            BUNDLED_POLICY,
+        )
+        .unwrap();
+        std::fs::write(root.join("automation-policy.toml"), TEST_POLICY).unwrap();
+        let paths = AppliancePaths {
+            active_installation_role: root.join("config/installation-role"),
+            foldops_apps_root: root.join("apps/foldops"),
+            automation_policy: root.join("automation-policy.toml"),
+            ..AppliancePaths::default()
+        };
+        set_test_username(Some("foldops"));
+        assert!(require_supervisor_automation_mutation(&paths, "services", "restart").is_ok());
+        assert!(require_supervisor_automation_mutation(&paths, "services", "restart-all").is_err());
         set_test_username(None);
         let _ = std::fs::remove_dir_all(root);
     }

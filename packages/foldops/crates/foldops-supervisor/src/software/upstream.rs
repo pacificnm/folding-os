@@ -240,8 +240,9 @@ pub fn select_foldops_latest(
             foldingos_version_satisfies(foldingos_version, &entry.minimum_foldingos_version)
         })
         .max_by(|left, right| {
-            version_cmp(&left.manifest_release, &right.manifest_release)
-                .then_with(|| left.published_at.cmp(&right.published_at))
+            left.published_at
+                .cmp(&right.published_at)
+                .then_with(|| version_cmp(&left.manifest_release, &right.manifest_release))
         })
         .map(|entry| FoldopsLatest {
             manifest_release: entry.manifest_release.clone(),
@@ -259,8 +260,9 @@ pub fn select_tools_latest(
             foldingos_version_satisfies(foldingos_version, &entry.minimum_foldingos_version)
         })
         .max_by(|left, right| {
-            version_cmp(&left.tools_version, &right.tools_version)
-                .then_with(|| left.published_at.cmp(&right.published_at))
+            left.published_at
+                .cmp(&right.published_at)
+                .then_with(|| version_cmp(&left.tools_version, &right.tools_version))
         })
         .map(|entry| ToolsLatest {
             tools_version: entry.tools_version.clone(),
@@ -301,7 +303,10 @@ pub fn update_available(latest: &str, active: &str, assigned: &str) -> bool {
 }
 
 pub fn apply_pending(assigned: &str, active: &str) -> bool {
-    !assigned.is_empty() && !active.is_empty() && assigned != active
+    if assigned.is_empty() {
+        return false;
+    }
+    active.is_empty() || assigned != active
 }
 
 fn parse_version_label(value: &str) -> Option<Vec<u32>> {
@@ -348,6 +353,29 @@ mod tests {
     use super::*;
 
     #[test]
+    fn select_tools_latest_prefers_most_recently_published_release() {
+        let releases = vec![
+            ToolsReleaseEntry {
+                tools_version: "0.1.0-9".into(),
+                published_at: "2026-06-19T02:42:09Z".into(),
+                binary_url: "https://example/0.1.0-9/foldingosctl-x86_64".into(),
+                sha256_url: "https://example/0.1.0-9/SHA256SUMS".into(),
+                minimum_foldingos_version: "0.1.0".into(),
+            },
+            ToolsReleaseEntry {
+                tools_version: "0.1.1".into(),
+                published_at: "2026-06-18T12:19:49Z".into(),
+                binary_url: "https://example/0.1.1/foldingosctl-x86_64".into(),
+                sha256_url: "https://example/0.1.1/SHA256SUMS".into(),
+                minimum_foldingos_version: "0.1.0".into(),
+            },
+        ];
+
+        let latest = select_tools_latest(&releases, "0.1.0").expect("latest");
+        assert_eq!(latest.tools_version, "0.1.0-9");
+    }
+
+    #[test]
     fn version_cmp_orders_manifest_releases() {
         assert_eq!(
             version_cmp("0.1.0-2", "0.1.0-1"),
@@ -385,6 +413,14 @@ mod tests {
         assert!(update_available("0.1.0-2", "0.1.0-1", "0.1.0-1"));
         assert!(update_available("0.1.0-2", "0.1.0-1", "0.1.0-2"));
         assert!(!update_available("0.1.0-1", "0.1.0-1", "0.1.0-1"));
+    }
+
+    #[test]
+    fn apply_pending_when_assigned_without_active_state() {
+        assert!(apply_pending("0.1.0-10", ""));
+        assert!(apply_pending("0.1.0-19", "0.1.0-17"));
+        assert!(!apply_pending("", "0.1.0-10"));
+        assert!(!apply_pending("0.1.0-10", "0.1.0-10"));
     }
 
     #[test]

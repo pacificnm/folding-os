@@ -11,9 +11,6 @@ use crate::recovery::bundle::{
     hash_file, validate_restore_target, RecoveryManifest, MANIFEST_SCHEMA_VERSION,
     MAX_EXPORT_BYTES,
 };
-use crate::recovery::privilege::{
-    delegate_recovery_import, prepare_recovery_access, should_delegate_recovery_import_to_root,
-};
 use crate::role::require_supervisor_role;
 
 pub struct ImportOptions {
@@ -26,12 +23,6 @@ pub fn recovery_import(
     options: ImportOptions,
 ) -> Result<serde_json::Value, String> {
     require_supervisor_role(paths)?;
-
-    if should_delegate_recovery_import_to_root() {
-        return delegate_recovery_import(archive_path, options.dry_run);
-    }
-
-    prepare_recovery_access(paths)?;
     require_supervisor_automation_mutation(paths, "recovery", "import")?;
 
     let temp_dir = std::env::temp_dir().join(format!(
@@ -49,7 +40,7 @@ pub fn recovery_import(
 }
 
 fn import_inner(
-    paths: &AppliancePaths,
+    _paths: &AppliancePaths,
     archive_path: &Path,
     temp_dir: &Path,
     options: ImportOptions,
@@ -78,7 +69,6 @@ fn import_inner(
         restore_file(&staged, &destination, entry.size_bytes)?;
     }
 
-    prepare_recovery_access(paths)?;
     restart_supervisor_services()?;
 
     Ok(serde_json::json!({

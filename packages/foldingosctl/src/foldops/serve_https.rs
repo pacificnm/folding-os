@@ -33,7 +33,13 @@ fn serve_tls_reverse_proxy(
 ) -> Result<(), String> {
     let listener = TcpListener::bind(listen_addr).map_err(|error| error.to_string())?;
     for stream in listener.incoming() {
-        let mut stream = stream.map_err(|error| error.to_string())?;
+        let mut stream = match stream {
+            Ok(stream) => stream,
+            Err(error) => {
+                eprintln!("foldops serve-https: accept failed: {error}");
+                continue;
+            }
+        };
         let config = config.clone();
         let upstream_base = upstream_base.to_string();
         if let Err(error) = handle_client(&mut stream, config, &upstream_base) {

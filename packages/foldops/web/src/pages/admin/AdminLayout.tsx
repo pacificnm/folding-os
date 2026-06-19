@@ -2,8 +2,12 @@ import { Link, Outlet, useLocation } from "react-router-dom";
 import { PageLayout } from "../../components/PageLayout";
 
 const NAV = [
-  { href: "/admin/recovery", label: "Backup" },
+  { href: "/admin/machines", label: "Network install" },
+  { href: "/admin/folding", label: "Folding@home" },
+  { href: "/admin/services", label: "Services" },
+  { href: "/admin/logs", label: "Logs" },
   { href: "/admin/software", label: "Software updates" },
+  { href: "/admin/recovery", label: "Backup" },
 ] as const;
 
 export function AdminLayout() {
@@ -13,7 +17,7 @@ export function AdminLayout() {
     <PageLayout
       backLink={{ href: "/dashboard", label: "← Farm dashboard" }}
       eyebrow="Settings"
-      title="Backup & updates"
+      title="Supervisor admin"
       footer={
         <>
           <Link to="/dashboard">Farm dashboard</Link>

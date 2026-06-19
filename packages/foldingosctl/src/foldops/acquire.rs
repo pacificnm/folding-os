@@ -11,7 +11,7 @@ use crate::boot_cmd::refresh_commissioning_display;
 use crate::foldops::extract::{
     extract_foldops_deb_data, extract_foldops_layout_bundle, verify_foldops_artifact_file,
 };
-use crate::foldops::provision::start_foldops_provision_service;
+use crate::foldops::provision::{restart_foldops_runtime_services, start_foldops_provision_service, foldops_provisioned};
 use crate::foldops::util::{
     embedded_bootstrap_cache_available, embedded_foldops_bundle_path, foldops_downloads_dir,
     foldops_staged_artifact_path, remove_tree, resolve_effective_foldops_manifest,
@@ -45,9 +45,7 @@ pub fn foldops_acquire(paths: &AppliancePaths) -> Result<serde_json::Value, Stri
             ),
         );
         refresh_commissioning_display(paths);
-        if let Err(error) = start_foldops_provision_service() {
-            return Err(error);
-        }
+        restart_foldops_after_acquire(paths)?;
         return Ok(result);
     }
 
@@ -85,25 +83,24 @@ pub fn foldops_acquire(paths: &AppliancePaths) -> Result<serde_json::Value, Stri
     ) {
         record_foldops_acquisition_failure(paths, &error)?;
     }
-    let release_dir = extract_and_install_foldops_packages(
+    let release_dir = match extract_and_install_foldops_packages(
         paths,
         &manifest_release,
         &manifest.artifact_format,
         &packages,
         &role,
-    )
-    .map_err(|error| {
-        record_foldops_acquisition_failure(paths, &error).unwrap_err();
-        error
-    })?;
+    ) {
+        Ok(release_dir) => release_dir,
+        Err(error) => {
+            record_foldops_acquisition_failure(paths, &error)?;
+            unreachable!("record_foldops_acquisition_failure always returns Err")
+        }
+    };
 
     if let Err(error) = foldops_activate(paths, &manifest_release) {
         record_foldops_acquisition_failure(paths, &error)?;
     }
     clear_foldops_acquire_state(paths)?;
-    if let Err(error) = start_foldops_provision_service() {
-        return Err(error);
-    }
     refresh_commissioning_display(paths);
 
     let result = foldops_acquire_result(
@@ -117,10 +114,16 @@ pub fn foldops_acquire(paths: &AppliancePaths) -> Result<serde_json::Value, Stri
             release_dir.display()
         ),
     );
-    if let Err(error) = crate::foldops::provision::restart_foldops_runtime_services(paths) {
-        return Err(error);
-    }
+    restart_foldops_after_acquire(paths)?;
     Ok(result)
+}
+
+fn restart_foldops_after_acquire(paths: &AppliancePaths) -> Result<(), String> {
+    if foldops_provisioned(paths) {
+        restart_foldops_runtime_services(paths)
+    } else {
+        start_foldops_provision_service()
+    }
 }
 
 fn foldops_acquire_result(
@@ -276,12 +279,12 @@ fn download_and_stage_foldops_package(
         let _ = fs::remove_file(partial_path);
         return Err(format!("stage verified artifact: {error}"));
     }
-    println!(
+    crate::automation::say_stdout(format!(
         "Staged verified {} {} artifact at {}.",
         pkg.name,
         pkg.version,
         staged_path.display()
-    );
+    ));
     Ok(())
 }
 
@@ -303,11 +306,11 @@ fn stage_foldops_package(
                 embedded.display()
             )
         })?;
-        println!(
+        crate::automation::say_stdout(format!(
             "Using embedded bootstrap {} artifact from {}.",
             pkg.name,
             embedded.display()
-        );
+        ));
         return Ok(());
     }
     download_foldops_package(pkg, destination)

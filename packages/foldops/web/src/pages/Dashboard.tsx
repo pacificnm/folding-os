@@ -47,7 +47,7 @@ export function Dashboard() {
           Auto-refresh every 30s ·{" "}
           <Link to="/alerts">Alert history</Link>
           {" · "}
-          <Link to="/admin/recovery">Backup →</Link>
+          <Link to="/admin/software">Settings →</Link>
           {" · "}
           <Link to="/deploy">Deploy agents →</Link>
         </>
@@ -70,18 +70,6 @@ export function Dashboard() {
       }
     >
       <AlertBanner alerts={alerts} />
-
-      <section className="admin-backup-cta" aria-label="Supervisor backup">
-        <div className="admin-backup-cta-body">
-          <h2 className="admin-backup-cta-title">Supervisor backup</h2>
-          <p className="admin-backup-cta-text">
-            Save your FoldOps settings and farm database to your computer.
-          </p>
-        </div>
-        <Link to="/admin/recovery" className="deploy-btn deploy-btn--primary">
-          Backup now
-        </Link>
-      </section>
 
       {loading && !data && <p className="message">Loading farm status…</p>}
       {error && <p className="message error">{error}</p>}

@@ -13,9 +13,6 @@ use crate::recovery::bundle::{
     write_tar_zst_archive, BundleFileEntry, RecoveryManifest, BACKUP_RETENTION,
     MANIFEST_SCHEMA_VERSION, MAX_EXPORT_BYTES,
 };
-use crate::recovery::privilege::{
-    delegate_recovery_export, prepare_recovery_access, should_delegate_recovery_to_root,
-};
 use crate::role::require_supervisor_role;
 
 pub fn recovery_export(
@@ -24,12 +21,6 @@ pub fn recovery_export(
     include_secrets: bool,
 ) -> Result<serde_json::Value, String> {
     require_supervisor_role(paths)?;
-
-    if should_delegate_recovery_to_root(paths) {
-        return delegate_recovery_export(output_path, include_secrets);
-    }
-
-    prepare_recovery_access(paths)?;
     require_supervisor_automation_mutation(paths, "recovery", "export")?;
 
     let files = collect_export_files(paths, include_secrets)?;

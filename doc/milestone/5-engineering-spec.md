@@ -203,12 +203,15 @@ Same shape as apply-foldops; proxies to agent `POST /software/tools-acquire`.
 
 ## `POST /api/software/apply-local`
 
-Runs on the **supervisor role only**:
+Runs on the **supervisor role only** via `foldops-supervisor` subprocess:
 
 1. `foldingosctl foldops acquire --format json` when FoldOps assignment differs
    from active or when `force` is true
 2. `foldingosctl tools acquire --format json` under the same rules
-3. restarts approved services
+
+Privileged steps execute inside setuid `/usr/bin/foldingosctl` per
+[ADR-0024](../adr/0024-foldops-supervisor-fleet-mutation-authorization.md).
+FoldOps does not invoke `sudo` or perform privileged OS operations directly.
 
 Request:
 

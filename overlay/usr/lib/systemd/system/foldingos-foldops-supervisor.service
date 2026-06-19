@@ -10,10 +10,11 @@ ExecCondition=/bin/sh -c 'grep -qx supervisor /data/config/installation-role'
 Type=simple
 User=foldops
 Group=foldops
+SupplementaryGroups=systemd-journal
 WorkingDirectory=/data/foldops
 EnvironmentFile=/data/config/foldops/supervisor.env
 ExecStart=/data/apps/foldops/current/foldops-supervisor/usr/bin/foldops-supervisor
-Restart=on-failure
+Restart=always
 RestartSec=5
 
 [Install]

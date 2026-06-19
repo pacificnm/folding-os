@@ -11,7 +11,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 use crate::agent::config::{
-    build_foldinghome_candidate_toml, push_foldinghome_config, validate_foldinghome_candidate,
+    build_foldinghome_candidate_toml, normalize_passkey_input, push_foldinghome_config, validate_foldinghome_candidate,
     write_supervisor_candidate, FoldinghomeConfigRequest,
 };
 use crate::agent::control::{fetch_agent_control_status, push_agent_control};
@@ -25,8 +25,11 @@ use crate::deploy::db::{get_deploy_run, list_deploy_runs};
 use crate::deploy::start_agent_deploy;
 use crate::fah_projects::fetch_fah_project;
 use crate::foldingos::{self, AllowBootRequest, AssignRequest, FleetCommandError, FleetDelegateConfig};
+use crate::install_log;
 use crate::recovery::{self, BACKUPS_DIR};
-use crate::software::{self, apply_local, assign_local, ensure_foldops_release_imported, fleet_apply_foldops, fleet_apply_tools, ApplyLocalRequest, AssignLocalBody, FleetSoftwareApplyRequest, SoftwareService};
+use crate::services;
+use crate::software::{self, apply_local, ensure_foldops_release_imported, ensure_tools_release_imported, fleet_apply_foldops, fleet_apply_tools, ApplyLocalRequest, FleetSoftwareApplyRequest, SoftwareService};
+use crate::supervisor_logs::{fetch_supervisor_logs, SupervisorLogSource};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -57,17 +60,26 @@ pub fn router(state: AppState) -> Router {
         .route("/projects/{id}", get(project_detail))
         .route("/snapshots/{name}", get(snapshots))
         .route("/fleet/enrollments", get(fleet_enrollments))
-        .route("/fleet/allow-boot", get(fleet_allow_boot).post(fleet_allow_boot_create))
+        .route(
+            "/fleet/allow-boot",
+            get(fleet_allow_boot)
+                .post(fleet_allow_boot_create)
+                .delete(fleet_allow_boot_delete),
+        )
         .route("/fleet/registry", get(fleet_registry))
         .route("/fleet/registry/{version}", get(fleet_registry_show))
         .route("/fleet/assign", post(fleet_assign))
         .route("/fleet/software/apply-foldops", post(fleet_software_apply_foldops))
         .route("/fleet/software/apply-tools", post(fleet_software_apply_tools))
         .route("/software/updates", get(software_updates))
-        .route("/software/assign-local", post(software_assign_local))
+        .route("/software/install-log", get(software_install_log))
         .route("/software/apply-local", post(software_apply_local))
+        .route("/supervisor/logs", get(supervisor_logs))
         .route("/recovery/export", post(recovery_export_create))
         .route("/recovery/export/latest", get(recovery_export_latest))
+        .route("/services", get(services_list))
+        .route("/services/restart", post(services_restart))
+        .route("/services/restart-all", post(services_restart_all))
         .with_state(state)
 }
 
@@ -505,9 +517,31 @@ async fn foldinghome_config(
             .into_response();
     }
 
-    let config_toml =
-        build_foldinghome_candidate_toml(username, body.team, body.passkey_secret.trim());
-    let candidate_path = match write_supervisor_candidate(&config_toml) {
+    let passkey = match normalize_passkey_input(&body.passkey) {
+        Ok(value) => value,
+        Err(error) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": error })),
+            )
+                .into_response();
+        }
+    };
+
+    let passkey_secret = if !passkey.is_empty() {
+        "fah-passkey".to_string()
+    } else {
+        body.passkey_secret.trim().to_string()
+    };
+
+    let validation_secret = if passkey.is_empty() {
+        passkey_secret.as_str()
+    } else {
+        ""
+    };
+    let validation_toml =
+        build_foldinghome_candidate_toml(username, body.team, validation_secret);
+    let candidate_path = match write_supervisor_candidate(&validation_toml) {
         Ok(path) => path,
         Err(error) => {
             return (
@@ -526,6 +560,9 @@ async fn foldinghome_config(
         return (StatusCode::BAD_REQUEST, Json(json!({ "error": error }))).into_response();
     }
     let _ = std::fs::remove_file(&candidate_path);
+
+    let config_toml =
+        build_foldinghome_candidate_toml(username, body.team, passkey_secret.as_str());
 
     let proxy = {
         let conn = state.db.lock();
@@ -552,7 +589,18 @@ async fn foldinghome_config(
 
     tracing::info!(hostname = %proxy.0, "proxying foldinghome config push to agent");
 
-    match push_foldinghome_config(&proxy.0, proxy.1, &proxy.2, &config_toml).await {
+    match push_foldinghome_config(
+        &proxy.0,
+        proxy.1,
+        &proxy.2,
+        &config_toml,
+        if passkey.is_empty() {
+            None
+        } else {
+            Some(passkey.as_str())
+        },
+    )
+    .await {
         Ok(result) => Json(json!({
             "hostname": proxy.0,
             "ok": result.ok,
@@ -917,6 +965,43 @@ async fn fleet_allow_boot_create(
     }
 }
 
+async fn fleet_allow_boot_delete(
+    State(state): State<AppState>,
+    Json(body): Json<FleetAllowBootBody>,
+) -> Response {
+    if !state.config.uses_supervisor_fleet_delegation() {
+        return fleet_delegation_unavailable();
+    }
+
+    let mac_address = body
+        .mac_address
+        .as_ref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    let Some(mac_address) = mac_address else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "mac_address is required" })),
+        )
+            .into_response();
+    };
+
+    let config = FleetDelegateConfig {
+        foldingosctl_path: &state.config.foldingosctl_path,
+    };
+
+    match foldingos::provision_deny_boot(
+        config,
+        foldingos::DenyBootRequest { mac_address },
+    )
+    .await
+    {
+        Ok(result) => Json(json!({ "ok": true, "result": result })).into_response(),
+        Err(error) => fleet_command_error(error),
+    }
+}
+
 async fn fleet_registry(State(state): State<AppState>) -> Response {
     if !state.config.uses_supervisor_fleet_delegation() {
         return fleet_delegation_unavailable();
@@ -958,6 +1043,7 @@ async fn fleet_registry_show(State(state): State<AppState>, Path(version): Path<
 
 #[derive(Debug, Deserialize)]
 struct FleetAssignBody {
+    local: Option<bool>,
     node_id: Option<String>,
     all: Option<bool>,
     version: Option<String>,
@@ -970,6 +1056,7 @@ async fn fleet_assign(State(state): State<AppState>, Json(body): Json<FleetAssig
         return fleet_delegation_unavailable();
     }
 
+    let mut local = body.local.unwrap_or(false);
     let all = body.all.unwrap_or(false);
     let node_id = body
         .node_id
@@ -978,6 +1065,32 @@ async fn fleet_assign(State(state): State<AppState>, Json(body): Json<FleetAssig
         .filter(|value| !value.is_empty())
         .map(str::to_string);
 
+    let image_version = trim_optional(body.version);
+    let foldops_manifest = trim_optional(body.foldops_manifest);
+    let tools_version = trim_optional(body.tools_version);
+
+    if !local
+        && !all
+        && node_id.is_none()
+        && (foldops_manifest.is_some() || tools_version.is_some())
+    {
+        local = true;
+    }
+
+    if local && all {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Use either local=true or all=true, not both" })),
+        )
+            .into_response();
+    }
+    if local && node_id.is_some() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Use either local=true or node_id, not both" })),
+        )
+            .into_response();
+    }
     if all && node_id.is_some() {
         return (
             StatusCode::BAD_REQUEST,
@@ -985,17 +1098,14 @@ async fn fleet_assign(State(state): State<AppState>, Json(body): Json<FleetAssig
         )
             .into_response();
     }
-    if !all && node_id.is_none() {
+    if !all && node_id.is_none() && !local {
         return (
             StatusCode::BAD_REQUEST,
-            Json(json!({ "error": "Assignment requires all=true or node_id" })),
+            Json(json!({ "error": "Assignment requires local=true, all=true, or node_id" })),
         )
             .into_response();
     }
 
-    let image_version = trim_optional(body.version);
-    let foldops_manifest = trim_optional(body.foldops_manifest);
-    let tools_version = trim_optional(body.tools_version);
     if image_version.is_none() && foldops_manifest.is_none() && tools_version.is_none() {
         return (
             StatusCode::BAD_REQUEST,
@@ -1008,10 +1118,30 @@ async fn fleet_assign(State(state): State<AppState>, Json(body): Json<FleetAssig
         foldingosctl_path: &state.config.foldingosctl_path,
     };
 
+    let request_detail = json!({
+        "local": local,
+        "all": all,
+        "node_id": node_id,
+        "foldops_manifest": foldops_manifest,
+        "tools_version": tools_version,
+        "image_version": image_version,
+    });
+
     if let Some(release) = foldops_manifest.as_deref() {
         if let Err(error) =
             ensure_foldops_release_imported(&state.config, release).await
         {
+            install_log::append_event(
+                "api",
+                "fleet_assign",
+                "POST /software/fleet/assign",
+                false,
+                None,
+                &error,
+                "",
+                "",
+                Some(request_detail.clone()),
+            );
             return (
                 StatusCode::BAD_REQUEST,
                 Json(json!({ "error": error })),
@@ -1020,20 +1150,70 @@ async fn fleet_assign(State(state): State<AppState>, Json(body): Json<FleetAssig
         }
     }
 
-    match foldingos::provision_assign(
-        config,
-        AssignRequest {
-            node_id,
-            all,
-            image_version,
-            foldops_manifest_release: foldops_manifest,
-            tools_version,
-        },
-    )
-    .await
-    {
-        Ok(result) => Json(json!({ "ok": true, "result": result })).into_response(),
-        Err(error) => fleet_command_error(error),
+    if let Some(version) = tools_version.as_deref() {
+        if let Err(error) = ensure_tools_release_imported(&state.config, version).await {
+            install_log::append_event(
+                "api",
+                "fleet_assign",
+                "POST /software/fleet/assign",
+                false,
+                None,
+                &error,
+                "",
+                "",
+                Some(request_detail.clone()),
+            );
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": error })),
+            )
+                .into_response();
+        }
+    }
+
+    let assign_request = AssignRequest {
+        node_id,
+        all,
+        image_version: image_version.clone(),
+        foldops_manifest_release: foldops_manifest.clone(),
+        tools_version: tools_version.clone(),
+    };
+
+    let assign_result = if local {
+        foldingos::provision_assign_local(config, assign_request).await
+    } else {
+        foldingos::provision_assign(config, assign_request).await
+    };
+
+    match assign_result {
+        Ok(result) => {
+            install_log::append_event(
+                "api",
+                "fleet_assign",
+                "POST /fleet/assign",
+                true,
+                None,
+                "assignment completed",
+                "",
+                "",
+                Some(json!({ "request": request_detail, "result": result })),
+            );
+            Json(json!({ "ok": true, "result": result })).into_response()
+        }
+        Err(error) => {
+            install_log::append_event(
+                "api",
+                "fleet_assign",
+                "POST /fleet/assign",
+                false,
+                None,
+                &error.to_string(),
+                "",
+                "",
+                Some(request_detail),
+            );
+            fleet_command_error(error)
+        }
     }
 }
 
@@ -1110,20 +1290,6 @@ async fn fleet_software_apply_tools(
     }
 }
 
-async fn software_assign_local(
-    State(state): State<AppState>,
-    Json(body): Json<AssignLocalBody>,
-) -> Response {
-    if !state.config.uses_supervisor_fleet_delegation() {
-        return fleet_delegation_unavailable();
-    }
-
-    match assign_local(&state.config, body).await {
-        Ok(body) => Json(body).into_response(),
-        Err(error) => (StatusCode::BAD_REQUEST, Json(json!({ "error": error }))).into_response(),
-    }
-}
-
 async fn software_apply_local(
     State(state): State<AppState>,
     Json(body): Json<ApplyLocalRequest>,
@@ -1132,9 +1298,96 @@ async fn software_apply_local(
         return fleet_delegation_unavailable();
     }
 
+    let request_detail = serde_json::to_value(&body).unwrap_or(Value::Null);
     match apply_local(&state.config, body).await {
+        Ok(response) => {
+            install_log::append_event(
+                "api",
+                "apply_local",
+                "POST /software/apply-local",
+                true,
+                None,
+                "apply-local completed",
+                "",
+                "",
+                Some(json!({ "request": request_detail, "response": response })),
+            );
+            Json(response).into_response()
+        }
+        Err(error) => {
+            install_log::append_event(
+                "api",
+                "apply_local",
+                "POST /software/apply-local",
+                false,
+                None,
+                &error,
+                "",
+                "",
+                Some(json!({ "request": request_detail })),
+            );
+            (StatusCode::BAD_REQUEST, Json(json!({ "error": error }))).into_response()
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct InstallLogQuery {
+    limit: Option<usize>,
+}
+
+async fn software_install_log(Query(query): Query<InstallLogQuery>) -> Response {
+    match install_log::list_response(query.limit) {
         Ok(body) => Json(body).into_response(),
-        Err(error) => (StatusCode::BAD_REQUEST, Json(json!({ "error": error }))).into_response(),
+        Err(error) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": error })),
+        )
+            .into_response(),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct SupervisorLogsQuery {
+    source: Option<String>,
+    lines: Option<u32>,
+}
+
+async fn supervisor_logs(
+    State(state): State<AppState>,
+    Query(query): Query<SupervisorLogsQuery>,
+) -> Response {
+    if !state.config.uses_supervisor_fleet_delegation() {
+        return fleet_delegation_unavailable();
+    }
+
+    let source_str = query.source.as_deref().unwrap_or("foldops");
+    let Some(source) = SupervisorLogSource::parse(source_str) else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "source must be foldops or foldingosctl" })),
+        )
+            .into_response();
+    };
+    let lines = query.lines.unwrap_or(300).clamp(1, 500);
+
+    match fetch_supervisor_logs(source, lines).await {
+        Ok((path, log_lines)) => Json(json!({
+            "source": source_str,
+            "lines": log_lines,
+            "path": path,
+            "updated_at": chrono::Utc::now().to_rfc3339(),
+            "live": true,
+        }))
+        .into_response(),
+        Err(error) => {
+            tracing::warn!(source = source_str, error = %error, "supervisor log fetch failed");
+            (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({ "error": error })),
+            )
+                .into_response()
+        }
     }
 }
 
@@ -1217,6 +1470,86 @@ async fn recovery_export_latest(State(state): State<AppState>) -> Response {
             )
                 .into_response()
         })
+}
+
+#[derive(Debug, Deserialize)]
+struct ServicesRestartBody {
+    unit: String,
+}
+
+async fn services_list(State(state): State<AppState>) -> Response {
+    if !state.config.uses_supervisor_fleet_delegation() {
+        return fleet_delegation_unavailable();
+    }
+
+    match services::list_services(&state.config).await {
+        Ok(body) => Json(body).into_response(),
+        Err(error) => {
+            tracing::error!(error = %error, "services list failed");
+            if error.contains("foldingosctl") {
+                return (
+                    StatusCode::BAD_GATEWAY,
+                    Json(json!({ "error": error })),
+                )
+                    .into_response();
+            }
+            (StatusCode::BAD_REQUEST, Json(json!({ "error": error }))).into_response()
+        }
+    }
+}
+
+async fn services_restart(
+    State(state): State<AppState>,
+    Json(body): Json<ServicesRestartBody>,
+) -> Response {
+    if !state.config.uses_supervisor_fleet_delegation() {
+        return fleet_delegation_unavailable();
+    }
+
+    let unit = body.unit.trim();
+    if unit.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "unit is required" })),
+        )
+            .into_response();
+    }
+
+    match services::restart_service(&state.config, unit).await {
+        Ok(body) => Json(body).into_response(),
+        Err(error) => {
+            tracing::error!(unit = %unit, error = %error, "service restart failed");
+            if error.contains("foldingosctl") {
+                return (
+                    StatusCode::BAD_GATEWAY,
+                    Json(json!({ "error": error })),
+                )
+                    .into_response();
+            }
+            (StatusCode::BAD_REQUEST, Json(json!({ "error": error }))).into_response()
+        }
+    }
+}
+
+async fn services_restart_all(State(state): State<AppState>) -> Response {
+    if !state.config.uses_supervisor_fleet_delegation() {
+        return fleet_delegation_unavailable();
+    }
+
+    match services::restart_all_services(&state.config).await {
+        Ok(body) => Json(body).into_response(),
+        Err(error) => {
+            tracing::error!(error = %error, "restart all services failed");
+            if error.contains("foldingosctl") {
+                return (
+                    StatusCode::BAD_GATEWAY,
+                    Json(json!({ "error": error })),
+                )
+                    .into_response();
+            }
+            (StatusCode::BAD_REQUEST, Json(json!({ "error": error }))).into_response()
+        }
+    }
 }
 
 pub fn spawn_alert_eval(state: AppState) {

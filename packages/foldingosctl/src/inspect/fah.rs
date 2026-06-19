@@ -4,6 +4,7 @@ use std::process::Command;
 use regex::Regex;
 use std::sync::LazyLock;
 
+use crate::config::load_effective_config_for_domain;
 use crate::inspect::commissioning::read_current_release;
 use crate::paths::AppliancePaths;
 
@@ -50,7 +51,33 @@ pub fn inspect_fah(paths: &AppliancePaths) -> Result<serde_json::Value, String> 
     }
 
     data["runtime"] = parse_fah_log_state(&paths.fah_log);
+    if let Some(configuration) = foldinghome_configuration(paths) {
+        data["configuration"] = configuration;
+    }
     Ok(data)
+}
+
+fn foldinghome_configuration(paths: &AppliancePaths) -> Option<serde_json::Value> {
+    let merged = load_effective_config_for_domain(paths, "foldinghome").ok()?;
+    let username = merged
+        .get("identity.username")
+        .map(|value| value.text.as_str())
+        .unwrap_or("Anonymous");
+    let team = merged
+        .get("identity.team")
+        .map(|value| value.ival)
+        .unwrap_or(0);
+    let passkey_secret = merged
+        .get("identity.passkey_secret")
+        .map(|value| value.text.as_str())
+        .unwrap_or_default();
+    let passkey_configured = !passkey_secret.is_empty()
+        && paths.secrets_dir().join(passkey_secret).is_file();
+    Some(serde_json::json!({
+        "username": username,
+        "team": team,
+        "passkey_configured": passkey_configured,
+    }))
 }
 
 fn systemd_unit_is_active(unit: &str) -> bool {

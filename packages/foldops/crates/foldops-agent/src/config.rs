@@ -81,7 +81,7 @@ impl Config {
             foldops_root,
             update_script,
             update_enabled: env_flag("UPDATE_ENABLED"),
-            controls_enabled: env_flag("CONTROLS_ENABLED"),
+            controls_enabled: appliance_feature_enabled("CONTROLS_ENABLED", &installation_role_path),
             controls_allow_reboot: env_flag("CONTROLS_ALLOW_REBOOT"),
             config_enabled: appliance_feature_enabled("CONFIG_ENABLED", &installation_role_path),
             foldingosctl_path: crate::foldingos::default_foldingosctl_path(),
@@ -125,8 +125,10 @@ mod tests {
         let temp = TempDir::new().expect("tempdir");
         let role_path = temp.path().join("installation-role");
         assert!(!appliance_feature_enabled("CONFIG_ENABLED", &role_path));
+        assert!(!appliance_feature_enabled("CONTROLS_ENABLED", &role_path));
         fs::write(&role_path, "agent\n").expect("write role");
         assert!(appliance_feature_enabled("CONFIG_ENABLED", &role_path));
+        assert!(appliance_feature_enabled("CONTROLS_ENABLED", &role_path));
     }
 
     #[test]

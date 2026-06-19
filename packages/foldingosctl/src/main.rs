@@ -23,12 +23,19 @@ mod registry_image;
 mod registry_import;
 mod registry_poll;
 mod role;
+mod services;
+mod setuid_privilege;
+mod software_install_log;
 mod storage;
 mod tools;
 
 use cli::{dispatch, exit_code_for_error, print_human_error};
 
 fn main() {
+    if let Err(error) = setuid_privilege::initialize() {
+        eprintln!("foldingosctl: {error}");
+        std::process::exit(1);
+    }
     let args: Vec<String> = std::env::args().skip(1).collect();
     if let Err(error) = dispatch(args) {
         print_human_error(&error);

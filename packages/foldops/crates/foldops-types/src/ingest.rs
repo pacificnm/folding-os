@@ -62,6 +62,12 @@ pub struct Fah {
     pub statsDonor: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub statsTeam: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub configUsername: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub configTeam: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub configPasskeyConfigured: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

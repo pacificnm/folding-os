@@ -6,8 +6,11 @@ mod db;
 mod deploy;
 mod fah_projects;
 mod foldingos;
+mod install_log;
 mod recovery;
+mod services;
 mod software;
+mod supervisor_logs;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -39,6 +42,10 @@ async fn main() {
             std::process::exit(1);
         }
     };
+
+    if let Err(error) = install_log::ensure_ready() {
+        tracing::warn!(error = %error, "software install log is unavailable");
+    }
 
     let db = match Db::open(&config.db_path) {
         Ok(db) => Arc::new(db),

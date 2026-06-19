@@ -27,6 +27,16 @@ pub fn allow_boot(paths: &AppliancePaths, args: &[String]) -> Result<serde_json:
     allow_boot_mac(paths, &mac, install_disk.as_deref())
 }
 
+pub fn deny_boot(paths: &AppliancePaths, args: &[String]) -> Result<serde_json::Value, String> {
+    if args.len() != 1 {
+        return Err(format!(
+            "deny-boot requires exactly one MAC address (got {})",
+            args.len()
+        ));
+    }
+    deny_boot_mac(paths, &args[0])
+}
+
 fn parse_allow_boot_args(args: &[String]) -> Result<(String, Option<String>), String> {
     let mut install_disk = None;
     let mut remaining = args;
@@ -91,6 +101,27 @@ fn allow_boot_mac(
     }))
 }
 
+fn deny_boot_mac(paths: &AppliancePaths, mac: &str) -> Result<serde_json::Value, String> {
+    require_supervisor_role(paths)?;
+    require_supervisor_automation_mutation(paths, "provision", "deny-boot")?;
+    let mac = parse_mac_address(mac)?;
+    let mut allowed = read_boot_allowlist_entries(paths)?;
+    let was_allowed = allowed.iter().any(|value| value == &mac);
+    if !was_allowed {
+        return Ok(serde_json::json!({
+            "mac_address": mac,
+            "already_removed": true,
+        }));
+    }
+    allowed.retain(|value| value != &mac);
+    save_boot_allowlist(paths, &allowed)?;
+    remove_boot_install_disk_mapping(paths, &mac)?;
+    Ok(serde_json::json!({
+        "mac_address": mac,
+        "already_removed": false,
+    }))
+}
+
 fn collect_boot_allow_devices(paths: &AppliancePaths) -> Result<Vec<serde_json::Value>, String> {
     let macs = read_boot_allowlist_entries(paths)?;
     let mut sorted = macs;
@@ -132,7 +163,8 @@ fn save_boot_allowlist(paths: &AppliancePaths, allowed: &[String]) -> Result<(),
     if !allowed.is_empty() {
         content.push('\n');
     }
-    atomic_write(&paths.boot_allowlist, content.as_bytes(), 0o644)
+    atomic_write(&paths.boot_allowlist, content.as_bytes(), 0o664)?;
+    finalize_boot_allowlist_metadata(&paths.boot_allowlist)
 }
 
 pub(crate) fn boot_install_disk_for_mac(paths: &AppliancePaths, mac: &str) -> String {
@@ -178,6 +210,19 @@ fn save_boot_install_disk_mapping(
 ) -> Result<(), String> {
     let mut mappings = read_boot_install_disk_allowlist_entries(paths)?;
     mappings.insert(mac.to_string(), install_disk.to_string());
+    write_boot_install_disk_mappings(paths, &mappings)
+}
+
+fn remove_boot_install_disk_mapping(paths: &AppliancePaths, mac: &str) -> Result<(), String> {
+    let mut mappings = read_boot_install_disk_allowlist_entries(paths)?;
+    mappings.remove(mac);
+    write_boot_install_disk_mappings(paths, &mappings)
+}
+
+fn write_boot_install_disk_mappings(
+    paths: &AppliancePaths,
+    mappings: &BTreeMap<String, String>,
+) -> Result<(), String> {
     let lines: Vec<String> = mappings
         .iter()
         .map(|(mac, disk)| format!("{mac} {disk}"))
@@ -186,7 +231,29 @@ fn save_boot_install_disk_mapping(
     if !lines.is_empty() {
         content.push('\n');
     }
-    atomic_write(&paths.boot_install_disk_allowlist, content.as_bytes(), 0o644)
+    atomic_write(&paths.boot_install_disk_allowlist, content.as_bytes(), 0o664)?;
+    finalize_boot_allowlist_metadata(&paths.boot_install_disk_allowlist)
+}
+
+fn finalize_boot_allowlist_metadata(path: &std::path::Path) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        use nix::unistd::{chown, geteuid, Group, Uid};
+        use std::os::unix::fs::PermissionsExt;
+
+        if geteuid() != Uid::from_raw(0) {
+            return Ok(());
+        }
+        let gid = Group::from_name("foldops")
+            .map_err(|error| format!("resolve foldops group: {error}"))?
+            .map(|group| group.gid)
+            .ok_or_else(|| "foldops group is not configured".to_string())?;
+        chown(path, Some(Uid::from_raw(0)), Some(gid))
+            .map_err(|error| format!("restore boot allowlist ownership: {error}"))?;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o664))
+            .map_err(|error| format!("restore boot allowlist mode: {error}"))?;
+    }
+    Ok(())
 }
 
 fn parse_mac_address(value: &str) -> Result<String, String> {

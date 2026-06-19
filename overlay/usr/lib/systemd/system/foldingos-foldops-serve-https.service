@@ -9,7 +9,7 @@ ExecCondition=/bin/sh -c 'grep -qx supervisor /data/config/installation-role'
 [Service]
 Type=simple
 ExecStart=/usr/bin/foldingosctl foldops serve-https
-Restart=on-failure
+Restart=always
 RestartSec=5
 
 [Install]

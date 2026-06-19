@@ -26,16 +26,18 @@ pub fn foldops_activate(paths: &AppliancePaths, release: &str) -> Result<(), Str
 
     if let Ok(current_release) = read_foldops_current_release(paths) {
         if current_release == release {
-            println!("FoldOps release {release} is already active.");
+            crate::automation::say_stdout(format!(
+                "FoldOps release {release} is already active."
+            ));
             return Ok(());
         }
     }
 
     activate_foldops_current_symlink(paths, release)?;
-    println!(
+    crate::automation::say_stdout(format!(
         "Activated FoldOps release {release} at {}.",
         paths.foldops_current_link().display()
-    );
+    ));
     Ok(())
 }
 

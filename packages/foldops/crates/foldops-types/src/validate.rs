@@ -113,6 +113,9 @@ mod tests {
                 recentErrors: vec![],
                 statsDonor: None,
                 statsTeam: None,
+                configUsername: None,
+                configTeam: None,
+                configPasskeyConfigured: None,
             },
             maintenance: Maintenance {
                 aptUpdatesAvailable: 0,

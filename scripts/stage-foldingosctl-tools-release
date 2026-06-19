@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# Stage the tools publication artifact from the Buildroot-built image binary.
+#
+# The tools channel foldingosctl MUST match /usr/bin/foldingosctl in the OS image
+# byte-for-byte. Buildroot produces the canonical binary; this script copies it
+# into build/output/foldingos-tools/<release>/ for publication.
+set -euo pipefail
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=lib/appliance-release.sh
+source "${PROJECT_ROOT}/scripts/lib/appliance-release.sh"
+
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") [options]
+
+Copy build/output/target/usr/bin/foldingosctl into the tools release directory
+for the current appliance release id (overlay manifest manifest_release).
+
+Options:
+  --version <id>   Override release id (default: overlay manifest_release)
+  -h, --help       Show this help
+EOF
+}
+
+TOOLS_VERSION=""
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --version)
+      TOOLS_VERSION="${2:?missing value for --version}"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "ERROR: unknown option: $1" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+done
+
+if [ -z "${TOOLS_VERSION}" ]; then
+  TOOLS_VERSION="$(appliance_release_read)"
+fi
+
+SOURCE_BINARY="$(appliance_release_image_foldingosctl)"
+OUTPUT_DIR="${PROJECT_ROOT}/build/output/foldingos-tools/${TOOLS_VERSION}"
+BINARY_NAME="foldingosctl-x86_64"
+OUTPUT_BINARY="${OUTPUT_DIR}/${BINARY_NAME}"
+
+if [ ! -x "${SOURCE_BINARY}" ]; then
+  echo "ERROR: image foldingosctl binary is missing: ${SOURCE_BINARY}" >&2
+  echo "Run ./scripts/build first so Buildroot produces the canonical binary." >&2
+  exit 1
+fi
+
+mkdir -p "${OUTPUT_DIR}"
+cp "${SOURCE_BINARY}" "${OUTPUT_BINARY}"
+chmod 0755 "${OUTPUT_BINARY}"
+(
+  cd "${OUTPUT_DIR}"
+  sha256sum "${BINARY_NAME}" > SHA256SUMS
+)
+
+echo "Staged tools release ${TOOLS_VERSION} from image binary:"
+echo "  source: ${SOURCE_BINARY}"
+echo "  output: ${OUTPUT_BINARY}"
+echo "  sha256: $(appliance_release_sha256_file "${OUTPUT_BINARY}")"

@@ -180,6 +180,17 @@ pub async fn activate_foldinghome_config(
     .await
 }
 
+pub async fn set_fah_passkey(
+    foldingosctl_path: &Path,
+    passkey: &str,
+) -> Result<Value, AutomationCommandError> {
+    run_automation(
+        foldingosctl_path,
+        &["config", "set-passkey", passkey],
+    )
+    .await
+}
+
 pub async fn foldops_acquire(foldingosctl_path: &Path) -> Result<Value, AutomationCommandError> {
     run_automation(foldingosctl_path, &["foldops", "acquire"]).await
 }
@@ -313,9 +324,18 @@ struct InspectFahRuntime {
 }
 
 #[derive(Debug, Default, Deserialize)]
+struct InspectFahConfiguration {
+    username: String,
+    team: i64,
+    passkey_configured: bool,
+}
+
+#[derive(Debug, Default, Deserialize)]
 struct InspectFahData {
     service_active: bool,
     runtime: InspectFahRuntime,
+    #[serde(default)]
+    configuration: Option<InspectFahConfiguration>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -409,6 +429,18 @@ fn parse_inspect_update(value: Value) -> InspectUpdateData {
 }
 
 fn fah_to_payload(data: InspectFahData, stats: &FahStats) -> Fah {
+    let (config_username, config_team, config_passkey_configured) = data
+        .configuration
+        .as_ref()
+        .map(|configuration| {
+            (
+                Some(configuration.username.clone()),
+                Some(configuration.team),
+                Some(configuration.passkey_configured),
+            )
+        })
+        .unwrap_or((None, None, None));
+
     Fah {
         systemdStatus: if data.service_active {
             FahSystemdStatus::Active
@@ -425,6 +457,9 @@ fn fah_to_payload(data: InspectFahData, stats: &FahStats) -> Fah {
         recentErrors: data.runtime.recent_errors,
         statsDonor: stats.donor.clone(),
         statsTeam: stats.team.clone(),
+        configUsername: config_username,
+        configTeam: config_team,
+        configPasskeyConfigured: config_passkey_configured,
     }
 }
 
@@ -441,6 +476,9 @@ fn empty_fah_payload(stats: &FahStats) -> Fah {
         recentErrors: vec![],
         statsDonor: stats.donor.clone(),
         statsTeam: stats.team.clone(),
+        configUsername: None,
+        configTeam: None,
+        configPasskeyConfigured: None,
     }
 }
 

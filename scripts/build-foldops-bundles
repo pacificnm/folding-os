@@ -165,11 +165,17 @@ bundle_layout() {
       install -D -m 0755 \
         "${FOLDOPS_DIR}/target/release/foldops-agent" \
         "${install_tree}/${package_name}/usr/bin/foldops-agent"
+      install -D -m 0644 \
+        "${PROJECT_ROOT}/overlay/usr/share/foldingos/foldops-agent-automation.toml" \
+        "${install_tree}/${package_name}/usr/share/foldingos/foldops-agent-automation.toml"
       ;;
     foldops-supervisor)
       install -D -m 0755 \
         "${FOLDOPS_DIR}/target/release/foldops-supervisor" \
         "${install_tree}/${package_name}/usr/bin/foldops-supervisor"
+      install -D -m 0644 \
+        "${PROJECT_ROOT}/overlay/usr/share/foldingos/foldops-supervisor-automation.toml" \
+        "${install_tree}/${package_name}/usr/share/foldingos/foldops-supervisor-automation.toml"
       ;;
     foldops-web)
       mkdir -p "${install_tree}/${package_name}/usr/share/foldops/web"

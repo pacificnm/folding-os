@@ -172,6 +172,9 @@ fn fah_log_to_payload(state: FahLogState, systemd: FahSystemdStatus, stats: &Fah
         recentErrors: state.recent_errors,
         statsDonor: stats.donor.clone(),
         statsTeam: stats.team.clone(),
+        configUsername: None,
+        configTeam: None,
+        configPasskeyConfigured: None,
     }
 }
 

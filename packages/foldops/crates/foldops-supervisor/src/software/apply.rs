@@ -1,4 +1,5 @@
 use serde::Deserialize;
+use serde::Serialize;
 use serde_json::{json, Value};
 
 use crate::agent::software::{push_foldops_acquire, push_tools_acquire};
@@ -13,7 +14,7 @@ pub struct FleetSoftwareApplyRequest {
     pub all: Option<bool>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct ApplyLocalRequest {
     pub foldops: Option<bool>,
     pub tools: Option<bool>,
@@ -267,14 +268,16 @@ async fn apply_local_tools(
 ) -> Result<Value, FleetCommandError> {
     if !force {
         let inspect = foldingos::inspect_tools(*config).await?;
-        let assigned = first_non_empty(&[
-            string_field(&inspect, "assigned_tools_version"),
-            string_field(&inspect, "effective_tools_version"),
-        ]);
-        let active = first_non_empty(&[
-            string_field(&inspect, "active_tools_version"),
-            string_field(&inspect, "effective_tools_version"),
-        ]);
+        let assigned = string_field(&inspect, "assigned_tools_version");
+        let active = string_field(&inspect, "active_tools_version");
+        if assigned.is_empty() {
+            return Ok(json!({
+                "component": "tools",
+                "ok": true,
+                "skipped": true,
+                "message": "no supervisor-assigned tools version is configured",
+            }));
+        }
         if !apply_pending(&assigned, &active) {
             return Ok(json!({
                 "component": "tools",
@@ -312,15 +315,6 @@ fn string_field(data: &Value, key: &str) -> String {
         .to_string()
 }
 
-fn first_non_empty(values: &[String]) -> String {
-    values
-        .iter()
-        .find(|value| !value.trim().is_empty())
-        .cloned()
-        .unwrap_or_default()
-}
-
-#[cfg(test)]
 mod tests {
     use super::*;
 

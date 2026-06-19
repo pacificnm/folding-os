@@ -3,6 +3,7 @@ mod acquire_state;
 mod activate;
 mod extract;
 mod manifest;
+pub mod passkey;
 mod prepare;
 mod run_cmd;
 mod util;

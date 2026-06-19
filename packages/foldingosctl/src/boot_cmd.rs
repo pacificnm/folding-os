@@ -24,20 +24,24 @@ struct CommissioningCheck {
 }
 
 pub fn boot_status(paths: &AppliancePaths) -> Result<(), String> {
-    write_commissioning_display(paths, true)
+    write_commissioning_display(paths, true, true)
 }
 
 pub fn boot_refresh(paths: &AppliancePaths) -> Result<(), String> {
-    write_commissioning_display(paths, false)
+    write_commissioning_display(paths, false, true)
 }
 
 pub fn refresh_commissioning_display(paths: &AppliancePaths) {
-    if let Err(error) = write_commissioning_display(paths, false) {
+    if let Err(error) = write_commissioning_display(paths, false, false) {
         eprintln!("foldingosctl: refresh commissioning display: {error}");
     }
 }
 
-fn write_commissioning_display(paths: &AppliancePaths, wait_for_services: bool) -> Result<(), String> {
+fn write_commissioning_display(
+    paths: &AppliancePaths,
+    wait_for_services: bool,
+    echo_to_stdout: bool,
+) -> Result<(), String> {
     let mut pretty_name = os_release_value("PRETTY_NAME")?;
     if pretty_name.is_empty() {
         pretty_name = os_release_value("VERSION")?;
@@ -85,8 +89,10 @@ fn write_commissioning_display(paths: &AppliancePaths, wait_for_services: bool) 
     let message = format_commissioning_display(&pretty_name, &version, &role, &address, &checks);
     clear_console()?;
     write_console(&message)?;
-    print_commissioning_status_summary(&checks);
-    println!("Wrote FoldingOS commissioning display status.");
+    if echo_to_stdout {
+        print_commissioning_status_summary(&checks);
+        crate::automation::say_stdout("Wrote FoldingOS commissioning display status.");
+    }
     Ok(())
 }
 

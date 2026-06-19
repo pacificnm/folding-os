@@ -3,7 +3,7 @@ mod apply;
 mod assign_local;
 
 pub use apply::{apply_local, fleet_apply_foldops, fleet_apply_tools, ApplyLocalRequest, FleetSoftwareApplyRequest};
-pub use assign_local::{assign_local, ensure_foldops_release_imported, AssignLocalBody};
+pub use assign_local::{ensure_foldops_release_imported, ensure_tools_release_imported};
 
 use std::sync::Arc;
 
@@ -107,7 +107,6 @@ pub async fn build_updates_response(
     ]);
     let supervisor_assigned_tools = first_non_empty(&[
         string_field(&supervisor_tools, "assigned_tools_version"),
-        string_field(&supervisor_tools, "effective_tools_version"),
         supervisor_assignment_tools(&enrollments, &supervisor_hostname),
     ]);
 

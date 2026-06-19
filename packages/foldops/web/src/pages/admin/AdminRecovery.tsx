@@ -42,11 +42,12 @@ export function AdminRecovery() {
       {error && <p className="message error">{error}</p>}
       {status && <p className="message admin-status">{status}</p>}
 
-      <section className="admin-section admin-backup-panel">
+      <section className="admin-section">
+        <h2 className="deploy-heading">Create backup</h2>
         <div className="deploy-actions">
           <button
             type="button"
-            className="deploy-btn deploy-btn--primary deploy-btn--large"
+            className="deploy-btn deploy-btn--primary"
             disabled={busy}
             onClick={backupNow}
           >

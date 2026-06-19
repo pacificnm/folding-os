@@ -1,6 +1,7 @@
 mod commissioning;
 mod fah;
 mod foldops;
+mod services;
 mod system;
 pub(crate) mod tools;
 mod update;
@@ -28,6 +29,7 @@ pub fn run(paths: &AppliancePaths, subcommand: &str, args: &[String]) -> Result<
         "update" => update::inspect_update(paths),
         "foldops" => foldops::inspect_foldops(paths),
         "tools" => tools::inspect_tools(paths),
+        "services" => services::inspect_services(paths),
         other => Err(format!("unknown inspect subcommand {other:?}")),
     }
 }

@@ -56,7 +56,7 @@ impl Config {
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(9100),
             deploy_enabled: env_flag("DEPLOY_ENABLED"),
-            control_enabled: env_flag("CONTROL_ENABLED"),
+            control_enabled: appliance_feature_enabled("CONTROL_ENABLED", &installation_role_path),
             config_enabled: appliance_feature_enabled("CONFIG_ENABLED", &installation_role_path),
             web_root,
             alert_config: AlertConfig {
@@ -124,8 +124,10 @@ mod tests {
         let temp = TempDir::new().expect("tempdir");
         let role_path = temp.path().join("installation-role");
         assert!(!appliance_feature_enabled("CONFIG_ENABLED", &role_path));
+        assert!(!appliance_feature_enabled("CONTROL_ENABLED", &role_path));
         fs::write(&role_path, "supervisor\n").expect("write role");
         assert!(appliance_feature_enabled("CONFIG_ENABLED", &role_path));
+        assert!(appliance_feature_enabled("CONTROL_ENABLED", &role_path));
     }
 }
 

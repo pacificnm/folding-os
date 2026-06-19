@@ -1,0 +1,9 @@
+[Unit]
+Description=Acquire assigned foldingosctl tools release
+After=network-online.target systemd-time-wait-sync.service data.mount foldingos-installation-role.service
+Wants=network-online.target
+ConditionPathExists=/data/config/installation-role
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/foldingosctl tools acquire

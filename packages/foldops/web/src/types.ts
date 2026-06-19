@@ -1,5 +1,45 @@
 export type LogSource = "fah" | "work";
 
+export type SupervisorLogSource = "foldops" | "foldingosctl";
+
+export interface SupervisorLogsResponse {
+  source: SupervisorLogSource;
+  lines: string[];
+  path: string | null;
+  updated_at: string | null;
+  live: boolean;
+}
+
+export interface AllowBootDevice {
+  mac_address: string;
+  install_disk?: string | null;
+}
+
+export interface AllowBootDevicesResponse {
+  devices: AllowBootDevice[];
+}
+
+export interface AllowBootResult {
+  mac_address: string;
+  already_allowed: boolean;
+  install_disk?: string | null;
+}
+
+export interface DenyBootResult {
+  mac_address: string;
+  already_removed: boolean;
+}
+
+export interface DenyBootMutationResponse {
+  ok: boolean;
+  result: DenyBootResult;
+}
+
+export interface AllowBootMutationResponse {
+  ok: boolean;
+  result: AllowBootResult;
+}
+
 export interface NodeLogs {
   fah: string[];
   work: string[];
@@ -47,6 +87,9 @@ export interface MachineSummary {
         recentErrors: string[];
         statsDonor?: string | null;
         statsTeam?: string | null;
+        configUsername?: string | null;
+        configTeam?: number | null;
+        configPasskeyConfigured?: boolean | null;
       };
       logs?: NodeLogs;
       system: {
@@ -264,6 +307,7 @@ export interface SoftwareUpdatesResponse {
 }
 
 export interface FleetAssignRequest {
+  local?: boolean;
   node_id?: string;
   all?: boolean;
   version?: string;
@@ -305,6 +349,25 @@ export interface FleetSoftwareApplyResponse {
   results: FleetSoftwareApplyResult[];
 }
 
+export interface SoftwareInstallLogEntry {
+  timestamp: string;
+  phase: string;
+  operation: string;
+  command: string;
+  ok: boolean;
+  exit_code?: number | null;
+  message: string;
+  stdout?: string;
+  stderr?: string;
+  detail?: unknown;
+}
+
+export interface SoftwareInstallLogResponse {
+  path: string;
+  updated_at: string;
+  entries: SoftwareInstallLogEntry[];
+}
+
 export interface RecoveryExportResponse {
   ok: boolean;
   path: string;
@@ -315,4 +378,45 @@ export interface RecoveryExportResponse {
   include_secrets?: boolean;
   file_count?: number;
   download_url?: string;
+}
+
+export interface FoldinghomeConfigRequest {
+  username: string;
+  team: number;
+  passkey?: string;
+}
+
+export interface FoldinghomeConfigResponse {
+  hostname: string;
+  ok: boolean;
+  domain?: string;
+  candidate?: string;
+  activated?: boolean;
+  error?: string;
+}
+
+export interface ManagedService {
+  unit: string;
+  name: string;
+  status: string;
+  loaded: boolean;
+  restartable: boolean;
+}
+
+export interface ServicesResponse {
+  installation_role?: string;
+  services: ManagedService[];
+}
+
+export interface ServiceRestartResponse {
+  unit: string;
+  name: string;
+  restarted: boolean;
+  message?: string;
+}
+
+export interface ServicesRestartAllResponse {
+  restarted: string[];
+  count: number;
+  message?: string;
 }

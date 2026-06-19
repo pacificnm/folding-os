@@ -25,6 +25,7 @@ pub fn run(paths: &AppliancePaths, subcommand: &str, args: &[String]) -> Result<
         "assign-local" => assign::assign_local(paths, args),
         "list-allow-boot" => boot::list_allow_boot(paths),
         "allow-boot" => boot::allow_boot(paths, args),
+        "deny-boot" => boot::deny_boot(paths, args),
         "ssh" => ssh::provision_ssh(paths),
         "role" => role_cmd::provision_role(paths),
         "serve" => serve::provision_serve(paths),
@@ -47,7 +48,7 @@ mod tests {
     use crate::automation_policy::set_test_username;
     use crate::enrollment::{save_enrollment_record, EnrollmentRecord};
     use crate::provision::assign::assign;
-    use crate::provision::boot::{allow_boot, list_allow_boot};
+    use crate::provision::boot::{allow_boot, deny_boot, list_allow_boot};
 
     const TEST_AGENT_NODE_ID: &str = "550e8400-e29b-41d4-a716-446655440000";
 
@@ -200,6 +201,40 @@ mod tests {
         write_supervisor_role(&paths);
         set_test_username(Some("foldingos-admin"));
         assert!(allow_boot(&paths, &["not-a-mac".into()]).is_err());
+        set_test_username(None);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn deny_boot_removes_mac_and_install_disk_mapping() {
+        let root = std::env::temp_dir().join(format!("foldingosctl-boot-deny-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let paths = provision_test_paths(&root);
+        write_supervisor_role(&paths);
+        set_test_username(Some("foldingos-admin"));
+
+        allow_boot(
+            &paths,
+            &[
+                "--disk".into(),
+                "/dev/sda".into(),
+                "52:54:00:12:34:56".into(),
+            ],
+        )
+        .unwrap();
+        let data = deny_boot(&paths, &["52:54:00:12:34:56".into()]).unwrap();
+        assert_eq!(data["mac_address"], "52:54:00:12:34:56");
+        assert_eq!(data["already_removed"], false);
+
+        let list = list_allow_boot(&paths).unwrap();
+        assert!(list["devices"].as_array().unwrap().is_empty());
+        assert!(!paths.boot_install_disk_allowlist.exists()
+            || fs::read_to_string(&paths.boot_install_disk_allowlist).unwrap().trim().is_empty());
+
+        let again = deny_boot(&paths, &["52:54:00:12:34:56".into()]).unwrap();
+        assert_eq!(again["already_removed"], true);
+
         set_test_username(None);
         let _ = fs::remove_dir_all(root);
     }

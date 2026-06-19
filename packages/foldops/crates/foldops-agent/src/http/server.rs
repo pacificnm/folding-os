@@ -14,7 +14,7 @@ use tokio::net::TcpListener;
 
 use crate::config::Config;
 use crate::fah::get_newest_work_log_path;
-use crate::foldingos::{activate_foldinghome_config, foldops_acquire, tools_acquire, try_restart_systemd_unit, write_foldinghome_candidate, AutomationCommandError, FOLDOPS_AGENT_UNIT};
+use crate::foldingos::{activate_foldinghome_config, foldops_acquire, set_fah_passkey, tools_acquire, try_restart_systemd_unit, write_foldinghome_candidate, AutomationCommandError, FOLDOPS_AGENT_UNIT};
 use crate::log_tail::read_log_tail_default;
 use crate::node_control::{
     execute_control_action, get_control_status, schedule_agent_self_restart, ControlContext,
@@ -39,6 +39,8 @@ struct ControlBody {
 #[derive(Debug, Deserialize)]
 struct FoldinghomeConfigBody {
     config: String,
+    #[serde(default)]
+    passkey: String,
 }
 
 #[derive(Serialize)]
@@ -209,6 +211,17 @@ async fn foldinghome_config(
 
     if body.config.trim().is_empty() {
         return json_error(StatusCode::BAD_REQUEST, "Missing config body");
+    }
+
+    let passkey = body.passkey.trim();
+    if !passkey.is_empty() {
+        tracing::info!("writing Folding@home passkey secret before config activate");
+        match set_fah_passkey(&state.config.foldingosctl_path, passkey).await {
+            Ok(_) => {}
+            Err(error) => {
+                return json_error(StatusCode::BAD_REQUEST, &error.to_string());
+            }
+        }
     }
 
     let candidate_path = match write_foldinghome_candidate(body.config.trim()) {

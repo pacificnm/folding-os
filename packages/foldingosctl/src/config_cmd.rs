@@ -68,6 +68,21 @@ pub fn run(
                 }
             })
         }
+        "set-passkey" => {
+            let passkey = args
+                .first()
+                .ok_or_else(|| "config set-passkey requires a passkey value".to_string())?;
+            if args.len() > 1 {
+                return Err(format!("unknown config option {:?}", args[1]));
+            }
+            config::set_fah_passkey(paths, passkey).map(|data| {
+                if format == OutputFormat::Json {
+                    ConfigCommandOutput::Json(data)
+                } else {
+                    ConfigCommandOutput::Silent
+                }
+            })
+        }
         other => Err(format!("unknown config subcommand {other:?}")),
     }
 }

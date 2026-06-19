@@ -1,21 +1,16 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 
-use regex::Regex;
-use std::sync::LazyLock;
-
+use crate::config_host::read_hostname;
 use crate::config::{load_effective_config_for_domain, validate_secret_reference, DomainConfig};
 use crate::paths::AppliancePaths;
 
 use super::manifest::{load_fah_manifest, validate_foldingos_compatibility};
+use super::passkey::is_valid_fah_passkey;
 use super::util::{
     read_fah_current_version, require_fah_root_ownership, FAH_SERVICE_GID,
 };
 use super::verify_install::{fah_installation_verified, verify_fah_installed_version};
-
-static FAH_PASSKEY_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^[0-9a-fA-F]{32}$").expect("passkey pattern compiles")
-});
 
 pub fn fah_prepare(paths: &AppliancePaths) -> Result<(), String> {
     let manifest = load_fah_manifest(paths, &paths.fah_embedded_manifest)?;
@@ -29,7 +24,7 @@ pub fn fah_prepare(paths: &AppliancePaths) -> Result<(), String> {
     verify_fah_installed_version(paths, &active_version, &manifest)?;
 
     let (config, passkey) = load_fah_runtime_configuration(paths)?;
-    let content = render_fah_config_xml(&config, &passkey);
+    let content = render_fah_config_xml(paths, &config, &passkey);
     atomic_write_root_fah(paths, content.as_bytes())?;
     println!(
         "Rendered Folding@home runtime configuration at {}.",
@@ -59,17 +54,18 @@ fn read_fah_passkey(paths: &AppliancePaths, secret_name: &str) -> Result<String,
     let path = paths.secrets_dir().join(secret_name);
     let content = fs::read_to_string(&path).map_err(|error| format!("read passkey secret: {error}"))?;
     let passkey = content.trim_end_matches('\n');
-    if !FAH_PASSKEY_PATTERN.is_match(passkey) {
-        return Err("passkey secret must be exactly 32 hexadecimal characters".into());
+    if !is_valid_fah_passkey(passkey) {
+        return Err("passkey secret has an invalid length or character set".into());
     }
     Ok(passkey.to_string())
 }
 
-fn render_fah_config_xml(config: &DomainConfig, passkey: &str) -> String {
-    let username = config
-        .get("identity.username")
-        .map(|value| value.text.as_str())
-        .unwrap_or_default();
+fn render_fah_config_xml(
+    paths: &AppliancePaths,
+    config: &DomainConfig,
+    passkey: &str,
+) -> String {
+    let machine_name = read_hostname(paths).unwrap_or_else(|_| String::from("foldingos"));
     let team = config
         .get("identity.team")
         .map(|value| value.ival)
@@ -81,18 +77,22 @@ fn render_fah_config_xml(config: &DomainConfig, passkey: &str) -> String {
 
     let mut builder = String::new();
     builder.push_str("<config>\n");
-    builder.push_str(&format!(
-        "  <user v=\"{}\"/>\n",
-        xml_escape_attribute(username)
-    ));
-    builder.push_str(&format!("  <team v=\"{team}\"/>\n"));
     if !passkey.is_empty() {
         builder.push_str(&format!(
-            "  <passkey v=\"{}\"/>\n",
+            "  <account-token v=\"{}\"/>\n",
             xml_escape_attribute(passkey)
         ));
     }
-    builder.push_str(&format!("  <cpus v=\"{cpus}\"/>\n"));
+    builder.push_str(&format!(
+        "  <machine-name v=\"{}\"/>\n",
+        xml_escape_attribute(&machine_name)
+    ));
+    if team != 0 {
+        builder.push_str(&format!("  <team v=\"{team}\"/>\n"));
+    }
+    if cpus != 0 {
+        builder.push_str(&format!("  <cpus v=\"{cpus}\"/>\n"));
+    }
     builder.push_str("</config>\n");
     builder
 }

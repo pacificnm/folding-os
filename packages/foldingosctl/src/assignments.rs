@@ -93,16 +93,13 @@ fn clear_assigned_tools_version(paths: &AppliancePaths) -> Result<(), String> {
 
 pub fn should_apply_local_supervisor_assignments(
     paths: &AppliancePaths,
-    scope: &str,
+    _scope: &str,
     target_node_id: &str,
 ) -> Result<bool, String> {
     if require_supervisor_role(paths).is_err() {
         return Ok(false);
     }
     let local_node_id = read_node_id(paths).unwrap_or_default();
-    if scope == "fleet" {
-        return Ok(true);
-    }
     Ok(target_node_id.trim() == local_node_id)
 }
 

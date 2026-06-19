@@ -216,10 +216,14 @@ or omitted with schema documentation in the foldops repository.
 
 ## Privilege model
 
-- `foldops-agent` runs as the `foldops` user on FoldingOS
-- `foldingosctl inspect …` must succeed for `foldops` without root
-- implementation may use file ACLs, dedicated helper subcommands, or minimal
-  capability boundaries; it must not run the agent as root on FoldingOS
+- `foldops-agent` and `foldops-supervisor` run as the unprivileged `foldops`
+  user on FoldingOS
+- both services delegate **only** through `/usr/bin/foldingosctl` subprocesses
+- `foldingosctl inspect …` and other read-only commands run without root
+- privileged commands (`foldops acquire`, `tools acquire`, `recovery …`, and
+  similar) re-elevate inside the setuid binary per
+  [ADR-0024](../adr/0024-foldops-supervisor-fleet-mutation-authorization.md)
+- FoldOps must not run the agent or supervisor as root on FoldingOS
 
 ## Supervisor privilege model
 
@@ -230,10 +234,11 @@ delegates fleet mutations to `foldingosctl` per
 | Requirement | Mechanism |
 | --- | --- |
 | Approved mutators only | `/usr/share/foldingos/foldops-supervisor-automation.toml` |
+| Privileged command execution | setuid root `/usr/bin/foldingosctl` with temporary `seteuid(0)` |
 | Enrollment assignment writes | `/data/provision/enrollments/` group `foldops`, mode `2775` |
 | Boot allowlist writes | `/data/config/provision/boot-allowlist` and `boot-install-disk-allowlist` owned `root:foldops` `0664` |
 | Supervisor self-assignment writes | `/data/config/foldops/assigned-manifest.toml` and `/data/config/tools/assigned-version.json` writable by `foldops` on supervisor bootstrap only |
-| Remote operator entry | `POST /api/fleet/assign`, `POST /api/fleet/allow-boot` |
+| Remote operator entry | FoldOps HTTP routes that subprocess `foldingosctl --format json` |
 
 `foldingosctl` must enforce the automation policy before executing approved
 mutators as the `foldops` user. Agent-role nodes must not receive supervisor
