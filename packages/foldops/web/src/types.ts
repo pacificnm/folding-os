@@ -97,6 +97,15 @@ export interface MachineSummary {
     reboot_required: boolean;
     payload?: {
       fah: {
+        activeClientVersion?: string | null;
+        expectedClientVersion?: string | null;
+        clientInstalled?: boolean | null;
+        clientVerified?: boolean | null;
+        acquisitionFailures?: number | null;
+        acquisitionNextAttemptUnix?: number | null;
+        acquisitionLastFailureReason?: string | null;
+        logPath?: string | null;
+        logReadable?: boolean | null;
         tpf: string | null;
         recentErrors: string[];
         statsDonor?: string | null;

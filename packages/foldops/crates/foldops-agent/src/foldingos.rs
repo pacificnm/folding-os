@@ -329,8 +329,22 @@ struct InspectFahConfiguration {
 }
 
 #[derive(Debug, Default, Deserialize)]
+struct InspectFahAcquisition {
+    consecutive_failures: Option<i64>,
+    next_attempt_unix: Option<i64>,
+    last_failure_reason: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize)]
 struct InspectFahData {
     service_active: bool,
+    active_client_version: Option<String>,
+    expected_client_version: Option<String>,
+    installed: Option<bool>,
+    verified: Option<bool>,
+    log_path: Option<String>,
+    log_readable: Option<bool>,
+    acquisition: Option<InspectFahAcquisition>,
     runtime: InspectFahRuntime,
     #[serde(default)]
     configuration: Option<InspectFahConfiguration>,
@@ -448,6 +462,25 @@ fn fah_to_payload(data: InspectFahData, stats: &FahStats) -> Fah {
         } else {
             FahSystemdStatus::Inactive
         },
+        activeClientVersion: data.active_client_version,
+        expectedClientVersion: data.expected_client_version,
+        clientInstalled: data.installed,
+        clientVerified: data.verified,
+        acquisitionFailures: data
+            .acquisition
+            .as_ref()
+            .and_then(|state| state.consecutive_failures),
+        acquisitionNextAttemptUnix: data
+            .acquisition
+            .as_ref()
+            .and_then(|state| state.next_attempt_unix),
+        acquisitionLastFailureReason: data
+            .acquisition
+            .as_ref()
+            .and_then(|state| state.last_failure_reason.clone())
+            .filter(|reason| !reason.is_empty()),
+        logPath: data.log_path,
+        logReadable: data.log_readable,
         project: data.runtime.project,
         run: data.runtime.run.map(|value| value as f64),
         clone: data.runtime.clone.map(|value| value as f64),
@@ -467,6 +500,15 @@ fn fah_to_payload(data: InspectFahData, stats: &FahStats) -> Fah {
 fn empty_fah_payload(stats: &FahStats) -> Fah {
     Fah {
         systemdStatus: FahSystemdStatus::Unknown,
+        activeClientVersion: None,
+        expectedClientVersion: None,
+        clientInstalled: None,
+        clientVerified: None,
+        acquisitionFailures: None,
+        acquisitionNextAttemptUnix: None,
+        acquisitionLastFailureReason: None,
+        logPath: None,
+        logReadable: None,
         project: None,
         run: None,
         clone: None,
@@ -546,7 +588,7 @@ case "$1:$2" in
     printf '%s' '{"schema_version":1,"ok":true,"command":"inspect system","data":{"uptime_seconds":3600,"load_average":[0.1,0.2,0.3],"memory":{"total_bytes":1000,"used_bytes":400,"free_bytes":600,"used_percent":40},"root_filesystem":{"mountpoint":"/","total_bytes":2000,"used_bytes":500,"free_bytes":1500,"used_percent":25},"primary_network":{"interface":"eth0","rx_bytes":100,"tx_bytes":50},"cpu_temp_celsius":42.5}}'
     ;;
   inspect:fah)
-    printf '%s' '{"schema_version":1,"ok":true,"command":"inspect fah","data":{"service_active":true,"verified":true,"runtime":{"project":"18400","run":0,"clone":1,"gen":2,"progress":12.5,"ppd":250000,"recent_errors":[]}}}'
+    printf '%s' '{"schema_version":1,"ok":true,"command":"inspect fah","data":{"service_active":true,"installed":true,"verified":true,"active_client_version":"8.5.6","expected_client_version":"8.5.6","log_path":"/data/fah/log.txt","log_readable":false,"acquisition":{"consecutive_failures":0,"next_attempt_unix":0,"last_failure_reason":""},"runtime":{"project":"18400","run":0,"clone":1,"gen":2,"progress":12.5,"ppd":250000,"recent_errors":[]}}}'
     ;;
   inspect:update)
     printf '%s' '{"schema_version":1,"ok":true,"command":"inspect update","data":{"current_image_version":"0.1.0","reboot_required":true}}'
@@ -577,6 +619,13 @@ esac
         assert_eq!(payload.system.uptime, 3600.0);
         assert_eq!(payload.system.memory.percent, 40.0);
         assert_eq!(payload.fah.systemdStatus, FahSystemdStatus::Active);
+        assert_eq!(payload.fah.activeClientVersion.as_deref(), Some("8.5.6"));
+        assert_eq!(payload.fah.expectedClientVersion.as_deref(), Some("8.5.6"));
+        assert_eq!(payload.fah.clientInstalled, Some(true));
+        assert_eq!(payload.fah.clientVerified, Some(true));
+        assert_eq!(payload.fah.acquisitionFailures, Some(0));
+        assert_eq!(payload.fah.logPath.as_deref(), Some("/data/fah/log.txt"));
+        assert_eq!(payload.fah.logReadable, Some(false));
         assert_eq!(payload.fah.project.as_deref(), Some("18400"));
         assert!(payload.maintenance.rebootRequired);
         assert!(payload.logs.is_none());

@@ -4,6 +4,12 @@ import { HistoryChart } from "../components/HistoryChart";
 import { MachineControlsPanel } from "../components/MachineControlsPanel";
 import { MachineLogsPanel } from "../components/MachineLogsPanel";
 import { PageLayout } from "../components/PageLayout";
+import {
+  fahAcquisitionLabel,
+  fahAcquisitionTitle,
+  fahClientClass,
+  fahClientLabel,
+} from "../components/FahClientStatus";
 import { FahStatsLinks } from "../components/FahStatsLinks";
 import { ProjectInfoPanel } from "../components/ProjectInfoPanel";
 import { Tabs, type TabItem } from "../components/Tabs";
@@ -67,6 +73,7 @@ export function MachineDetail() {
   }, [load]);
 
   const latest = machine?.latest;
+  const fah = latest?.payload?.fah;
   const projectId = latest?.project ?? null;
 
   useEffect(() => {
@@ -194,6 +201,24 @@ export function MachineDetail() {
             {!loading && history.length > 0 && (
               <>
                 <div className="detail-stats">
+                  <div className="detail-stat">
+                    <span className="label">Client</span>
+                    <span
+                      className={`value mono ${fahClientClass(fah)}`}
+                      title={fahAcquisitionTitle(fah)}
+                    >
+                      {fahClientLabel(fah)}
+                    </span>
+                  </div>
+                  <div className="detail-stat">
+                    <span className="label">Acquire</span>
+                    <span
+                      className={`value mono ${fahClientClass(fah)}`}
+                      title={fahAcquisitionTitle(fah)}
+                    >
+                      {fahAcquisitionLabel(fah)}
+                    </span>
+                  </div>
                   <div className="detail-stat">
                     <span className="label">Current PPD</span>
                     <span className="value mono highlight">

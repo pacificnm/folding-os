@@ -9,6 +9,7 @@ mod run_cmd;
 mod util;
 mod verify_install;
 
+pub(crate) use acquire_state::load_fah_acquire_state;
 pub(crate) use prepare::fah_prepare_quiet;
 
 use crate::paths::AppliancePaths;

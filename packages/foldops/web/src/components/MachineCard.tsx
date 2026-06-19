@@ -1,4 +1,10 @@
 import { Link } from "react-router-dom";
+import {
+  fahAcquisitionLabel,
+  fahAcquisitionTitle,
+  fahClientClass,
+  fahClientLabel,
+} from "./FahClientStatus";
 import { FahStatsLinks } from "./FahStatsLinks";
 import type { MachineSummary } from "../types";
 import {
@@ -13,6 +19,7 @@ export function MachineCard({ machine }: { machine: MachineSummary }) {
   const load = latest?.payload?.system.loadAvg;
   const uptime = latest?.payload?.system.uptime;
   const tpf = latest?.payload?.fah?.tpf;
+  const fah = latest?.payload?.fah;
   const errors = latest?.payload?.fah?.recentErrors ?? [];
   const statsDonor = latest?.payload?.fah?.statsDonor;
   const statsTeam = latest?.payload?.fah?.statsTeam;
@@ -40,6 +47,18 @@ export function MachineCard({ machine }: { machine: MachineSummary }) {
             <dt>Service</dt>
             <dd className={`status-${latest?.fah_status ?? "unknown"}`}>
               {latest?.fah_status ?? "—"}
+            </dd>
+          </div>
+          <div>
+            <dt>Client</dt>
+            <dd className={fahClientClass(fah)} title={fahAcquisitionTitle(fah)}>
+              {fahClientLabel(fah)}
+            </dd>
+          </div>
+          <div>
+            <dt>Acquire</dt>
+            <dd className={fahClientClass(fah)} title={fahAcquisitionTitle(fah)}>
+              {fahAcquisitionLabel(fah)}
             </dd>
           </div>
           <div>

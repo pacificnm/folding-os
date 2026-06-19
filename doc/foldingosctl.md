@@ -559,6 +559,23 @@ Drops privileges to the `fah` user.
 
 Long-running. Invoked by `folding-at-home.service`.
 
+## `inspect fah --format json`
+
+Reports machine-readable Folding@home acquisition and runtime status for
+FoldOps and operators. The response includes:
+
+- `installed` and `active_client_version` for `/data/apps/fah/current`
+- `expected_client_version` from the embedded manifest
+- `verified`, based on the `.foldingos-verified` marker and manifest digest
+- `acquisition.consecutive_failures`, `next_attempt_unix`, and
+  `last_failure_reason` from `/data/state/fah-acquire.state`
+- `service_active`, runtime project/progress fields, and recent log errors
+- `log_path` and `log_readable`
+
+This inspection path is read-only. It does not download or install the client;
+automatic acquisition remains owned by `foldingos-fah-acquire.service` and
+`foldingos-fah-acquire.timer`.
+
 ---
 
 # FoldOps Commands

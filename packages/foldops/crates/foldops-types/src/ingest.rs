@@ -50,6 +50,24 @@ pub enum FahSystemdStatus {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Fah {
     pub systemdStatus: FahSystemdStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub activeClientVersion: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expectedClientVersion: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clientInstalled: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clientVerified: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub acquisitionFailures: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub acquisitionNextAttemptUnix: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub acquisitionLastFailureReason: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub logPath: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub logReadable: Option<bool>,
     pub project: Option<String>,
     pub run: Option<f64>,
     pub clone: Option<f64>,

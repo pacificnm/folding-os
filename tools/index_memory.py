@@ -1,16 +1,9 @@
 import hashlib
-import os
+import sys
 from pathlib import Path
 
-import psycopg
-from openai import OpenAI
+from memory_common import database_url, vector_literal
 
-client = OpenAI()
-
-DB_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql://postgres@localhost:5432/foldingos_memory",
-)
 
 PATHS = [
     "AGENTS.md",
@@ -31,45 +24,62 @@ def chunks(text, size=1800, overlap=200):
 
 
 def embed(text):
+    from openai import OpenAI
+
+    client = OpenAI()
     result = client.embeddings.create(
         model="text-embedding-3-small",
         input=text,
     )
-    return result.data[0].embedding
+    return vector_literal(result.data[0].embedding)
 
 
-with psycopg.connect(DB_URL) as conn:
-    for root in PATHS:
-        path = Path(root)
+def main() -> int:
+    import psycopg
 
-        if path.is_dir():
-            files = list(path.rglob("*.md"))
-        elif path.exists():
-            files = [path]
-        else:
-            continue
+    project_root = Path(__file__).resolve().parents[1]
 
-        for file in files:
-            text = file.read_text(errors="ignore")
+    with psycopg.connect(database_url()) as conn:
+        for root in PATHS:
+            path = project_root / root
 
-            for chunk in chunks(text):
-                content_hash = hashlib.sha256(
-                    f"{file}:{chunk}".encode()
-                ).hexdigest()
+            if path.is_dir():
+                files = list(path.rglob("*.md"))
+            elif path.exists():
+                files = [path]
+            else:
+                continue
 
-                vector = embed(chunk)
+            for file in files:
+                text = file.read_text(errors="ignore")
+                source_path = file.relative_to(project_root).as_posix()
 
-                conn.execute(
-                    """
-                    INSERT INTO project_memory
-                      (source_path, content, content_hash, embedding)
-                    VALUES
-                      (%s, %s, %s, %s)
-                    ON CONFLICT (content_hash) DO NOTHING
-                    """,
-                    (str(file), chunk, content_hash, vector),
-                )
+                for chunk in chunks(text):
+                    content_hash = hashlib.sha256(
+                        f"{source_path}:{chunk}".encode()
+                    ).hexdigest()
+                    vector = embed(chunk)
 
-    conn.commit()
+                    conn.execute(
+                        """
+                        INSERT INTO project_memory
+                          (source_path, content, content_hash, embedding)
+                        VALUES
+                          (%s, %s, %s, %s::vector)
+                        ON CONFLICT (content_hash) DO NOTHING
+                        """,
+                        (source_path, chunk, content_hash, vector),
+                    )
 
-print("Memory indexing complete.")
+        conn.commit()
+
+    print("Memory indexing complete.")
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except Exception as error:
+        print(f"ERROR: memory indexing failed: {error}", file=sys.stderr)
+        sys.exit(1)

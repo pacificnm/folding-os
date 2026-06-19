@@ -39,29 +39,53 @@ static FAH_SHA256_PATTERN: LazyLock<Regex> =
 pub fn inspect_fah(paths: &AppliancePaths) -> Result<serde_json::Value, String> {
     let mut data = serde_json::json!({
         "service_active": systemd_unit_is_active("folding-at-home.service"),
+        "installed": false,
         "verified": false,
         "runtime": {
             "recent_errors": [],
         },
         "log_path": paths.fah_log.to_string_lossy(),
+        "log_readable": fs::File::open(&paths.fah_log).is_ok(),
     });
 
+    let manifest = fs::read_to_string(&paths.fah_embedded_manifest).ok();
+    if let Some(manifest) = manifest.as_deref() {
+        if let Some(expected_version) = parse_fah_client_version(manifest) {
+            data["expected_client_version"] = serde_json::Value::String(expected_version);
+        }
+    }
+
     if let Ok(version) = read_current_release(&paths.fah_apps_root) {
+        data["installed"] = serde_json::Value::Bool(true);
         data["active_client_version"] = serde_json::Value::String(version.clone());
-        if let Ok(manifest) = fs::read_to_string(&paths.fah_embedded_manifest) {
+        if let Some(manifest) = manifest.as_deref() {
             if let Some(verified) =
-                fah_installation_verified(&paths.fah_apps_root, &version, &manifest)
+                fah_installation_verified(&paths.fah_apps_root, &version, manifest)
             {
                 data["verified"] = serde_json::Value::Bool(verified);
             }
         }
     }
 
+    data["acquisition"] = fah_acquisition_state(paths);
     data["runtime"] = parse_fah_log_state(&paths.fah_log);
     if let Some(configuration) = foldinghome_configuration(paths) {
         data["configuration"] = configuration;
     }
     Ok(data)
+}
+
+fn fah_acquisition_state(paths: &AppliancePaths) -> serde_json::Value {
+    match crate::fah::load_fah_acquire_state(paths) {
+        Ok(state) => serde_json::json!({
+            "consecutive_failures": state.consecutive_failures,
+            "next_attempt_unix": state.next_attempt_unix,
+            "last_failure_reason": state.last_failure_reason,
+        }),
+        Err(error) => serde_json::json!({
+            "state_error": error,
+        }),
+    }
 }
 
 fn foldinghome_configuration(paths: &AppliancePaths) -> Option<serde_json::Value> {
@@ -214,4 +238,89 @@ fn parse_fah_log_state(path: &std::path::Path) -> serde_json::Value {
             .collect(),
     );
     runtime
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::symlink;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    const TEST_SHA256: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    #[test]
+    fn inspect_fah_reports_installation_and_acquisition_state() {
+        let root = tempfile_dir("inspect-fah-state");
+        let paths = AppliancePaths {
+            fah_apps_root: root.join("apps/fah"),
+            fah_embedded_manifest: root.join("manifests/fah.toml"),
+            fah_acquire_state: root.join("state/fah-acquire.state"),
+            fah_log: root.join("fah/log.txt"),
+            ..AppliancePaths::default()
+        };
+
+        fs::create_dir_all(paths.fah_apps_root.join("8.5.6/usr/bin")).unwrap();
+        fs::create_dir_all(paths.fah_embedded_manifest.parent().unwrap()).unwrap();
+        fs::create_dir_all(paths.fah_acquire_state.parent().unwrap()).unwrap();
+        fs::create_dir_all(paths.fah_log.parent().unwrap()).unwrap();
+        fs::write(
+            &paths.fah_embedded_manifest,
+            format!(
+                r#"schema_version = 1
+client_version = "8.5.6"
+architecture = "x86_64"
+artifact_url = "https://download.foldingathome.org/releases/public/fah-client/debian-stable-64bit/v8.5/fah-client_8.5.6_amd64.deb"
+artifact_size = 1
+sha256 = "{TEST_SHA256}"
+artifact_format = "deb"
+minimum_foldingos_version = "0.1.0"
+terms_url = "https://foldingathome.org/faq/opensource/"
+executable_path = "/data/apps/fah/current/usr/bin/fah-client"
+arguments = ["--config=/run/foldingos/fah/config.xml"]
+"#
+            ),
+        )
+        .unwrap();
+        fs::write(paths.fah_apps_root.join("8.5.6/usr/bin/fah-client"), "").unwrap();
+        fs::write(
+            paths.fah_apps_root.join("8.5.6/.foldingos-verified"),
+            format!("client_version=8.5.6\nartifact_sha256={TEST_SHA256}\n"),
+        )
+        .unwrap();
+        symlink("8.5.6", paths.fah_current_link()).unwrap();
+        fs::write(
+            &paths.fah_acquire_state,
+            "consecutive_failures=2\nnext_attempt_unix=1800000000\nlast_failure_reason=network is not online\n",
+        )
+        .unwrap();
+        fs::write(&paths.fah_log, "Project: 18400 (Run 0, Clone 1, Gen 2)\n").unwrap();
+
+        let data = inspect_fah(&paths).unwrap();
+        assert_eq!(data["installed"], true);
+        assert_eq!(data["verified"], true);
+        assert_eq!(data["active_client_version"], "8.5.6");
+        assert_eq!(data["expected_client_version"], "8.5.6");
+        assert_eq!(data["log_readable"], true);
+        assert_eq!(data["acquisition"]["consecutive_failures"], 2);
+        assert_eq!(data["acquisition"]["next_attempt_unix"], 1_800_000_000);
+        assert_eq!(
+            data["acquisition"]["last_failure_reason"],
+            "network is not online"
+        );
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    fn tempfile_dir(label: &str) -> std::path::PathBuf {
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        let id = NEXT.fetch_add(1, Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!(
+            "foldingosctl-{}-{}-{label}",
+            std::process::id(),
+            id
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("create temp dir");
+        dir
+    }
 }

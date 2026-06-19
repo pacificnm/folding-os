@@ -163,6 +163,15 @@ pub async fn collect_snapshot(paths: CollectPaths<'_>) -> IngestPayload {
 fn fah_log_to_payload(state: FahLogState, systemd: FahSystemdStatus, stats: &FahStats) -> Fah {
     Fah {
         systemdStatus: systemd,
+        activeClientVersion: None,
+        expectedClientVersion: None,
+        clientInstalled: None,
+        clientVerified: None,
+        acquisitionFailures: None,
+        acquisitionNextAttemptUnix: None,
+        acquisitionLastFailureReason: None,
+        logPath: None,
+        logReadable: None,
         project: state.project,
         run: state.run,
         clone: state.clone,
