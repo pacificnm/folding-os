@@ -640,6 +640,7 @@ async fn foldinghome_config(
         } else {
             Some(passkey.as_str())
         },
+        !passkey_secret.is_empty(),
     )
     .await
     {

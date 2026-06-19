@@ -17,7 +17,7 @@ pub fn is_valid_fah_passkey(value: &str) -> bool {
         && value.len() <= FAH_PASSKEY_MAX_LEN
         && value
             .chars()
-            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '+' | '/' | '='))
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '+' | '/' | '=' | '-' | '_'))
 }
 
 pub fn normalize_passkey_input(raw: &str) -> Result<String, String> {
@@ -43,7 +43,7 @@ pub fn normalize_passkey_input(raw: &str) -> Result<String, String> {
 
 pub fn passkey_format_error(length: usize) -> String {
     format!(
-        "passkey must be {FAH_PASSKEY_MIN_LEN} through {FAH_PASSKEY_MAX_LEN} letters, digits, or base64 characters (+/=); got {length} characters"
+        "passkey must be {FAH_PASSKEY_MIN_LEN} through {FAH_PASSKEY_MAX_LEN} letters, digits, or base64/base64url characters (+/=-_); got {length} characters"
     )
 }
 
@@ -59,21 +59,27 @@ mod tests {
 
     #[test]
     fn normalize_accepts_v8_style_passkey() {
-        let key = "VSEPdVSEhijz2hijn2mVZn2mipUP9ipU1qyQH1qxkZ8";
+        let key = "FAKEFAHAccountTokenForTestsOnly1234567890XX";
         assert_eq!(normalize_passkey_input(key).expect("v8 key"), key);
         assert_eq!(key.len(), 43);
     }
 
     #[test]
+    fn normalize_accepts_v8_base64url_token() {
+        let key = "FAKEFAHAccountTokenForTestsOnly1234567890XX-_";
+        assert_eq!(normalize_passkey_input(key).expect("v8 key"), key);
+    }
+
+    #[test]
     fn normalize_extracts_from_config_xml_line() {
-        let key = "VSEPdVSEhijz2hijn2mVZn2mipUP9ipU1qyQH1qxkZ8";
+        let key = "FAKEFAHAccountTokenForTestsOnly1234567890XX";
         let xml = format!(r#"<passkey v="{key}"/>"#);
         assert_eq!(normalize_passkey_input(&xml).expect("xml line"), key);
     }
 
     #[test]
     fn normalize_extracts_from_v8_account_token_xml() {
-        let key = "VSEPdVSEhijz2hijn2mVZn2mipUP9ipU1qyQH1qxkZ8";
+        let key = "FAKEFAHAccountTokenForTestsOnly1234567890XX";
         let xml = format!(r#"<account-token v="{key}"/>"#);
         assert_eq!(normalize_passkey_input(&xml).expect("v8 xml"), key);
     }

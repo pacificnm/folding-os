@@ -40,12 +40,12 @@ fn is_valid_fah_passkey(value: &str) -> bool {
         && value.len() <= MAX_LEN
         && value
             .chars()
-            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '+' | '/' | '='))
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '+' | '/' | '=' | '-' | '_'))
 }
 
 fn passkey_format_error(length: usize) -> String {
     format!(
-        "passkey must be 8 through 128 letters, digits, or base64 characters (+/=); got {length} characters"
+        "passkey must be 8 through 128 letters, digits, or base64/base64url characters (+/=-_); got {length} characters"
     )
 }
 
@@ -92,6 +92,7 @@ pub async fn push_foldinghome_config(
     token: &str,
     config_toml: &str,
     passkey: Option<&str>,
+    expect_passkey_configured: bool,
 ) -> Result<FoldinghomeConfigResult, String> {
     let url = format!("http://{hostname}:{port}/config/foldinghome");
     let client = reqwest::Client::builder()
@@ -101,6 +102,9 @@ pub async fn push_foldinghome_config(
     let mut payload = serde_json::json!({ "config": config_toml });
     if let Some(passkey) = passkey.filter(|value| !value.trim().is_empty()) {
         payload["passkey"] = serde_json::Value::String(passkey.to_string());
+    }
+    if expect_passkey_configured {
+        payload["expect_passkey_configured"] = serde_json::Value::Bool(true);
     }
     let res = client
         .post(&url)
@@ -206,6 +210,12 @@ gpus = false
         assert!(toml.contains("team = 123"));
         assert!(toml.contains("passkey_secret = \"\""));
         assert!(toml.contains("gpus = false"));
+    }
+
+    #[test]
+    fn normalize_passkey_input_accepts_base64url_token() {
+        let token = "FAKEFAHAccountTokenForTestsOnly1234567890XX-_";
+        assert_eq!(normalize_passkey_input(token).expect("token"), token);
     }
 
     #[tokio::test]

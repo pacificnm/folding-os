@@ -47,6 +47,8 @@ struct FoldinghomeConfigBody {
     config: String,
     #[serde(default)]
     passkey: String,
+    #[serde(default)]
+    expect_passkey_configured: bool,
 }
 
 #[derive(Serialize)]
@@ -265,6 +267,13 @@ async fn foldinghome_config(
                 "foldinghome config activate succeeded"
             );
             let snapshot = state.ingest.collect_payload().await;
+            if body.expect_passkey_configured && snapshot.fah.configPasskeyConfigured != Some(true)
+            {
+                return json_error(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Folding@home account token was not configured after activation",
+                );
+            }
             let ingest_result = state.ingest.post_snapshot(&snapshot).await;
             let (ingested, ingest_error) = match ingest_result {
                 Ok(()) => (true, None),

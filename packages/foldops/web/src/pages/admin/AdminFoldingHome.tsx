@@ -49,7 +49,6 @@ function mergeAppliedFahConfig(
   hostnames: Set<string>,
   username: string,
   team: number,
-  passkeyConfigured: boolean,
 ): MachineSummary[] {
   return machines.map((machine) => {
     if (!hostnames.has(machine.hostname) || !machine.latest?.payload) {
@@ -66,9 +65,6 @@ function mergeAppliedFahConfig(
             ...previousFah,
             configUsername: username,
             configTeam: team,
-            configPasskeyConfigured: passkeyConfigured
-              ? true
-              : previousFah.configPasskeyConfigured,
           },
         },
       },
@@ -159,6 +155,14 @@ export function AdminFoldingHome() {
       setError("Select at least one online machine.");
       return;
     }
+    const targetsMissingToken = targets.filter(
+      (machine) => machine.latest?.payload?.fah?.configPasskeyConfigured !== true,
+    );
+    if (!passkeyValue && targetsMissingToken.length > 0) {
+      const hosts = targetsMissingToken.map((machine) => machine.hostname).join(", ");
+      setError(`Paste an account token; these machines do not have one configured: ${hosts}`);
+      return;
+    }
 
     saveDefaults({
       username: donor,
@@ -203,11 +207,13 @@ export function AdminFoldingHome() {
         successfulHosts,
         donor,
         teamNumber,
-        Boolean(passkeyValue),
       ),
     );
 
     if (failures.length === 0) {
+      if (passkeyValue) {
+        setPasskey("");
+      }
       setStatus(
         `Applied Folding@home settings to ${nextResults.length} machine${nextResults.length === 1 ? "" : "s"}.`,
       );
@@ -229,7 +235,6 @@ export function AdminFoldingHome() {
           successfulHosts,
           donor,
           teamNumber,
-          Boolean(passkeyValue),
         ),
       );
       setError(null);
@@ -281,7 +286,7 @@ export function AdminFoldingHome() {
               />
             </label>
             <label>
-              Passkey / account token (optional)
+              Passkey / account token
               <input
                 className="admin-input mono"
                 type="text"
@@ -305,10 +310,10 @@ export function AdminFoldingHome() {
             </label>
           </div>
           <p className="admin-muted">
-            Leave account token blank to keep the existing token unchanged. Paste
-            the token from FAH v8 <span className="mono">config.xml</span> (
+            Leave blank only for machines that already show Token set. Paste the
+            token from FAH v8 <span className="mono">config.xml</span> (
             <span className="mono">account-token</span>) or your Folding@home
-            account email (~43 characters).
+            account email.
           </p>
           <div className="deploy-actions">
             <button

@@ -6,7 +6,7 @@ function isValidFahPasskey(value: string): boolean {
   if (!value || value.length < PASSKEY_MIN_LEN || value.length > PASSKEY_MAX_LEN) {
     return false;
   }
-  return /^[0-9a-zA-Z+/=]+$/.test(value);
+  return /^[0-9a-zA-Z+/=_-]+$/.test(value);
 }
 
 export function normalizePasskeyInput(raw: string): string {
@@ -32,5 +32,5 @@ export function normalizePasskeyInput(raw: string): string {
 }
 
 export function formatPasskeyError(length: number): string {
-  return `Passkey must be ${PASSKEY_MIN_LEN} through ${PASSKEY_MAX_LEN} letters, digits, or base64 characters (+/=); got ${length} characters. Paste the exact value from config.xml or your FAH passkey email.`;
+  return `Passkey must be ${PASSKEY_MIN_LEN} through ${PASSKEY_MAX_LEN} letters, digits, or base64/base64url characters (+/=-_); got ${length} characters. Paste the exact value from config.xml or your FAH passkey email.`;
 }

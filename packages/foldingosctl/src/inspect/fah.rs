@@ -35,6 +35,17 @@ static FAH_CLIENT_VERSION_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
 });
 static FAH_SHA256_PATTERN: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[0-9a-f]{64}$").expect("sha256 pattern compiles"));
+static FAH_RUNTIME_TOKEN_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?i)<(?:account-token|passkey)\b[^>]*\bv=['"]([^'"]+)['"]"#)
+        .expect("fah runtime token pattern compiles")
+});
+static FAH_RUNTIME_USER_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?i)<user\b[^>]*\bv=['"]([^'"]+)['"]"#)
+        .expect("fah runtime user pattern compiles")
+});
+static FAH_RUNTIME_TEAM_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?i)<team\b[^>]*\bv=['"](\d+)['"]"#).expect("fah runtime team pattern compiles")
+});
 
 pub fn inspect_fah(paths: &AppliancePaths) -> Result<serde_json::Value, String> {
     let mut data = serde_json::json!({
@@ -89,26 +100,74 @@ fn fah_acquisition_state(paths: &AppliancePaths) -> serde_json::Value {
 }
 
 fn foldinghome_configuration(paths: &AppliancePaths) -> Option<serde_json::Value> {
-    let merged = load_effective_config_for_domain(paths, "foldinghome").ok()?;
-    let username = merged
-        .get("identity.username")
-        .map(|value| value.text.as_str())
+    let runtime = read_runtime_config_summary(&paths.fah_runtime_config);
+    let merged = load_effective_config_for_domain(paths, "foldinghome").ok();
+    if merged.is_none() && !runtime.has_configuration() {
+        return None;
+    }
+    let username = runtime
+        .username
+        .as_deref()
+        .or_else(|| {
+            merged
+                .as_ref()
+                .and_then(|config| config.get("identity.username"))
+                .map(|value| value.text.as_str())
+        })
         .unwrap_or("Anonymous");
-    let team = merged
-        .get("identity.team")
-        .map(|value| value.ival)
-        .unwrap_or(0);
+    let team = runtime.team.unwrap_or_else(|| {
+        merged
+            .as_ref()
+            .and_then(|config| config.get("identity.team"))
+            .map(|value| value.ival)
+            .unwrap_or(0)
+    });
     let passkey_secret = merged
-        .get("identity.passkey_secret")
+        .as_ref()
+        .and_then(|config| config.get("identity.passkey_secret"))
         .map(|value| value.text.as_str())
         .unwrap_or_default();
-    let passkey_configured =
+    let secret_file_configured =
         !passkey_secret.is_empty() && paths.secrets_dir().join(passkey_secret).is_file();
+    let passkey_configured = runtime.passkey_configured || secret_file_configured;
     Some(serde_json::json!({
         "username": username,
         "team": team,
         "passkey_configured": passkey_configured,
     }))
+}
+
+#[derive(Default)]
+struct RuntimeConfigSummary {
+    username: Option<String>,
+    team: Option<i64>,
+    passkey_configured: bool,
+}
+
+impl RuntimeConfigSummary {
+    fn has_configuration(&self) -> bool {
+        self.username.is_some() || self.team.is_some() || self.passkey_configured
+    }
+}
+
+fn read_runtime_config_summary(path: &std::path::Path) -> RuntimeConfigSummary {
+    let Ok(content) = fs::read_to_string(path) else {
+        return RuntimeConfigSummary::default();
+    };
+    RuntimeConfigSummary {
+        username: capture_runtime_attr(&FAH_RUNTIME_USER_PATTERN, &content),
+        team: capture_runtime_attr(&FAH_RUNTIME_TEAM_PATTERN, &content)
+            .and_then(|value| value.parse::<i64>().ok()),
+        passkey_configured: capture_runtime_attr(&FAH_RUNTIME_TOKEN_PATTERN, &content)
+            .is_some_and(|value| !value.trim().is_empty()),
+    }
+}
+
+fn capture_runtime_attr(pattern: &Regex, content: &str) -> Option<String> {
+    pattern
+        .captures(content)
+        .and_then(|captures| captures.get(1))
+        .map(|value| value.as_str().to_string())
 }
 
 fn systemd_unit_is_active(unit: &str) -> bool {
@@ -247,6 +306,34 @@ mod tests {
     use std::sync::atomic::{AtomicU64, Ordering};
 
     const TEST_SHA256: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    #[test]
+    fn runtime_config_summary_reads_account_token_user_and_team() {
+        let root = tempfile_dir("runtime-config-summary");
+        let config = root.join("config.xml");
+        fs::write(
+            &config,
+            r#"<config>
+  <!-- Account -->
+  <account-token v='FAKEFAHAccountTokenForTestsOnly1234567890XX'/>
+  <machine-name v='folding-425564'/>
+
+  <!-- User Information -->
+  <team v='1068254'/>
+  <user v='FoldingOS'/>
+</config>
+"#,
+        )
+        .unwrap();
+
+        let summary = read_runtime_config_summary(&config);
+
+        assert!(summary.passkey_configured);
+        assert_eq!(summary.username.as_deref(), Some("FoldingOS"));
+        assert_eq!(summary.team, Some(1_068_254));
+
+        let _ = fs::remove_dir_all(root);
+    }
 
     #[test]
     fn inspect_fah_reports_installation_and_acquisition_state() {
