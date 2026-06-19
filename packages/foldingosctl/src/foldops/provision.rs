@@ -99,9 +99,11 @@ pub fn start_foldops_provision_service() -> Result<(), String> {
 
 pub fn restart_foldops_runtime_services(paths: &AppliancePaths) -> Result<(), String> {
     refresh_supervisor_colocated_env(paths)?;
-    restart_systemd_unit_if_loaded(FOLDOPS_SUPERVISOR_SERVICE)?;
     if unit_is_loaded(FOLDOPS_AGENT_SERVICE) {
-        crate::process::schedule_deferred_systemd_restart_after(FOLDOPS_AGENT_SERVICE, 2)?;
+        crate::process::schedule_deferred_systemd_restart_after(FOLDOPS_AGENT_SERVICE, 1)?;
+    }
+    if unit_is_loaded(FOLDOPS_SUPERVISOR_SERVICE) {
+        crate::process::schedule_deferred_systemd_restart_after(FOLDOPS_SUPERVISOR_SERVICE, 2)?;
     }
     if unit_is_loaded(FOLDOPS_SERVE_HTTPS_SERVICE) {
         crate::process::schedule_deferred_systemd_restart_after(FOLDOPS_SERVE_HTTPS_SERVICE, 3)?;
@@ -114,15 +116,6 @@ fn unit_is_loaded(unit: &str) -> bool {
     command_output("systemctl", &["show", "-p", "LoadState", "--value", unit])
         .map(|value| value.trim() == "loaded")
         .unwrap_or(false)
-}
-
-fn restart_systemd_unit_if_loaded(unit: &str) -> Result<(), String> {
-    let state = command_output("systemctl", &["show", "-p", "LoadState", "--value", unit])?;
-    if state.trim() != "loaded" {
-        return Ok(());
-    }
-    run_command("systemctl", &["restart", "--no-block", unit])
-        .map_err(|error| format!("restart {unit}: {error}"))
 }
 
 pub fn start_foldops_runtime_services(paths: &AppliancePaths) -> Result<(), String> {
