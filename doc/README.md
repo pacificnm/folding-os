@@ -12,6 +12,8 @@ This index groups the project's documentation by purpose.
 - [foldingosctl command reference](foldingosctl.md) - on-appliance CLI for provisioning, config, storage, and Folding@home
 - [Roadmap](../ROADMAP.md) - planned implementation milestones
 - [AI context](ai-context.md) - condensed project context for AI assistants
+- [Agent subsystem guide](agent-subsystems.md) - implementation-agent map from
+  subsystems to governing docs, owner paths, and verification commands
 
 ## Architecture And Design
 
