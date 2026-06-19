@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { AdminLayout } from "./pages/admin/AdminLayout";
 import { AdminIndex } from "./pages/admin/AdminIndex";
 import { AdminFoldingHome } from "./pages/admin/AdminFoldingHome";
+import { AdminFoldingMachineDetail } from "./pages/admin/AdminFoldingMachineDetail";
 import { AdminLogs } from "./pages/admin/AdminLogs";
 import { AdminMachines } from "./pages/admin/AdminMachines";
 import { AdminRecovery } from "./pages/admin/AdminRecovery";
@@ -21,6 +22,7 @@ export default function App() {
         <Route index element={<AdminIndex />} />
         <Route path="machines" element={<AdminMachines />} />
         <Route path="folding" element={<AdminFoldingHome />} />
+        <Route path="folding/:machineId" element={<AdminFoldingMachineDetail />} />
         <Route path="logs" element={<AdminLogs />} />
         <Route path="software" element={<AdminSoftwareUpdates />} />
         <Route path="services" element={<AdminServices />} />

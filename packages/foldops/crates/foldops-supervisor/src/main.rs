@@ -67,9 +67,7 @@ async fn main() {
     let mut app = Router::new().nest("/api", api_router(state.clone()));
 
     if web_root.is_dir() {
-        app = app.fallback_service(
-            ServeDir::new(&web_root).not_found_service(ServeFile::new(&index_path)),
-        );
+        app = app.fallback_service(ServeDir::new(&web_root).fallback(ServeFile::new(&index_path)));
     } else {
         tracing::warn!(path = %web_root.display(), "WEB_ROOT not found — dashboard static files unavailable");
     }

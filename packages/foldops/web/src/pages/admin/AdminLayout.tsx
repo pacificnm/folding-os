@@ -12,6 +12,8 @@ const NAV = [
 
 export function AdminLayout() {
   const location = useLocation();
+  const isActive = (href: string) =>
+    location.pathname === href || location.pathname.startsWith(`${href}/`);
 
   return (
     <PageLayout
@@ -30,7 +32,7 @@ export function AdminLayout() {
             key={item.href}
             to={item.href}
             className={
-              location.pathname === item.href
+              isActive(item.href)
                 ? "admin-nav-link admin-nav-link--active"
                 : "admin-nav-link"
             }

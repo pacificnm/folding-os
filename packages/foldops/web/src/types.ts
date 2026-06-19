@@ -79,6 +79,9 @@ export interface MachineSummary {
   first_seen: string;
   last_seen: string;
   online: boolean;
+  node_id?: string | null;
+  installation_role?: string | null;
+  foldingos_version?: string | null;
   latest: {
     created_at: string;
     fah_status: string;
@@ -96,6 +99,11 @@ export interface MachineSummary {
     apt_updates: number;
     reboot_required: boolean;
     payload?: {
+      hostname?: string;
+      nodeId?: string | null;
+      installationRole?: string | null;
+      foldingosVersion?: string | null;
+      primaryIpv4?: string | null;
       fah: {
         activeClientVersion?: string | null;
         expectedClientVersion?: string | null;
@@ -122,8 +130,27 @@ export interface MachineSummary {
       system: {
         loadAvg: [number, number, number];
         uptime: number;
+        cpuUsage?: number | null;
         cpuTemp: number | null;
         chassisTemp: number | null;
+        memory?: {
+          total: number;
+          used: number;
+          free: number;
+          percent: number;
+        };
+        disk?: {
+          total: number;
+          used: number;
+          free: number;
+          percent: number;
+        };
+        network?: {
+          rxBytes: number;
+          txBytes: number;
+          rxSec?: number | null;
+          txSec?: number | null;
+        };
       };
     };
   } | null;

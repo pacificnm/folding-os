@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { fetchMachines, pushFoldinghomeConfig } from "../../api";
 import {
   fahAcquisitionLabel,
@@ -466,7 +467,14 @@ export function AdminFoldingHome() {
                           aria-label={`Select ${machine.hostname}`}
                         />
                       </td>
-                      <td className="mono">{machine.hostname}</td>
+                      <td className="mono">
+                        <Link
+                          to={`/admin/folding/${encodeURIComponent(machine.hostname)}`}
+                          className="admin-table-link"
+                        >
+                          {machine.hostname}
+                        </Link>
+                      </td>
                       <td>
                         <span
                           className={`badge ${machine.online ? "badge-ok" : "badge-warn"}`}

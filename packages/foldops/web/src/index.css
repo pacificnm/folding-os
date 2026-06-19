@@ -1114,6 +1114,16 @@ body {
   vertical-align: middle;
 }
 
+.admin-table-link {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.admin-table-link:hover {
+  text-decoration: underline;
+}
+
 .admin-table-actions {
   text-align: right;
   white-space: nowrap;
@@ -1122,6 +1132,128 @@ body {
 
 .admin-pending {
   color: var(--warn);
+}
+
+.admin-detail {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.admin-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.admin-detail-back {
+  display: inline-block;
+  margin-bottom: 0.35rem;
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.admin-detail-back:hover {
+  text-decoration: underline;
+}
+
+.admin-detail-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.admin-detail-title-row h2 {
+  margin-bottom: 0;
+}
+
+.admin-detail-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+}
+
+.admin-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.admin-detail-card,
+.admin-detail-placeholder {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.admin-detail-card h3,
+.admin-detail-placeholder h3 {
+  margin: 0 0 0.8rem;
+  font-size: 0.95rem;
+}
+
+.admin-detail-list {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+}
+
+.admin-detail-list div {
+  display: grid;
+  grid-template-columns: minmax(9rem, 0.42fr) 1fr;
+  gap: 0.75rem;
+  align-items: baseline;
+}
+
+.admin-detail-list dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.admin-detail-list dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.admin-machine-tabs .tabs-panel {
+  min-height: 16rem;
+}
+
+.admin-detail-charts {
+  margin-top: 1rem;
+}
+
+.admin-detail-placeholder p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.admin-detail-fah-stats {
+  margin-top: -0.35rem;
+}
+
+@media (max-width: 900px) {
+  .admin-detail-header {
+    flex-direction: column;
+  }
+
+  .admin-detail-summary,
+  .admin-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-detail-list div {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
+  }
 }
 
 .admin-token-form {
