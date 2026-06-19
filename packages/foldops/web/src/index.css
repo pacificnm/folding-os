@@ -213,6 +213,11 @@ body {
   color: var(--warn);
 }
 
+.badge-danger {
+  background: color-mix(in srgb, var(--danger) 20%, transparent);
+  color: var(--danger);
+}
+
 .card-section {
   padding: 1rem 1.25rem;
 }

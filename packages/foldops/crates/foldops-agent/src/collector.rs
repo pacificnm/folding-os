@@ -179,12 +179,16 @@ fn fah_log_to_payload(state: FahLogState, systemd: FahSystemdStatus, stats: &Fah
         progress: state.progress,
         ppd: state.ppd,
         tpf: state.tpf,
+        foldingState: state.folding_state,
+        unitState: state.unit_state,
+        foldingDetail: state.folding_detail,
         recentErrors: state.recent_errors,
         statsDonor: stats.donor.clone(),
         statsTeam: stats.team.clone(),
         configUsername: None,
         configTeam: None,
         configPasskeyConfigured: None,
+        configCpus: None,
     }
 }
 

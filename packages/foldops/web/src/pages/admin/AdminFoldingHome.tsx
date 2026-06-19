@@ -8,6 +8,7 @@ import {
 } from "../../components/FahClientStatus";
 import { formatPasskeyError, normalizePasskeyInput } from "../../fahPasskey";
 import {
+  displayConfiguredCpus,
   displayConfiguredDonor,
   displayConfiguredTeam,
   displayConfiguredToken,
@@ -42,6 +43,92 @@ function saveDefaults(defaults: FoldinghomeSavedDefaults) {
   } catch {
     /* Ignore storage failures; config push still proceeds. */
   }
+}
+
+function serviceLabel(status: string | null | undefined): string {
+  if (!status) return "Unknown";
+  switch (status) {
+    case "active":
+      return "Active";
+    case "inactive":
+      return "Inactive";
+    case "failed":
+      return "Failed";
+    default:
+      return status;
+  }
+}
+
+function serviceBadgeClass(status: string | null | undefined): string {
+  switch (status) {
+    case "active":
+      return "badge-ok";
+    case "failed":
+      return "badge-danger";
+    default:
+      return "badge-warn";
+  }
+}
+
+function activityState(machine: MachineSummary): string {
+  const direct = machine.latest?.payload?.fah?.foldingState?.trim().toLowerCase();
+  if (direct) return direct;
+  if (machine.latest?.project) return "folding";
+  if (machine.latest?.fah_status && machine.latest.fah_status !== "active") {
+    return machine.latest.fah_status;
+  }
+  return "unknown";
+}
+
+function activityLabel(state: string): string {
+  switch (state) {
+    case "folding":
+      return "Folding";
+    case "paused":
+      return "Paused";
+    case "waiting":
+      return "Waiting for work";
+    case "finishing":
+      return "Finishing WU";
+    case "download":
+      return "Downloading WU";
+    case "upload":
+      return "Uploading WU";
+    case "ready":
+      return "Ready";
+    case "core":
+      return "Starting core";
+    case "stopped":
+    case "inactive":
+      return "Stopped";
+    case "failed":
+      return "Failed";
+    case "idle":
+      return "Idle";
+    default:
+      return "Unknown";
+  }
+}
+
+function activityBadgeClass(state: string): string {
+  switch (state) {
+    case "folding":
+      return "badge-ok";
+    case "failed":
+    case "stopped":
+    case "inactive":
+      return "badge-danger";
+    default:
+      return "badge-warn";
+  }
+}
+
+function activityTitle(machine: MachineSummary): string {
+  const fah = machine.latest?.payload?.fah;
+  if (fah?.foldingDetail) return fah.foldingDetail;
+  if (fah?.unitState) return `FAH unit state: ${fah.unitState}`;
+  if (machine.latest?.project) return `Project ${machine.latest.project}`;
+  return "No recent FAH activity details";
 }
 
 function mergeAppliedFahConfig(
@@ -352,7 +439,10 @@ export function AdminFoldingHome() {
                 <tr>
                   <th aria-label="Select" />
                   <th>Host</th>
-                  <th>Status</th>
+                  <th>Host status</th>
+                  <th>FAH service</th>
+                  <th>Activity</th>
+                  <th>CPUs</th>
                   <th>Client</th>
                   <th>Acquire</th>
                   <th>FAH settings</th>
@@ -364,6 +454,7 @@ export function AdminFoldingHome() {
               <tbody>
                 {sorted.map((machine) => {
                   const fah = machine.latest?.payload?.fah;
+                  const state = activityState(machine);
                   return (
                     <tr key={machine.hostname}>
                       <td>
@@ -383,6 +474,19 @@ export function AdminFoldingHome() {
                           {machine.online ? "online" : "offline"}
                         </span>
                       </td>
+                      <td>
+                        <span
+                          className={`badge ${serviceBadgeClass(machine.latest?.fah_status)}`}
+                        >
+                          {serviceLabel(machine.latest?.fah_status)}
+                        </span>
+                      </td>
+                      <td title={activityTitle(machine)}>
+                        <span className={`badge ${activityBadgeClass(state)}`}>
+                          {activityLabel(state)}
+                        </span>
+                      </td>
+                      <td className="mono">{displayConfiguredCpus(fah)}</td>
                       <td
                         className={`mono ${fahClientClass(fah)}`}
                         title={fahAcquisitionTitle(fah)}

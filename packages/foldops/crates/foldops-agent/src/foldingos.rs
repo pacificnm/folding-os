@@ -317,6 +317,9 @@ struct InspectFahRuntime {
     progress: Option<f64>,
     ppd: Option<f64>,
     tpf: Option<String>,
+    folding_state: Option<String>,
+    unit_state: Option<String>,
+    folding_detail: Option<String>,
     #[serde(default)]
     recent_errors: Vec<String>,
 }
@@ -326,6 +329,7 @@ struct InspectFahConfiguration {
     username: String,
     team: i64,
     passkey_configured: bool,
+    cpus: Option<i64>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -488,12 +492,19 @@ fn fah_to_payload(data: InspectFahData, stats: &FahStats) -> Fah {
         progress: data.runtime.progress,
         ppd: data.runtime.ppd,
         tpf: data.runtime.tpf,
+        foldingState: data.runtime.folding_state,
+        unitState: data.runtime.unit_state,
+        foldingDetail: data.runtime.folding_detail,
         recentErrors: data.runtime.recent_errors,
         statsDonor: stats.donor.clone(),
         statsTeam: stats.team.clone(),
         configUsername: config_username,
         configTeam: config_team,
         configPasskeyConfigured: config_passkey_configured,
+        configCpus: data
+            .configuration
+            .as_ref()
+            .and_then(|configuration| configuration.cpus),
     }
 }
 
@@ -516,12 +527,16 @@ fn empty_fah_payload(stats: &FahStats) -> Fah {
         progress: None,
         ppd: None,
         tpf: None,
+        foldingState: None,
+        unitState: None,
+        foldingDetail: None,
         recentErrors: vec![],
         statsDonor: stats.donor.clone(),
         statsTeam: stats.team.clone(),
         configUsername: None,
         configTeam: None,
         configPasskeyConfigured: None,
+        configCpus: None,
     }
 }
 

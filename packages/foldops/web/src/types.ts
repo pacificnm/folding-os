@@ -107,12 +107,16 @@ export interface MachineSummary {
         logPath?: string | null;
         logReadable?: boolean | null;
         tpf: string | null;
+        foldingState?: string | null;
+        unitState?: string | null;
+        foldingDetail?: string | null;
         recentErrors: string[];
         statsDonor?: string | null;
         statsTeam?: string | null;
         configUsername?: string | null;
         configTeam?: number | null;
         configPasskeyConfigured?: boolean | null;
+        configCpus?: number | null;
       };
       logs?: NodeLogs;
       system: {

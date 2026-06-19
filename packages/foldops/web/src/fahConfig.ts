@@ -2,6 +2,7 @@ export interface FahConfigSnapshot {
   configUsername?: string | null;
   configTeam?: number | null;
   configPasskeyConfigured?: boolean | null;
+  configCpus?: number | null;
   statsDonor?: string | null;
   statsTeam?: string | null;
 }
@@ -54,6 +55,15 @@ export function displayConfiguredToken(
 ): string {
   if (fah?.configPasskeyConfigured) {
     return "Set";
+  }
+  return "—";
+}
+
+export function displayConfiguredCpus(
+  fah: FahConfigSnapshot | null | undefined,
+): string {
+  if (fah?.configCpus != null && fah.configCpus > 0) {
+    return String(fah.configCpus);
   }
   return "—";
 }

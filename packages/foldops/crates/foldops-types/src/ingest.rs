@@ -75,6 +75,12 @@ pub struct Fah {
     pub progress: Option<f64>,
     pub ppd: Option<f64>,
     pub tpf: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub foldingState: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unitState: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub foldingDetail: Option<String>,
     pub recentErrors: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub statsDonor: Option<String>,
@@ -86,6 +92,8 @@ pub struct Fah {
     pub configTeam: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub configPasskeyConfigured: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub configCpus: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

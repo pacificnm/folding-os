@@ -72,6 +72,9 @@ fn unit_to_state(raw: &WsUnit) -> Option<FahLogState> {
         } else {
             Some(eta.to_string())
         },
+        folding_state: None,
+        unit_state: None,
+        folding_detail: None,
         recent_errors: vec![],
     })
 }
@@ -85,8 +88,72 @@ fn empty_fah_log_state() -> FahLogState {
         progress: None,
         ppd: None,
         tpf: None,
+        folding_state: None,
+        unit_state: None,
+        folding_detail: None,
         recent_errors: vec![],
     }
+}
+
+fn folding_state_from_unit(unit_state: &str, state: &FahLogState) -> String {
+    match unit_state.trim().to_uppercase().as_str() {
+        "RUN" if state.project.is_some() => "folding".into(),
+        "RUN" => "waiting".into(),
+        "PAUSE" => "paused".into(),
+        "FINISH" => "finishing".into(),
+        "DOWNLOAD" | "UPLOAD" | "READY" | "CORE" => unit_state.trim().to_lowercase(),
+        "" => "idle".into(),
+        other => other.to_lowercase(),
+    }
+}
+
+fn format_activity_detail(state: &FahLogState, unit_state: &str) -> Option<String> {
+    let mut parts = Vec::new();
+    if let Some(project) = state.project.as_deref() {
+        parts.push(format!("project {project}"));
+    }
+    if let Some(progress) = state.progress {
+        parts.push(format!("{progress:.1}%"));
+    }
+    if let Some(ppd) = state.ppd {
+        parts.push(format!("{} PPD", format_ppd(ppd)));
+    }
+    if parts.is_empty() {
+        if unit_state.eq_ignore_ascii_case("RUN") {
+            Some("No work unit assigned".into())
+        } else {
+            None
+        }
+    } else {
+        Some(parts.join(" - "))
+    }
+}
+
+fn format_ppd(ppd: f64) -> String {
+    if ppd >= 1_000_000.0 {
+        format!("{:.2}M", ppd / 1_000_000.0)
+    } else if ppd >= 1_000.0 {
+        format!("{:.0}k", ppd / 1_000.0)
+    } else {
+        format!("{ppd:.0}")
+    }
+}
+
+fn enrich_state_with_activity(
+    mut state: FahLogState,
+    unit_state: String,
+    detail: Option<String>,
+) -> FahLogState {
+    let normalized_unit_state = unit_state.trim().to_uppercase();
+    state.folding_state = Some(folding_state_from_unit(&normalized_unit_state, &state));
+    state.unit_state = if normalized_unit_state.is_empty() {
+        None
+    } else {
+        Some(normalized_unit_state.clone())
+    };
+    state.folding_detail =
+        detail.or_else(|| format_activity_detail(&state, &normalized_unit_state));
+    state
 }
 
 fn unit_status(raw: &WsUnit) -> String {
@@ -246,7 +313,7 @@ pub async fn query_fah_websocket_activity(host: &str, port: u16) -> Option<FahWs
 pub async fn parse_fah_websocket(host: &str, port: u16) -> Option<FahLogState> {
     parse_fah_websocket_with_unit_state(host, port)
         .await
-        .map(|(state, _, _)| state)
+        .map(|(state, unit_state, detail)| enrich_state_with_activity(state, unit_state, detail))
 }
 
 async fn parse_fah_websocket_with_unit_state(
