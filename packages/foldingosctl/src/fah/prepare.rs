@@ -75,6 +75,10 @@ fn render_fah_config_xml(paths: &AppliancePaths, config: &DomainConfig, passkey:
         .get("identity.team")
         .map(|value| value.ival)
         .unwrap_or_default();
+    let username = config
+        .get("identity.username")
+        .map(|value| value.text.as_str())
+        .unwrap_or("Anonymous");
     let cpus = config
         .get("resources.cpus")
         .map(|value| value.ival)
@@ -92,6 +96,12 @@ fn render_fah_config_xml(paths: &AppliancePaths, config: &DomainConfig, passkey:
         "  <machine-name v=\"{}\"/>\n",
         xml_escape_attribute(&machine_name)
     ));
+    if !username.is_empty() {
+        builder.push_str(&format!(
+            "  <user v=\"{}\"/>\n",
+            xml_escape_attribute(username)
+        ));
+    }
     if team != 0 {
         builder.push_str(&format!("  <team v=\"{team}\"/>\n"));
     }
@@ -224,5 +234,37 @@ impl Drop for TempCleanup {
         if self.active {
             let _ = fs::remove_file(&self.path);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::parse_domain;
+
+    #[test]
+    fn render_fah_config_xml_includes_configured_donor() {
+        let config = parse_domain(
+            "foldinghome",
+            r#"
+schema_version = 1
+
+[identity]
+username = "FoldingOS"
+team = 1068254
+passkey_secret = ""
+
+[resources]
+cpus = 0
+gpus = false
+"#,
+            true,
+        )
+        .expect("parse config");
+
+        let xml = render_fah_config_xml(&AppliancePaths::default(), &config, "");
+
+        assert!(xml.contains(r#"<user v="FoldingOS"/>"#));
+        assert!(xml.contains(r#"<team v="1068254"/>"#));
     }
 }

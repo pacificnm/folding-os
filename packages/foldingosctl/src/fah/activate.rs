@@ -84,7 +84,7 @@ fn restart_fah_service_after_activation() -> Result<(), String> {
     if state.trim() != "loaded" {
         return Ok(());
     }
-    run_command("systemctl", &["try-restart", FAH_SERVICE_NAME])
+    run_command("systemctl", &["restart", FAH_SERVICE_NAME])
         .map_err(|error| format!("restart {FAH_SERVICE_NAME}: {error}"))
 }
 

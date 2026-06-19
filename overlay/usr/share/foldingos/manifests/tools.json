@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "tools_version": "0.1.0-69",
-  "artifact_url": "https://packages.folding-os.com/foldingos-tools/0.1.0-69/foldingosctl-x86_64",
-  "artifact_size": 11436856,
-  "sha256": "58e64e0ece4245c0f85f285601c9a8d4160a8c623355314301c8dca292bdf3cc"
+  "tools_version": "0.1.0-71",
+  "artifact_url": "https://packages.folding-os.com/foldingos-tools/0.1.0-71/foldingosctl-x86_64",
+  "artifact_size": 11434328,
+  "sha256": "fe3b0dfa133039496c1182c3572684ac8e7fbc17768a913095fee1c4899a6cbd"
 }

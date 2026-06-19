@@ -29,7 +29,7 @@ pub fn apply_domain(paths: &AppliancePaths, domain: &str) -> Result<(), String> 
         "foldinghome" => {
             match crate::fah::fah_prepare_quiet(paths) {
                 Ok(()) => {
-                    run_command("systemctl", &["try-restart", "folding-at-home.service"])?;
+                    run_command("systemctl", &["restart", "folding-at-home.service"])?;
                 }
                 Err(error) => {
                     eprintln!(
