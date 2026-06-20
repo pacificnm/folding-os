@@ -60,6 +60,10 @@ This index groups the project's documentation by purpose.
   proposed update discovery, apply APIs, publication indexes, and recovery export
 - [Milestone 5 readiness review](milestone/5-readiness-review.md) - validation
   evidence and milestone closeout
+- [Milestone 6 implementation specification](milestone/6-implementation-spec.md) -
+  proposed FoldOps Upgrades dashboard, settings, telemetry, and restore scope
+- [Milestone 6 engineering specification](milestone/6-engineering-spec.md) -
+  proposed dashboard routes, settings contract, telemetry surfaces, and restore workflow
 - [Deployment and provisioning](installer.md) - supervisor bootstrap and network
   fleet provisioning
 - [Milestone 3 engineering specification](milestone/3-engineering-spec.md) -
