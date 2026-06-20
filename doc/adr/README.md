@@ -68,6 +68,9 @@ design decisions years after they were originally made.
 - [ADR-0028: Supervisor Fleet Software Update Workflow](0028-supervisor-fleet-software-update-workflow.md)
 - [ADR-0029: Packages Channel Publication Via rclone](0029-packages-channel-publication-via-rclone.md)
 - [ADR-0030: Supervisor Recovery Backup And Export](0030-supervisor-recovery-backup-and-export.md)
+- [ADR-0031: FoldOps Upgrades Dashboard And Navigation](0031-foldops-upgrades-dashboard-and-navigation.md) (proposed)
+- [ADR-0032: Unified Settings Model And First-Boot Configuration Wizard](0032-unified-settings-model-and-first-boot-configuration-wizard.md) (proposed)
+- [ADR-0033: Supervisor Recovery Restore Workflow In FoldOps Upgrades](0033-supervisor-recovery-restore-workflow-in-foldops-upgrades.md) (proposed)
 
 ---
 

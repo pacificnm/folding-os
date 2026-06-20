@@ -118,8 +118,10 @@ for the issue closure matrix and validation evidence.
 
 ## Milestone 6: FoldOps Upgrades
 
-- Full supervisor dashboard rework and admin settings UI
-- First-boot configuration wizard (consolidate env and feature flags)
+- Full supervisor dashboard rework, navigation, and operator telemetry
+- First-boot configuration wizard and unified settings model
+- Recovery restore workflow built on Milestone 5 APIs
+- Host profile, work-history, help, footer, and alerting workflows
 - Polish fleet operator workflows built on Milestone 5 APIs
 
 ## Milestone 7: Raspberry Pi Support
