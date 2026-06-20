@@ -74,6 +74,7 @@ fn summarize_fah_folding(
         "RUN" => "waiting".to_string(),
         "PAUSE" => "paused".to_string(),
         "FINISH" => "finishing".to_string(),
+        "CORE" if activity_has_work_evidence(&activity) => "folding".to_string(),
         "DOWNLOAD" | "UPLOAD" | "READY" | "CORE" => unit_state.to_lowercase(),
         "" => "idle".to_string(),
         other => other.to_lowercase(),
@@ -88,6 +89,12 @@ fn summarize_fah_folding(
         },
         detail,
     )
+}
+
+fn activity_has_work_evidence(activity: &crate::fah::FahWsActivity) -> bool {
+    activity.project.is_some()
+        || activity.progress.is_some_and(|value| value > 0.0)
+        || activity.ppd.is_some_and(|value| value > 0.0)
 }
 
 fn format_fah_activity_detail(activity: &crate::fah::FahWsActivity) -> Option<String> {
@@ -119,6 +126,44 @@ fn format_ppd(ppd: f64) -> String {
         format!("{:.0}k", ppd / 1_000.0)
     } else {
         format!("{ppd:.0}")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn core_activity_with_work_metrics_reports_folding() {
+        let activity = crate::fah::FahWsActivity {
+            unit_state: "CORE".into(),
+            project: Some("18400".into()),
+            progress: Some(12.5),
+            ppd: Some(250_000.0),
+            detail: None,
+        };
+
+        let (state, unit_state, detail) = summarize_fah_folding(Some(activity));
+
+        assert_eq!(state, "folding");
+        assert_eq!(unit_state.as_deref(), Some("CORE"));
+        assert_eq!(detail.as_deref(), Some("project 18400 · 12.5% · 250k PPD"));
+    }
+
+    #[test]
+    fn core_activity_without_work_metrics_reports_core() {
+        let activity = crate::fah::FahWsActivity {
+            unit_state: "CORE".into(),
+            project: None,
+            progress: None,
+            ppd: None,
+            detail: None,
+        };
+
+        let (state, unit_state, _) = summarize_fah_folding(Some(activity));
+
+        assert_eq!(state, "core");
+        assert_eq!(unit_state.as_deref(), Some("CORE"));
     }
 }
 

@@ -101,10 +101,17 @@ fn folding_state_from_unit(unit_state: &str, state: &FahLogState) -> String {
         "RUN" => "waiting".into(),
         "PAUSE" => "paused".into(),
         "FINISH" => "finishing".into(),
+        "CORE" if active_work_evidence_present(state) => "folding".into(),
         "DOWNLOAD" | "UPLOAD" | "READY" | "CORE" => unit_state.trim().to_lowercase(),
         "" => "idle".into(),
         other => other.to_lowercase(),
     }
+}
+
+fn active_work_evidence_present(state: &FahLogState) -> bool {
+    state.project.is_some()
+        || state.progress.is_some_and(|value| value > 0.0)
+        || state.ppd.is_some_and(|value| value > 0.0)
 }
 
 fn format_activity_detail(state: &FahLogState, unit_state: &str) -> Option<String> {
@@ -402,6 +409,25 @@ mod tests {
         });
         let (_, unit_state, _) = activity_from_websocket_message(&msg).unwrap();
         assert_eq!(unit_state, "RUN");
+    }
+
+    #[test]
+    fn core_unit_with_work_metrics_reports_folding_state() {
+        let msg = json!({
+            "groups": { "": { "config": { "paused": false, "finish": false } } },
+            "units": [{
+                "ppd": 250000.0,
+                "state": {
+                    "state": "CORE",
+                    "wu_progress": 0.125,
+                    "assignment": { "project": 18400 }
+                }
+            }]
+        });
+        let (state, unit_state, detail) = activity_from_websocket_message(&msg).unwrap();
+        let enriched = enrich_state_with_activity(state, unit_state, detail);
+        assert_eq!(enriched.folding_state.as_deref(), Some("folding"));
+        assert_eq!(enriched.unit_state.as_deref(), Some("CORE"));
     }
 }
 

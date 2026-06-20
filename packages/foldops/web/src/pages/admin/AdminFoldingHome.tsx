@@ -8,6 +8,7 @@ import {
   fahClientLabel,
 } from "../../components/FahClientStatus";
 import { formatPasskeyError, normalizePasskeyInput } from "../../fahPasskey";
+import { machineFoldingActivityState } from "../../fahActivity";
 import {
   displayConfiguredCpus,
   displayConfiguredDonor,
@@ -69,16 +70,6 @@ function serviceBadgeClass(status: string | null | undefined): string {
     default:
       return "badge-warn";
   }
-}
-
-function activityState(machine: MachineSummary): string {
-  const direct = machine.latest?.payload?.fah?.foldingState?.trim().toLowerCase();
-  if (direct) return direct;
-  if (machine.latest?.project) return "folding";
-  if (machine.latest?.fah_status && machine.latest.fah_status !== "active") {
-    return machine.latest.fah_status;
-  }
-  return "unknown";
 }
 
 function activityLabel(state: string): string {
@@ -455,7 +446,7 @@ export function AdminFoldingHome() {
               <tbody>
                 {sorted.map((machine) => {
                   const fah = machine.latest?.payload?.fah;
-                  const state = activityState(machine);
+                  const state = machineFoldingActivityState(machine) ?? "unknown";
                   return (
                     <tr key={machine.hostname}>
                       <td>

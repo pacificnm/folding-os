@@ -466,7 +466,10 @@ fn apply_fah_activity_summary(
                 .get("project")
                 .and_then(Value::as_str)
                 .is_some();
-        let folding_state = folding_state_from_unit(&unit_state, project_present);
+        let active_work_evidence =
+            project_present || active_work_metrics_present(runtime_object, unit);
+        let folding_state =
+            folding_state_from_unit(&unit_state, project_present, active_work_evidence);
         runtime_object.insert("folding_state".into(), serde_json::json!(folding_state));
         if !unit_state.is_empty() {
             runtime_object.insert("unit_state".into(), serde_json::json!(unit_state));
@@ -504,7 +507,27 @@ fn apply_fah_activity_summary(
     }
 }
 
-fn folding_state_from_unit(unit_state: &str, project_present: bool) -> &'static str {
+fn active_work_metrics_present(
+    runtime: &serde_json::Map<String, Value>,
+    unit: &FahDbUnitSummary,
+) -> bool {
+    unit.progress.is_some_and(|value| value > 0.0)
+        || unit.ppd.is_some_and(|value| value > 0.0)
+        || runtime
+            .get("progress")
+            .and_then(json_f64)
+            .is_some_and(|value| value > 0.0)
+        || runtime
+            .get("ppd")
+            .and_then(json_f64)
+            .is_some_and(|value| value > 0.0)
+}
+
+fn folding_state_from_unit(
+    unit_state: &str,
+    project_present: bool,
+    active_work_evidence: bool,
+) -> &'static str {
     match unit_state {
         "RUN" if project_present => "folding",
         "RUN" => "waiting",
@@ -513,6 +536,7 @@ fn folding_state_from_unit(unit_state: &str, project_present: bool) -> &'static 
         "DOWNLOAD" => "download",
         "UPLOAD" => "upload",
         "READY" => "ready",
+        "CORE" if active_work_evidence => "folding",
         "CORE" => "core",
         "" => "idle",
         _ => "unknown",
@@ -780,6 +804,50 @@ mod tests {
         );
 
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn core_unit_with_work_metrics_reports_folding_activity() {
+        let summary = FahClientDbSummary {
+            readable: true,
+            unit: Some(FahDbUnitSummary {
+                unit_state: Some("CORE".into()),
+                project: Some("18400".into()),
+                progress: Some(12.5),
+                ppd: Some(250_000.0),
+            }),
+            ..FahClientDbSummary::default()
+        };
+        let mut runtime = serde_json::json!({"recent_errors":[]});
+
+        apply_fah_activity_summary(&mut runtime, true, &summary);
+
+        assert_eq!(runtime["folding_state"], "folding");
+        assert_eq!(runtime["unit_state"], "CORE");
+        assert_eq!(
+            runtime["folding_detail"],
+            "project 18400 - 12.5% - 250k PPD"
+        );
+    }
+
+    #[test]
+    fn core_unit_without_work_metrics_reports_core_startup() {
+        let summary = FahClientDbSummary {
+            readable: true,
+            unit: Some(FahDbUnitSummary {
+                unit_state: Some("CORE".into()),
+                project: None,
+                progress: None,
+                ppd: None,
+            }),
+            ..FahClientDbSummary::default()
+        };
+        let mut runtime = serde_json::json!({"recent_errors":[]});
+
+        apply_fah_activity_summary(&mut runtime, true, &summary);
+
+        assert_eq!(runtime["folding_state"], "core");
+        assert_eq!(runtime["unit_state"], "CORE");
     }
 
     #[test]

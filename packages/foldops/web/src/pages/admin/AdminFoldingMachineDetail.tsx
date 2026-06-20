@@ -11,6 +11,7 @@ import { MachineLogsPanel } from "../../components/MachineLogsPanel";
 import { ProjectInfoPanel } from "../../components/ProjectInfoPanel";
 import { Tabs, type TabItem } from "../../components/Tabs";
 import { fetchFahProject, fetchMachine, fetchSnapshots } from "../../api";
+import { machineFoldingActivityState } from "../../fahActivity";
 import {
   displayConfiguredCpus,
   displayConfiguredDonor,
@@ -104,13 +105,6 @@ function activityBadgeClass(state: string | null | undefined): string {
   }
 }
 
-function machineActivity(machine: MachineSummary | null): string | null {
-  const direct = machine?.latest?.payload?.fah?.foldingState?.trim();
-  if (direct) return direct;
-  if (machine?.latest?.project) return "folding";
-  return machine?.latest?.fah_status ?? null;
-}
-
 function projectLabel(machine: MachineSummary | null): string {
   const latest = machine?.latest;
   if (!latest?.project) return "-";
@@ -198,7 +192,7 @@ export function AdminFoldingMachineDetail() {
   const payload = latest?.payload;
   const fah = payload?.fah;
   const system = payload?.system;
-  const activity = machineActivity(machine);
+  const activity = machineFoldingActivityState(machine);
   const projectId = latest?.project ?? null;
   const snapshotCount = history.length;
   const rangeLabel = useMemo(
