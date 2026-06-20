@@ -14,9 +14,12 @@ use super::acquire_state::{
 use super::activate::fah_activate;
 use super::manifest::{load_fah_manifest, validate_foldingos_compatibility, FahManifest};
 use super::util::format_go_duration;
-use super::verify_install::{extract_and_install_fah_artifact, fah_installation_verified, verify_fah_artifact_file};
+use super::verify_install::{
+    extract_and_install_fah_artifact, fah_installation_verified, verify_fah_artifact_file,
+};
 
-static FAH_HTTP_AGENT: LazyLock<Agent> = LazyLock::new(|| ureq::AgentBuilder::new().redirects(0).build());
+static FAH_HTTP_AGENT: LazyLock<Agent> =
+    LazyLock::new(|| ureq::AgentBuilder::new().redirects(0).build());
 
 pub fn fah_acquire(paths: &AppliancePaths) -> Result<(), String> {
     let manifest = load_fah_manifest(paths, &paths.fah_embedded_manifest)?;
@@ -96,7 +99,12 @@ fn civil_from_days(days: i64) -> (i64, i64, i64) {
 }
 
 pub fn require_fah_acquisition_prerequisites() -> Result<(), String> {
-    if run_command("systemctl", &["is-active", "--quiet", "network-online.target"]).is_err() {
+    if run_command(
+        "systemctl",
+        &["is-active", "--quiet", "network-online.target"],
+    )
+    .is_err()
+    {
         return Err("network is not online".into());
     }
     let synchronized = fah_ntp_synchronized()?;
@@ -112,10 +120,10 @@ fn fah_ntp_synchronized() -> Result<bool, String> {
 }
 
 pub fn has_verified_active_client(paths: &AppliancePaths, manifest: &FahManifest) -> bool {
-  let Ok(version) = super::util::read_fah_current_version(paths) else {
-    return false;
-  };
-  fah_installation_verified(paths, &version, manifest)
+    let Ok(version) = super::util::read_fah_current_version(paths) else {
+        return false;
+    };
+    fah_installation_verified(paths, &version, manifest)
 }
 
 pub fn download_and_stage_fah_artifact(
@@ -153,7 +161,10 @@ pub fn download_and_stage_fah_artifact(
     Ok(staged_path)
 }
 
-fn download_fah_artifact(manifest: &FahManifest, destination: &std::path::Path) -> Result<(), String> {
+fn download_fah_artifact(
+    manifest: &FahManifest,
+    destination: &std::path::Path,
+) -> Result<(), String> {
     let response = FAH_HTTP_AGENT
         .get(&manifest.artifact_url)
         .call()
@@ -169,7 +180,8 @@ fn download_fah_artifact(manifest: &FahManifest, destination: &std::path::Path) 
         ));
     }
 
-    let mut file = File::create(destination).map_err(|error| format!("open partial download: {error}"))?;
+    let mut file =
+        File::create(destination).map_err(|error| format!("open partial download: {error}"))?;
     let mut reader = response.into_reader();
     let mut written = 0_i64;
     let mut buffer = vec![0_u8; 8192];
@@ -204,7 +216,6 @@ fn download_fah_artifact(manifest: &FahManifest, destination: &std::path::Path) 
     Ok(())
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -225,11 +236,11 @@ mod tests {
 
     fn test_manifest_content() -> String {
         r#"schema_version = 1
-client_version = "8.5.6"
+client_version = "8.5.5"
 architecture = "x86_64"
 artifact_url = "https://download.foldingathome.org/approved.deb"
 artifact_size = 1
-sha256 = "643de04033a1cb972a81e3a193d710e919a4f34634a987f11adc4cee61fdaefe"
+sha256 = "4f9c8bed9b2893752afb87e2796512ca0ca300ffc3d6035c518d56360370886c"
 artifact_format = "deb"
 minimum_foldingos_version = "0.1.0"
 terms_url = "https://foldingathome.org/faq/opensource/"
@@ -272,7 +283,9 @@ arguments = ["--config=/run/foldingos/fah/config.xml"]
                 "HTTP/1.1 {status} OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
                 body.len()
             );
-            stream.write_all(response.as_bytes()).expect("write headers");
+            stream
+                .write_all(response.as_bytes())
+                .expect("write headers");
             stream.write_all(&body).expect("write body");
             stream.shutdown(std::net::Shutdown::Write).ok();
         });
@@ -301,10 +314,7 @@ arguments = ["--config=/run/foldingos/fah/config.xml"]
         let paths = test_paths(&root);
 
         let staged_path = download_and_stage_fah_artifact(&paths, &manifest).expect("stage");
-        assert_eq!(
-            staged_path,
-            paths.fah_downloads_dir().join("8.5.6.deb")
-        );
+        assert_eq!(staged_path, paths.fah_downloads_dir().join("8.5.5.deb"));
         assert!(staged_path.exists());
     }
 
@@ -316,13 +326,14 @@ arguments = ["--config=/run/foldingos/fah/config.xml"]
         let (base_url, _handle) = spawn_http_server(|_| (200, artifact.to_vec()));
         manifest.artifact_url = format!("{base_url}/approved.deb");
 
-        let root = std::env::temp_dir().join(format!("fah-download-oversize-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("fah-download-oversize-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).expect("mkdir");
         let paths = test_paths(&root);
 
         assert!(download_and_stage_fah_artifact(&paths, &manifest).is_err());
-        assert!(!paths.fah_partial_deb("8.5.6").exists());
+        assert!(!paths.fah_partial_deb("8.5.5").exists());
     }
 
     #[test]
@@ -343,20 +354,23 @@ arguments = ["--config=/run/foldingos/fah/config.xml"]
 
     #[test]
     fn fah_acquire_requires_synchronized_time() {
-        assert!(require_fah_acquisition_prerequisites().is_err() || fah_ntp_synchronized().unwrap_or(false));
+        assert!(
+            require_fah_acquisition_prerequisites().is_err()
+                || fah_ntp_synchronized().unwrap_or(false)
+        );
     }
 
     #[test]
     fn has_verified_active_client_detects_installation() {
         let root = std::env::temp_dir().join(format!("fah-active-client-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
-        let version_dir = root.join("8.5.6");
+        let version_dir = root.join("8.5.5");
         fs::create_dir_all(version_dir.join("usr/bin")).expect("mkdir");
         fs::write(version_dir.join("usr/bin/fah-client"), b"binary").expect("write exe");
-        std::os::unix::fs::symlink("8.5.6", root.join("current")).expect("symlink");
+        std::os::unix::fs::symlink("8.5.5", root.join("current")).expect("symlink");
         fs::write(
             version_dir.join(crate::paths::FAH_VERIFIED_MARKER),
-            "client_version=8.5.6\nartifact_sha256=643de04033a1cb972a81e3a193d710e919a4f34634a987f11adc4cee61fdaefe\n",
+            "client_version=8.5.5\nartifact_sha256=4f9c8bed9b2893752afb87e2796512ca0ca300ffc3d6035c518d56360370886c\n",
         )
         .expect("marker");
 

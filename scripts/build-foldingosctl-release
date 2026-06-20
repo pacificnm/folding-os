@@ -10,6 +10,8 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FOLDINGOSCTL_CRATE="${PROJECT_ROOT}/packages/foldingosctl"
 # shellcheck source=lib/rust-host.sh
 source "${PROJECT_ROOT}/scripts/lib/rust-host.sh"
+# shellcheck source=lib/packages-channel.sh
+source "${PROJECT_ROOT}/scripts/lib/packages-channel.sh"
 
 usage() {
   cat <<EOF
@@ -19,17 +21,29 @@ Build a static foldingosctl binary for packages.folding-os.com/foldingos-tools/.
 
 Options:
   --version <id>   Release directory name (default: 0.1.0)
+  --sync-overlay   Write overlay tools bootstrap manifest for the next image build
+  --dry-run        Print planned actions without building
   -h, --help       Show this help
 EOF
 }
 
 TOOLS_VERSION="0.1.0"
+SYNC_OVERLAY=0
+DRY_RUN=0
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --version)
       TOOLS_VERSION="${2:?missing value for --version}"
       shift 2
+      ;;
+    --sync-overlay)
+      SYNC_OVERLAY=1
+      shift
+      ;;
+    --dry-run)
+      DRY_RUN=1
+      shift
       ;;
     -h|--help)
       usage
@@ -43,11 +57,67 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-rust_host_ensure_cargo
-
 OUTPUT_DIR="${PROJECT_ROOT}/build/output/foldingos-tools/${TOOLS_VERSION}"
 BINARY_NAME="foldingosctl-x86_64"
 OUTPUT_BINARY="${OUTPUT_DIR}/${BINARY_NAME}"
+
+validate_tools_version() {
+  local version="$1"
+  if [ -z "${version}" ]; then
+    echo "ERROR: tools version must be non-empty" >&2
+    exit 1
+  fi
+  case "${version}" in
+    *[!A-Za-z0-9._+-]*)
+      echo "ERROR: tools version may contain only letters, digits, '.', '_', '+', and '-'" >&2
+      exit 1
+      ;;
+  esac
+}
+
+write_overlay_tools_manifest() {
+  local artifact_size
+  local artifact_sha
+  local artifact_url
+  local overlay_manifest
+
+  artifact_size="$(stat -c '%s' "${OUTPUT_BINARY}")"
+  artifact_sha="$(sha256sum "${OUTPUT_BINARY}" | awk '{print $1}')"
+  artifact_url="${PACKAGES_PUBLIC_BASE}/${TOOLS_R2_PREFIX}/${TOOLS_VERSION}/${BINARY_NAME}"
+  overlay_manifest="${PROJECT_ROOT}/overlay/usr/share/foldingos/manifests/tools.json"
+
+  install -d -m 0755 "$(dirname "${overlay_manifest}")"
+  cat > "${overlay_manifest}" <<EOF
+{
+  "schema_version": 1,
+  "tools_version": "${TOOLS_VERSION}",
+  "artifact_url": "${artifact_url}",
+  "artifact_size": ${artifact_size},
+  "sha256": "${artifact_sha}"
+}
+EOF
+  echo "Synced overlay tools manifest: ${overlay_manifest}"
+}
+
+validate_tools_version "${TOOLS_VERSION}"
+packages_channel_defaults
+
+echo "foldingosctl tools release build"
+echo "  tools version:  ${TOOLS_VERSION}"
+echo "  output dir:     ${OUTPUT_DIR}"
+if [ "${SYNC_OVERLAY}" -eq 1 ]; then
+  echo "  sync overlay:   yes"
+fi
+
+if [ "${DRY_RUN}" -eq 1 ]; then
+  echo "Dry run - would build ${OUTPUT_BINARY}"
+  if [ "${SYNC_OVERLAY}" -eq 1 ]; then
+    echo "Dry run - would write overlay/usr/share/foldingos/manifests/tools.json"
+  fi
+  exit 0
+fi
+
+rust_host_ensure_cargo
 
 mkdir -p "${OUTPUT_DIR}"
 
@@ -64,9 +134,16 @@ chmod 0755 "${OUTPUT_BINARY}"
   sha256sum "${BINARY_NAME}" > SHA256SUMS
 )
 
+if [ "${SYNC_OVERLAY}" -eq 1 ]; then
+  write_overlay_tools_manifest
+fi
+
 echo ""
 echo "Tools release ready:"
 echo "  ${OUTPUT_BINARY}"
 echo "  ${OUTPUT_DIR}/SHA256SUMS"
+if [ "${SYNC_OVERLAY}" -eq 1 ]; then
+  echo "  ${PROJECT_ROOT}/overlay/usr/share/foldingos/manifests/tools.json"
+fi
 echo ""
 echo "Publish to: https://packages.folding-os.com/foldingos-tools/${TOOLS_VERSION}/"

@@ -46,22 +46,23 @@ pub fn read_fah_current_version(paths: &AppliancePaths) -> Result<String, String
     if target.starts_with('/') {
         return Err("current must be a relative symlink".into());
     }
-    let cleaned = Path::new(target.as_ref())
-        .components()
-        .fold(String::new(), |mut acc, component| {
-            use std::path::Component;
-            match component {
-                Component::Normal(part) => {
-                    if !acc.is_empty() {
-                        acc.push('/');
+    let cleaned =
+        Path::new(target.as_ref())
+            .components()
+            .fold(String::new(), |mut acc, component| {
+                use std::path::Component;
+                match component {
+                    Component::Normal(part) => {
+                        if !acc.is_empty() {
+                            acc.push('/');
+                        }
+                        acc.push_str(&part.to_string_lossy());
                     }
-                    acc.push_str(&part.to_string_lossy());
+                    Component::ParentDir => acc.clear(),
+                    _ => {}
                 }
-                Component::ParentDir => acc.clear(),
-                _ => {}
-            }
-            acc
-        });
+                acc
+            });
     if cleaned.is_empty() || cleaned.contains("..") || cleaned != target {
         return Err("current must not contain path traversal".into());
     }
@@ -74,7 +75,10 @@ pub fn read_fah_current_version(paths: &AppliancePaths) -> Result<String, String
     Ok(cleaned)
 }
 
-pub fn fah_executable_in_root(root: &Path, manifest_executable_path: &str) -> Result<PathBuf, String> {
+pub fn fah_executable_in_root(
+    root: &Path,
+    manifest_executable_path: &str,
+) -> Result<PathBuf, String> {
     if !manifest_executable_path.starts_with(FAH_EXECUTABLE_PATH_PREFIX) {
         return Err("manifest executable_path is invalid".into());
     }
@@ -94,7 +98,8 @@ pub fn fah_executable_in_root(root: &Path, manifest_executable_path: &str) -> Re
 fn path_within_root(root: &Path, candidate: &Path) -> bool {
     let root_clean = clean_path(root);
     let candidate_clean = clean_path(candidate);
-    candidate_clean == root_clean || candidate_clean.starts_with(&path_with_trailing_sep(&root_clean))
+    candidate_clean == root_clean
+        || candidate_clean.starts_with(&path_with_trailing_sep(&root_clean))
 }
 
 fn clean_path(path: &Path) -> PathBuf {

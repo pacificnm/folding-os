@@ -24,20 +24,24 @@ struct CommissioningCheck {
 }
 
 pub fn boot_status(paths: &AppliancePaths) -> Result<(), String> {
-    write_commissioning_display(paths, true)
+    write_commissioning_display(paths, true, true)
 }
 
 pub fn boot_refresh(paths: &AppliancePaths) -> Result<(), String> {
-    write_commissioning_display(paths, false)
+    write_commissioning_display(paths, false, true)
 }
 
 pub fn refresh_commissioning_display(paths: &AppliancePaths) {
-    if let Err(error) = write_commissioning_display(paths, false) {
+    if let Err(error) = write_commissioning_display(paths, false, false) {
         eprintln!("foldingosctl: refresh commissioning display: {error}");
     }
 }
 
-fn write_commissioning_display(paths: &AppliancePaths, wait_for_services: bool) -> Result<(), String> {
+fn write_commissioning_display(
+    paths: &AppliancePaths,
+    wait_for_services: bool,
+    echo_to_stdout: bool,
+) -> Result<(), String> {
     let mut pretty_name = os_release_value("PRETTY_NAME")?;
     if pretty_name.is_empty() {
         pretty_name = os_release_value("VERSION")?;
@@ -85,8 +89,10 @@ fn write_commissioning_display(paths: &AppliancePaths, wait_for_services: bool) 
     let message = format_commissioning_display(&pretty_name, &version, &role, &address, &checks);
     clear_console()?;
     write_console(&message)?;
-    print_commissioning_status_summary(&checks);
-    println!("Wrote FoldingOS commissioning display status.");
+    if echo_to_stdout {
+        print_commissioning_status_summary(&checks);
+        crate::automation::say_stdout("Wrote FoldingOS commissioning display status.");
+    }
     Ok(())
 }
 
@@ -115,8 +121,8 @@ fn routable_ipv4_error() -> String {
 }
 
 fn os_release_value(key: &str) -> Result<String, String> {
-    let file = fs::File::open(OS_RELEASE_PATH)
-        .map_err(|error| format!("read os-release: {error}"))?;
+    let file =
+        fs::File::open(OS_RELEASE_PATH).map_err(|error| format!("read os-release: {error}"))?;
     let prefix = format!("{key}=");
     for line in BufReader::new(file).lines() {
         let line = line.map_err(|error| error.to_string())?;
@@ -129,9 +135,7 @@ fn os_release_value(key: &str) -> Result<String, String> {
 }
 
 fn format_ready_display(pretty_name: &str, address: &str) -> String {
-    format!(
-        "{pretty_name} ready\nAddress: {address}\nSSH: {ADMIN_SSH_USER}@{address}\n"
-    )
+    format!("{pretty_name} ready\nAddress: {address}\nSSH: {ADMIN_SSH_USER}@{address}\n")
 }
 
 fn format_waiting_display(pretty_name: &str, address: &str) -> String {
@@ -150,7 +154,10 @@ fn evaluate_commissioning_checks(paths: &AppliancePaths, role: &str) -> Vec<Comm
             label: "Network online".into(),
             ready: true,
         },
-        check_systemd_unit("SSH administrator provisioned", "foldingos-ssh-provision.service"),
+        check_systemd_unit(
+            "SSH administrator provisioned",
+            "foldingos-ssh-provision.service",
+        ),
         check_installation_role(role),
         check_foldops_packages(paths),
         check_foldops_provisioned(paths),

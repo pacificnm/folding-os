@@ -10,8 +10,6 @@ import type {
   ControlAction,
   ControlResult,
   ControlStatus,
-  DeployRun,
-  DeployRunsResponse,
   FahProjectInfo,
   FleetAssignRequest,
   FleetAssignResponse,
@@ -22,8 +20,21 @@ import type {
   MachineSummary,
   MachinesResponse,
   RecoveryExportResponse,
+  SoftwareInstallLogResponse,
   SoftwareUpdatesResponse,
   SnapshotsResponse,
+  SupervisorLogSource,
+  SupervisorLogsResponse,
+  AllowBootDevicesResponse,
+  AllowBootResult,
+  AllowBootMutationResponse,
+  DenyBootResult,
+  DenyBootMutationResponse,
+  FoldinghomeConfigRequest,
+  FoldinghomeConfigResponse,
+  ServicesResponse,
+  ServiceRestartResponse,
+  ServicesRestartAllResponse,
 } from "./types";
 
 const FAH_PROJECT_API = "https://api.foldingathome.org/project";
@@ -60,44 +71,6 @@ export async function runMachineControl(
     throw new Error(body.error ?? `Control failed (${res.status})`);
   }
   return body;
-}
-
-export async function fetchDeployRuns(): Promise<DeployRunsResponse> {
-  const res = await fetch("/api/deploy/runs");
-  if (!res.ok) {
-    throw new Error(`Failed to load deploy history (${res.status})`);
-  }
-  return res.json() as Promise<DeployRunsResponse>;
-}
-
-export async function fetchDeployRun(id: string): Promise<DeployRun> {
-  const res = await fetch(`/api/deploy/runs/${encodeURIComponent(id)}`);
-  if (!res.ok) {
-    throw new Error(`Failed to load deploy run (${res.status})`);
-  }
-  return res.json() as Promise<DeployRun>;
-}
-
-export async function startAgentDeploy(
-  hostnames?: string[],
-): Promise<{ run_id: string; status: string }> {
-  const res = await fetch("/api/deploy/agents", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(hostnames?.length ? { hostnames } : {}),
-  });
-  const body = (await res.json().catch(() => ({}))) as {
-    error?: string;
-    run_id?: string;
-    status?: string;
-  };
-  if (!res.ok) {
-    throw new Error(body.error ?? `Deploy failed (${res.status})`);
-  }
-  if (!body.run_id) {
-    throw new Error("Deploy started but no run id returned");
-  }
-  return { run_id: body.run_id, status: body.status ?? "running" };
 }
 
 export async function fetchAlerts(): Promise<AlertsResponse> {
@@ -271,6 +244,74 @@ export async function fetchSoftwareUpdates(
   return res.json() as Promise<SoftwareUpdatesResponse>;
 }
 
+export async function fetchSoftwareInstallLog(
+  limit = 200,
+): Promise<SoftwareInstallLogResponse> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  const res = await fetch(`/api/software/install-log?${params}`);
+  if (!res.ok) {
+    throw new Error(await readApiError(res, "Failed to load install log"));
+  }
+  return res.json() as Promise<SoftwareInstallLogResponse>;
+}
+
+export async function fetchSupervisorLogs(
+  source: SupervisorLogSource,
+  options?: { lines?: number },
+): Promise<SupervisorLogsResponse> {
+  const params = new URLSearchParams({ source });
+  if (options?.lines != null) {
+    params.set("lines", String(options.lines));
+  }
+  const res = await fetch(`/api/supervisor/logs?${params}`);
+  if (!res.ok) {
+    throw new Error(await readApiError(res, "Failed to load supervisor logs"));
+  }
+  return res.json() as Promise<SupervisorLogsResponse>;
+}
+
+export async function fetchAllowBootDevices(): Promise<AllowBootDevicesResponse> {
+  const res = await fetch("/api/fleet/allow-boot");
+  if (!res.ok) {
+    throw new Error(await readApiError(res, "Failed to load network boot allowlist"));
+  }
+  return res.json() as Promise<AllowBootDevicesResponse>;
+}
+
+export async function addAllowBootDevice(
+  macAddress: string,
+  installDisk?: string,
+): Promise<AllowBootResult> {
+  const res = await fetch("/api/fleet/allow-boot", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      mac_address: macAddress,
+      install_disk: installDisk || undefined,
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(await readApiError(res, "Failed to allow network install"));
+  }
+  const body = (await res.json()) as AllowBootMutationResponse;
+  return body.result;
+}
+
+export async function removeAllowBootDevice(
+  macAddress: string,
+): Promise<DenyBootResult> {
+  const res = await fetch("/api/fleet/allow-boot", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mac_address: macAddress }),
+  });
+  if (!res.ok) {
+    throw new Error(await readApiError(res, "Failed to remove machine from allowlist"));
+  }
+  const body = (await res.json()) as DenyBootMutationResponse;
+  return body.result;
+}
+
 export async function fleetAssign(
   body: FleetAssignRequest,
 ): Promise<FleetAssignResponse> {
@@ -281,20 +322,6 @@ export async function fleetAssign(
   });
   if (!res.ok) {
     throw new Error(await readApiError(res, "Assignment failed"));
-  }
-  return res.json() as Promise<FleetAssignResponse>;
-}
-
-export async function assignLocalSoftware(
-  body: Pick<FleetAssignRequest, "foldops_manifest" | "tools_version">,
-): Promise<FleetAssignResponse> {
-  const res = await fetch("/api/software/assign-local", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    throw new Error(await readApiError(res, "Supervisor assignment failed"));
   }
   return res.json() as Promise<FleetAssignResponse>;
 }
@@ -372,4 +399,82 @@ export async function downloadRecoveryExport(): Promise<void> {
   anchor.download = filename;
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+export async function pushFoldinghomeConfig(
+  hostname: string,
+  body: FoldinghomeConfigRequest,
+): Promise<FoldinghomeConfigResponse> {
+  const res = await fetch(
+    `/api/machines/${encodeURIComponent(hostname)}/config/foldinghome`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
+  const payload = (await res.json().catch(() => ({}))) as FoldinghomeConfigResponse & {
+    error?: string;
+  };
+  if (!res.ok) {
+    return {
+      hostname,
+      ok: false,
+      error: payload.error ?? `Config push failed (${res.status})`,
+    };
+  }
+  return { ...payload, hostname, ok: payload.ok ?? true };
+}
+
+export async function fetchServices(): Promise<ServicesResponse> {
+  const res = await fetch("/api/services");
+  if (!res.ok) {
+    throw new Error(await readApiError(res, "Failed to load services"));
+  }
+  return res.json() as Promise<ServicesResponse>;
+}
+
+export async function restartService(
+  unit: string,
+): Promise<ServiceRestartResponse> {
+  const dashboardRestart =
+    unit === "foldingos-foldops-supervisor.service" ||
+    unit === "foldingos-foldops-serve-https.service";
+  const res = await fetch("/api/services/restart", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ unit }),
+  }).catch((error) => {
+    if (dashboardRestart) {
+      return null;
+    }
+    throw error;
+  });
+  if (!res) {
+    return {
+      unit,
+      name:
+        unit === "foldingos-foldops-supervisor.service"
+          ? "FoldOps supervisor (loopback)"
+          : "FoldOps HTTPS (port 3443)",
+      restarted: true,
+      scheduled: true,
+      message: "Restart started. The dashboard may reconnect briefly.",
+    };
+  }
+  if (!res.ok) {
+    throw new Error(await readApiError(res, "Service restart failed"));
+  }
+  return res.json() as Promise<ServiceRestartResponse>;
+}
+
+export async function restartAllServices(): Promise<ServicesRestartAllResponse> {
+  const res = await fetch("/api/services/restart-all", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) {
+    throw new Error(await readApiError(res, "Restart all services failed"));
+  }
+  return res.json() as Promise<ServicesRestartAllResponse>;
 }

@@ -2,6 +2,8 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
+use crate::foldingos::FOLDOPS_AGENT_UNIT;
+
 static UPDATE_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
 
 pub struct UpdateResult {
@@ -93,7 +95,7 @@ async fn run_agent_update_inner(
 
 pub async fn restart_foldops_agent() -> Result<(), String> {
     tokio::process::Command::new("systemctl")
-        .args(["restart", "foldops-agent"])
+        .args(["restart", FOLDOPS_AGENT_UNIT])
         .output()
         .await
         .map_err(|e| e.to_string())?;

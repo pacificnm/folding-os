@@ -6,7 +6,8 @@ use crate::foldops::util::{
 use crate::paths::AppliancePaths;
 
 pub fn validate_foldops_manifest_embedded(paths: &AppliancePaths) -> Result<(), String> {
-    let manifest = load_foldops_manifest_from_allowed_path(paths, &paths.foldops_embedded_manifest)?;
+    let manifest =
+        load_foldops_manifest_from_allowed_path(paths, &paths.foldops_embedded_manifest)?;
     validate_foldingos_compatibility(&manifest.minimum_foldingos_version)?;
     println!(
         "Approved FoldOps bootstrap manifest {} is valid for FoldingOS {}.",
@@ -14,11 +15,9 @@ pub fn validate_foldops_manifest_embedded(paths: &AppliancePaths) -> Result<(), 
     );
 
     if paths.foldops_assigned_manifest.exists() {
-        let assigned = load_foldops_manifest_from_allowed_path(
-            paths,
-            &paths.foldops_assigned_manifest,
-        )
-        .map_err(|error| format!("assigned manifest: {error}"))?;
+        let assigned =
+            load_foldops_manifest_from_allowed_path(paths, &paths.foldops_assigned_manifest)
+                .map_err(|error| format!("assigned manifest: {error}"))?;
         validate_foldingos_compatibility(&assigned.minimum_foldingos_version)
             .map_err(|error| format!("assigned manifest: {error}"))?;
         println!(
@@ -131,7 +130,9 @@ verification_path = "/data/apps/foldops/current/foldops-web/usr/share/foldops/we
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
         let paths = test_paths(&root);
-        assert!(load_foldops_manifest_from_allowed_path(&paths, &root.join("external.toml")).is_err());
+        assert!(
+            load_foldops_manifest_from_allowed_path(&paths, &root.join("external.toml")).is_err()
+        );
         let _ = fs::remove_dir_all(root);
     }
 
@@ -149,7 +150,10 @@ verification_path = "/data/apps/foldops/current/foldops-web/usr/share/foldops/we
             &format!("minimum_foldingos_version = \"{FOLDOPS_MANIFEST_PLACEHOLDER}\""),
         );
         fs::write(&paths.foldops_embedded_manifest, content).unwrap();
-        assert!(load_foldops_manifest_from_allowed_path(&paths, &paths.foldops_embedded_manifest).is_err());
+        assert!(
+            load_foldops_manifest_from_allowed_path(&paths, &paths.foldops_embedded_manifest)
+                .is_err()
+        );
         let _ = fs::remove_dir_all(root);
     }
 

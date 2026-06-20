@@ -78,7 +78,8 @@ pub fn collect_inspect_tools_data(paths: &AppliancePaths) -> Result<serde_json::
     }
 
     if let Some(assignment) = resolve_effective_tools_assignment(paths)? {
-        data["effective_tools_version"] = serde_json::Value::String(assignment.tools_version.clone());
+        data["effective_tools_version"] =
+            serde_json::Value::String(assignment.tools_version.clone());
         data["verified"] = serde_json::json!(tools_installation_verified(paths, &assignment));
     }
 
@@ -153,7 +154,9 @@ fn validate_tools_version_label(version: &str) -> Result<(), String> {
             component,
             Component::ParentDir | Component::RootDir | Component::Prefix(_)
         )
-    }) || version.contains('/') || version.contains('\\') {
+    }) || version.contains('/')
+        || version.contains('\\')
+    {
         return Err("tools version must not contain path separators or traversal".into());
     }
     if cleaned != Path::new(version) {

@@ -5,6 +5,8 @@ set -euo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=lib/packages-channel.sh
 source "${PROJECT_ROOT}/scripts/lib/packages-channel.sh"
+# shellcheck source=lib/appliance-release.sh
+source "${PROJECT_ROOT}/scripts/lib/appliance-release.sh"
 
 usage() {
   cat <<EOF
@@ -16,19 +18,35 @@ packages.folding-os.com via rclone.
 Options:
   --foldops <manifest_release>   FoldOps manifest release id to publish
   --tools <tools_version>        foldingosctl tools version id to publish
-  --build                        Run build scripts before upload
+  --build                        Run channel build scripts before upload
   --skip-web                     Pass --skip-web to build-foldops-bundles
   --dry-run                      List planned uploads without writing objects
   --skip-index                   Upload artifacts only; do not refresh index.json
   -h, --help                     Show this help
 
-At least one of --foldops or --tools is required.
+Pass --foldops, --tools, or both. FoldOps and tools release ids may differ.
+When no ids are supplied, defaults come from the overlay bootstrap manifests.
+
+Tools releases are built independently with build-foldingosctl-release. With
+--build, this script passes --sync-overlay so the next image build embeds the
+published tools pin.
 
 Environment defaults are documented in doc/adr/0029-packages-channel-publication-via-rclone.md.
 
 Example:
-  ./scripts/publish-packages-release --foldops 0.1.0-2 --tools 0.1.1 --build
+  ./scripts/publish-packages-release --tools 0.1.0-8 --build
+  ./scripts/publish-packages-release --foldops 0.1.0-8 --tools 0.1.1 --build
 EOF
+}
+
+read_overlay_tools_version() {
+  local manifest="${PROJECT_ROOT}/overlay/usr/share/foldingos/manifests/tools.json"
+  if [ ! -f "${manifest}" ]; then
+    return 1
+  fi
+  grep -E '"tools_version"[[:space:]]*:' "${manifest}" \
+    | head -1 \
+    | sed -E 's/.*"tools_version"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/'
 }
 
 FOLDOPS_RELEASE=""
@@ -78,9 +96,12 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ -z "${FOLDOPS_RELEASE}" ] && [ -z "${TOOLS_VERSION}" ]; then
-  echo "ERROR: specify at least one of --foldops or --tools" >&2
-  usage >&2
-  exit 1
+  DEFAULT_RELEASE="$(appliance_release_read)"
+  FOLDOPS_RELEASE="${DEFAULT_RELEASE}"
+  TOOLS_VERSION="$(read_overlay_tools_version || true)"
+  if [ -z "${TOOLS_VERSION}" ]; then
+    TOOLS_VERSION="${DEFAULT_RELEASE}"
+  fi
 fi
 
 if [ "${DRY_RUN}" -eq 1 ]; then
@@ -94,7 +115,7 @@ packages_channel_defaults
 
 if [ "${DO_BUILD}" -eq 1 ]; then
   if [ -n "${FOLDOPS_RELEASE}" ]; then
-    build_args=(--manifest-release "${FOLDOPS_RELEASE}")
+    build_args=(--manifest-release "${FOLDOPS_RELEASE}" --sync-overlay)
     if [ "${SKIP_WEB}" -eq 1 ]; then
       build_args+=(--skip-web)
     fi
@@ -105,12 +126,12 @@ if [ "${DO_BUILD}" -eq 1 ]; then
     "${PROJECT_ROOT}/scripts/build-foldops-bundles" "${build_args[@]}"
   fi
   if [ -n "${TOOLS_VERSION}" ]; then
+    build_args=(--version "${TOOLS_VERSION}" --sync-overlay)
     if [ "${DRY_RUN}" -eq 1 ]; then
-      echo "Dry run — would build foldingosctl tools release ${TOOLS_VERSION}"
-    else
-      echo "Building foldingosctl tools release ${TOOLS_VERSION} …"
-      "${PROJECT_ROOT}/scripts/build-foldingosctl-release" --version "${TOOLS_VERSION}"
+      build_args+=(--dry-run)
     fi
+    echo "Building foldingosctl tools release ${TOOLS_VERSION} …"
+    "${PROJECT_ROOT}/scripts/build-foldingosctl-release" "${build_args[@]}"
   fi
 fi
 

@@ -3,16 +3,19 @@ mod effective;
 mod parse;
 
 use std::fs::{self, OpenOptions};
+use std::path::PathBuf;
 
 use nix::fcntl::{Flock, FlockArg};
 use serde::Serialize;
 
-use crate::automation_policy::{require_agent_automation_mutation, require_inspectable_role};
+use crate::automation_policy::{require_config_automation_mutation, require_inspectable_role};
 use crate::fs_atomic::atomic_write;
 use crate::paths::AppliancePaths;
 
 pub use apply::apply_domain;
-pub use effective::{effective_config, load_effective_config_for_domain, validate_secret_reference};
+pub use effective::{
+    effective_config, load_effective_config_for_domain, validate_secret_reference,
+};
 pub use parse::{parse_domain, DomainConfig, HOSTNAME_PATTERN};
 
 #[derive(Debug, Serialize)]
@@ -85,12 +88,38 @@ pub fn print_effective_config(
     }
 }
 
+pub const FAH_PASSKEY_SECRET_NAME: &str = "fah-passkey";
+
+pub fn set_fah_passkey(paths: &AppliancePaths, passkey: &str) -> Result<serde_json::Value, String> {
+    use crate::fah::passkey::normalize_passkey_input;
+
+    const FAH_SERVICE_GID: u32 = 200;
+
+    require_config_automation_mutation(paths, "config", "set-passkey")?;
+    let passkey = normalize_passkey_input(passkey)?;
+
+    fs::create_dir_all(paths.secrets_dir()).map_err(|error| error.to_string())?;
+    let path = paths.secrets_dir().join(FAH_PASSKEY_SECRET_NAME);
+    atomic_write(&path, format!("{passkey}\n").as_bytes(), 0o640)?;
+    nix::unistd::chown(
+        &path,
+        Some(nix::unistd::Uid::from_raw(0)),
+        Some(nix::unistd::Gid::from_raw(FAH_SERVICE_GID)),
+    )
+    .map_err(|error| format!("set passkey secret ownership: {error}"))?;
+
+    Ok(serde_json::json!({
+        "secret": FAH_PASSKEY_SECRET_NAME,
+        "written": true,
+    }))
+}
+
 pub fn activate_config(
     paths: &AppliancePaths,
     domain: &str,
     candidate: &str,
 ) -> Result<serde_json::Value, String> {
-    require_agent_automation_mutation(paths, "config", "activate")?;
+    require_config_automation_mutation(paths, "config", "activate")?;
 
     if !effective::valid_domain(domain) {
         return Err(format!("unknown configuration domain {domain:?}"));
@@ -108,8 +137,8 @@ pub fn activate_config(
         .write(true)
         .open(&lock_path)
         .map_err(|error| error.to_string())?;
-    let _guard = Flock::lock(lock, FlockArg::LockExclusive)
-        .map_err(|(_, errno)| errno.to_string())?;
+    let _guard =
+        Flock::lock(lock, FlockArg::LockExclusive).map_err(|(_, errno)| errno.to_string())?;
 
     effective::validate_candidate(paths, domain, &candidate_values)?;
 
@@ -173,23 +202,31 @@ fn load_candidate(
     domain: &str,
     candidate: &str,
 ) -> Result<(String, Vec<u8>, DomainConfig), String> {
-    let resolved = fs::canonicalize(candidate).map_err(|error| error.to_string())?;
+    let resolved = resolve_data_candidate_path(candidate)?;
     let resolved_str = resolved.to_string_lossy().into_owned();
-    if resolved_str != "/data" && !resolved_str.starts_with("/data/") {
+    let candidate_content = fs::read(&resolved).map_err(|error| error.to_string())?;
+    let candidate_values =
+        parse_domain(domain, &String::from_utf8_lossy(&candidate_content), false)?;
+    Ok((resolved_str, candidate_content, candidate_values))
+}
+
+const DATA_MOUNT: &str = "/data";
+
+fn resolve_data_candidate_path(candidate: &str) -> Result<PathBuf, String> {
+    let data_root =
+        fs::canonicalize(DATA_MOUNT).map_err(|error| format!("resolve {DATA_MOUNT}: {error}"))?;
+    let resolved = fs::canonicalize(candidate).map_err(|error| error.to_string())?;
+    if resolved == data_root {
+        return Err("configuration candidate must be a regular file on /data".into());
+    }
+    if resolved.strip_prefix(&data_root).ok().is_none() {
         return Err("configuration candidate must be a regular file on /data".into());
     }
     let metadata = fs::metadata(&resolved).map_err(|error| error.to_string())?;
     if !metadata.is_file() {
         return Err("configuration candidate must be a regular file".into());
     }
-
-    let candidate_content = fs::read(&resolved).map_err(|error| error.to_string())?;
-    let candidate_values = parse_domain(
-        domain,
-        &String::from_utf8_lossy(&candidate_content),
-        false,
-    )?;
-    Ok((resolved_str, candidate_content, candidate_values))
+    Ok(resolved)
 }
 
 fn audit_config_activation(domain: &str, candidate: &str, success: bool, detail: &str) {
@@ -218,4 +255,29 @@ fn validate_all_config_domains(
         });
     }
     Ok(results)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    #[test]
+    fn strip_prefix_accepts_nested_data_path() {
+        let root =
+            std::env::temp_dir().join(format!("foldingosctl-config-path-{}", std::process::id()));
+        let data_root = root.join("data");
+        let candidate = data_root.join("config/candidates/example.toml");
+        fs::create_dir_all(candidate.parent().unwrap()).expect("create dirs");
+        fs::write(&candidate, "schema_version = 1\n").expect("write candidate");
+
+        let resolved_data = fs::canonicalize(&data_root).expect("canonical data");
+        let resolved_candidate = fs::canonicalize(&candidate).expect("canonical candidate");
+        assert!(resolved_candidate
+            .strip_prefix(&resolved_data)
+            .ok()
+            .is_some());
+        assert_ne!(resolved_candidate, resolved_data);
+
+        let _ = fs::remove_dir_all(&root);
+    }
 }

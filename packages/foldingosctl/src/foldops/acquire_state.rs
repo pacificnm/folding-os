@@ -33,7 +33,9 @@ pub fn load_foldops_acquire_state(paths: &AppliancePaths) -> Result<FoldOpsAcqui
     let path = foldops_acquire_state_path(paths);
     let content = match fs::read_to_string(&path) {
         Ok(content) => content,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(FoldOpsAcquireState::default()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(FoldOpsAcquireState::default())
+        }
         Err(error) => return Err(format!("read acquisition retry state: {error}")),
     };
     parse_foldops_acquire_state(&content)

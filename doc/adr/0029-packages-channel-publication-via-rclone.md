@@ -117,10 +117,13 @@ Supervisor “check for updates” reads these indexes per
 Add `scripts/publish-packages-release` that:
 
 1. accepts FoldOps manifest release id and tools version id
-2. runs build scripts when `--build` is passed (or expects prebuilt output)
-3. invokes `publish-foldops-bundles` and `publish-foldingos-tools`
-4. refreshes both channel `index.json` files
-5. prints public URLs for operator verification
+2. allows FoldOps and tools ids to differ so each channel can ship independently
+3. runs channel build scripts when `--build` is passed (or expects prebuilt output)
+4. builds tools releases with `build-foldingosctl-release --sync-overlay`
+   when `--build --tools` is requested
+5. invokes `publish-foldops-bundles` and `publish-foldingos-tools`
+6. refreshes both channel `index.json` files
+7. prints public URLs for operator verification
 
 Dry-run mode must list planned uploads without writing objects.
 
@@ -130,8 +133,16 @@ Publishing a new FoldOps release does **not** require an immediate OS image
 rebuild. The embedded bootstrap manifest in the OS image remains the floor.
 Supervisor assignment overrides the floor on running nodes per ADR-0023.
 
-Updating the embedded overlay manifest remains a **separate, optional** step
-when a new OS image is built (`--sync-overlay` on `build-foldops-bundles`).
+Publishing a new `foldingosctl` tools release also does **not** require an
+immediate OS image rebuild. The tools artifact may be built by
+`build-foldingosctl-release` and published directly to the tools channel. Passing
+`--sync-overlay` writes `overlay/usr/share/foldingos/manifests/tools.json` so
+the next OS image build embeds that tools pin as its bootstrap assignment.
+
+Updating embedded overlay pins is a release hygiene step, not an image rebuild
+requirement. Use `--sync-overlay` on `build-foldops-bundles` for FoldOps and on
+`build-foldingosctl-release` for tools when the next image should inherit the
+new package-channel release.
 
 ---
 

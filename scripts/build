@@ -114,6 +114,12 @@ if [ -f "${ROOTFS_TAR}" ]; then
   "${PROJECT_ROOT}/scripts/verify-foldops-manifest" "${ROOTFS_TAR}"
 fi
 
+echo "Staging tools channel artifact from image foldingosctl"
+"${PROJECT_ROOT}/scripts/stage-foldingosctl-tools-release"
+
+echo "Verifying appliance release sync"
+"${PROJECT_ROOT}/scripts/verify-appliance-release-sync"
+
 echo "Generating FoldingOS build artifacts"
 "${PROJECT_ROOT}/tools/release/generate-build-artifacts" \
   "${PROJECT_ROOT}" \

@@ -37,6 +37,9 @@ fn merge_states(primary: Option<FahLogState>, fallbacks: &[Option<FahLogState>])
         base.progress = merge_progress(base.progress, fb.progress);
         base.ppd = merge_field(&base.ppd, &fb.ppd);
         base.tpf = merge_field(&base.tpf, &fb.tpf);
+        base.folding_state = merge_field(&base.folding_state, &fb.folding_state);
+        base.unit_state = merge_field(&base.unit_state, &fb.unit_state);
+        base.folding_detail = merge_field(&base.folding_detail, &fb.folding_detail);
         if !fb.recent_errors.is_empty() {
             base.recent_errors = fb.recent_errors.clone();
         }

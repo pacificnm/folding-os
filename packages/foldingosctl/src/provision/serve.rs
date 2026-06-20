@@ -5,6 +5,7 @@ use crate::paths::AppliancePaths;
 use crate::provision::authorize::{
     authorize_provision_install, validate_install_stream_access, ProvisionAuthorizeRequest,
 };
+use crate::provision::boot::boot_install_disk_for_mac;
 use crate::provision::enrollment_api::{
     desired_version_for_node, handle_rollout_assign, register_agent, AgentRegistrationRequest,
     RolloutAssignRequest,
@@ -20,7 +21,6 @@ use crate::provision::util::{
     empty_human_result, ensure_enrollment_token, read_provision_listen_host,
     validate_enrollment_token, INSTALL_SESSION_HEADER, UPDATE_SESSION_HEADER,
 };
-use crate::provision::boot::boot_install_disk_for_mac;
 use crate::registry_image::RegistryEntry;
 use crate::role::require_supervisor_role;
 
@@ -33,7 +33,10 @@ pub fn provision_serve(paths: &AppliancePaths) -> Result<serde_json::Value, Stri
         "Enrollment token is stored at {}",
         paths.enrollment_token.display()
     );
-    println!("Generated or loaded enrollment token prefix: {}...", &token[..8.min(token.len())]);
+    println!(
+        "Generated or loaded enrollment token prefix: {}...",
+        &token[..8.min(token.len())]
+    );
     serve_forever(&listen_host, |request| handle_request(paths, request))?;
     Ok(empty_human_result())
 }
@@ -85,7 +88,8 @@ fn handle_desired_version(paths: &AppliancePaths, request: &HttpRequest) -> Http
     if node_id.is_empty() {
         return HttpResponse::error(400, "node_id is required");
     }
-    if let Err(error) = validate_enrollment_token(paths, header_value(request, "x-foldingos-enrollment-token"))
+    if let Err(error) =
+        validate_enrollment_token(paths, header_value(request, "x-foldingos-enrollment-token"))
     {
         return HttpResponse::error(401, &error);
     }
@@ -95,7 +99,11 @@ fn handle_desired_version(paths: &AppliancePaths, request: &HttpRequest) -> Http
             Err(error) => HttpResponse::error(500, &error.to_string()),
         },
         Err(error) => {
-            let status = if error.contains("not registered") { 403 } else { 400 };
+            let status = if error.contains("not registered") {
+                403
+            } else {
+                400
+            };
             HttpResponse::error(status, &error)
         }
     }
@@ -118,7 +126,11 @@ fn handle_rollout_assign_http(paths: &AppliancePaths, request: &HttpRequest) -> 
             Err(error) => HttpResponse::error(500, &error.to_string()),
         },
         Err(error) => {
-            let status = if error.contains("not registered") { 403 } else { 400 };
+            let status = if error.contains("not registered") {
+                403
+            } else {
+                400
+            };
             HttpResponse::error(status, &error)
         }
     }
@@ -155,7 +167,11 @@ fn handle_update_status_http(paths: &AppliancePaths, request: &HttpRequest) -> H
     match handle_update_status(paths, status_request) {
         Ok(()) => HttpResponse::json(200, br#"{"status":"ok"}"#.to_vec()),
         Err(error) => {
-            let status = if error.contains("not registered") { 404 } else { 400 };
+            let status = if error.contains("not registered") {
+                404
+            } else {
+                400
+            };
             HttpResponse::error(status, &error)
         }
     }
@@ -172,7 +188,11 @@ fn handle_provision_authorize(paths: &AppliancePaths, request: &HttpRequest) -> 
             Err(error) => HttpResponse::error(500, &error.to_string()),
         },
         Err(error) => {
-            let status = if error.contains("enrollment token") { 401 } else { 400 };
+            let status = if error.contains("enrollment token") {
+                401
+            } else {
+                400
+            };
             HttpResponse::error(status, &error)
         }
     }
@@ -205,11 +225,12 @@ fn handle_provision_image_stream(paths: &AppliancePaths, request: &HttpRequest) 
         match validate_update_stream_access(paths, update_session_id, &version, enrollment_token) {
             Ok((_, entry)) => entry,
             Err(error) => {
-                let status = if error.contains("enrollment token") || error.contains("update session") {
-                    401
-                } else {
-                    400
-                };
+                let status =
+                    if error.contains("enrollment token") || error.contains("update session") {
+                        401
+                    } else {
+                        400
+                    };
                 return HttpResponse::error(status, &error);
             }
         }
@@ -217,11 +238,12 @@ fn handle_provision_image_stream(paths: &AppliancePaths, request: &HttpRequest) 
         match validate_install_stream_access(paths, session_id, &version, enrollment_token) {
             Ok((_, entry)) => entry,
             Err(error) => {
-                let status = if error.contains("enrollment token") || error.contains("install session") {
-                    401
-                } else {
-                    400
-                };
+                let status =
+                    if error.contains("enrollment token") || error.contains("install session") {
+                        401
+                    } else {
+                        400
+                    };
                 return HttpResponse::error(status, &error);
             }
         }
@@ -241,9 +263,10 @@ fn stream_registry_image(entry: &RegistryEntry) -> HttpResponse {
         200,
         "application/octet-stream",
         content,
-        vec![
-            ("X-FoldingOS-Image-SHA256".into(), entry.image_sha256.clone()),
-        ],
+        vec![(
+            "X-FoldingOS-Image-SHA256".into(),
+            entry.image_sha256.clone(),
+        )],
     )
 }
 
@@ -273,13 +296,21 @@ fn handle_ipxe_install_script(paths: &AppliancePaths, request: &HttpRequest) -> 
     match render_ipxe_install_script(paths, &host, mac, token, install_disk) {
         Ok(script) => HttpResponse::text(200, "text/plain", script.into_bytes()),
         Err(error) => {
-            let status = if error.contains("enrollment token") { 401 } else { 403 };
+            let status = if error.contains("enrollment token") {
+                401
+            } else {
+                403
+            };
             HttpResponse::error(status, &error)
         }
     }
 }
 
-fn handle_boot_asset(paths: &AppliancePaths, filename: &str, request: &HttpRequest) -> HttpResponse {
+fn handle_boot_asset(
+    paths: &AppliancePaths,
+    filename: &str,
+    request: &HttpRequest,
+) -> HttpResponse {
     if request.method != "GET" {
         return HttpResponse::error(405, "method not allowed");
     }
@@ -288,7 +319,8 @@ fn handle_boot_asset(paths: &AppliancePaths, filename: &str, request: &HttpReque
         Ok(content) => content,
         Err(_) => return HttpResponse::error(404, "boot asset is unavailable"),
     };
-    let content_type = if Path::new(filename).extension().and_then(|ext| ext.to_str()) == Some("gz") {
+    let content_type = if Path::new(filename).extension().and_then(|ext| ext.to_str()) == Some("gz")
+    {
         "application/gzip"
     } else {
         "application/octet-stream"

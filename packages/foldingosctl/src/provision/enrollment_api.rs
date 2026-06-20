@@ -158,9 +158,15 @@ pub fn desired_version_for_node(
         current_image_version: record.current_image_version,
         desired_version: desired,
         desired_foldops_manifest_release: record.desired_foldops_manifest_release.clone(),
-        desired_foldops_manifest: resolve_desired_foldops_manifest_toml(paths, &record.desired_foldops_manifest_release),
+        desired_foldops_manifest: resolve_desired_foldops_manifest_toml(
+            paths,
+            &record.desired_foldops_manifest_release,
+        ),
         desired_tools_version: record.desired_tools_version.clone(),
-        desired_tools_assignment: resolve_desired_tools_assignment(paths, &record.desired_tools_version),
+        desired_tools_assignment: resolve_desired_tools_assignment(
+            paths,
+            &record.desired_tools_version,
+        ),
     })
 }
 
@@ -210,7 +216,10 @@ pub fn handle_rollout_assign(
         && update.foldops_manifest_release.is_none()
         && update.tools_version.is_none()
     {
-        return Err("assignment requires at least one of --version, --foldops-manifest, or --tools-version".into());
+        return Err(
+            "assignment requires at least one of --version, --foldops-manifest, or --tools-version"
+                .into(),
+        );
     }
 
     let updated = assign_software_versions(

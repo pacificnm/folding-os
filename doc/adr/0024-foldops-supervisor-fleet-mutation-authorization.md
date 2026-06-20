@@ -1,6 +1,6 @@
 # ADR-0024: FoldOps Supervisor Fleet Mutation Authorization
 
-**Status:** Proposed
+**Status:** Accepted (amended 2026-06-18 for setuid `foldingosctl`)
 
 **Date:** 2026-06-14
 
@@ -83,14 +83,51 @@ Milestone 4 baseline policy:
 | Command group | Subcommand | Purpose |
 | --- | --- | --- |
 | `provision` | `assign` | Set desired image, FoldOps manifest, and tools versions for enrolled agents |
+| `provision` | `assign-local` | Set supervisor-local FoldOps/tools assignment |
 | `provision` | `allow-boot` | Authorize PXE/iPXE clients and optional install-disk pins |
 
-No other mutating `foldingosctl` commands are exposed to the `foldops` user in
-Milestone 4. Agent-role nodes do not install this automation policy for
-mutation; `foldingosctl` role checks remain mandatory even when paths are
-group-writable.
+Milestone 5 extends supervisor automation for software apply and recovery:
 
-### 3. Filesystem permissions on the supervisor
+| Command group | Subcommand | Purpose |
+| --- | --- | --- |
+| `foldops` | `acquire` | Download, verify, and activate assigned FoldOps packages |
+| `tools` | `acquire` | Download, verify, and replace `/usr/bin/foldingosctl` |
+| `recovery` | `export` | Export supervisor backup archive |
+| `recovery` | `import` | Restore supervisor backup archive |
+
+Agent-role automation policy (separate file) authorizes `config activate`,
+`foldops acquire`, and `tools acquire` for the same `foldops` service identity.
+
+No other mutating `foldingosctl` commands are exposed to the `foldops` user unless
+added to the shipped policy file. Agent-role nodes do not install supervisor
+mutation permissions; `foldingosctl` role checks remain mandatory even when paths
+are group-writable.
+
+### 3. Setuid `foldingosctl` privilege boundary
+
+FoldOps **must not** run privileged OS operations directly. `foldops-supervisor`
+and `foldops-agent` delegate only by subprocess:
+
+```text
+/usr/bin/foldingosctl <group> <command> [--format json]
+```
+
+`/usr/bin/foldingosctl` is installed **`root:root` mode `4755`** (setuid root).
+On startup the binary **drops to the real invoking UID** (typically `foldops`).
+For commands that require root (software acquire, recovery, and similar), it:
+
+1. verifies the real UID is `foldops`, `foldingos-admin`, or `root`
+2. for the `foldops` user, verifies the command appears in the automation policy
+3. temporarily re-elevates with `seteuid(0)` for the command duration only
+4. drops back to the real UID before exit
+
+Read-only commands (`inspect`, fleet assignment to group-writable paths, and
+similar) run without re-elevation.
+
+`foldops-supervisor` itself **must not** invoke `sudo`, `systemctl`, or write
+root-owned paths directly. Elevation happens **inside `foldingosctl` only**.
+
+### 4. Filesystem permissions on the supervisor
 
 Mutating delegated commands write only to the following supervisor state paths:
 
@@ -125,23 +162,24 @@ Role-specific permission application may occur during supervisor direct-flash
 bootstrap (`foldingosctl provision install` / `foldingosctl foldops provision`)
 rather than through identical tmpfiles rules on agent-role nodes.
 
-### 4. Authorization boundary
+### 5. Authorization boundary
 
 - **FoldOps HTTP API** is the remote operator interface for fleet mutation on
   the supervisor.
 - **`foldingosctl`** remains the sole local implementation of validation,
-  registry checks, and persistence.
+  registry checks, persistence, and **privileged execution** for delegated
+  commands.
 - **`foldops-supervisor`** must not parse or rewrite enrollment, registry, or
-  allowlist files directly.
-- **`foldingos-admin`** retains full operator CLI access, including commands not
-  delegated to FoldOps.
+  allowlist files directly, and must not escalate outside `foldingosctl`.
+- **`foldingos-admin`** retains full operator CLI access through the same setuid
+  binary (elevation without automation-policy restriction).
 
-### 5. Audit and failure behavior
+### 6. Audit and failure behavior
 
 - `foldops-supervisor` logs delegation failures with the structured
   `foldingosctl` error document when `--format json` is used.
-- Permission or policy denial must surface as an HTTP API error; the service
-  must not escalate to root.
+- Automation policy denial or missing setuid installation must surface as an
+  HTTP API error; **`foldops-supervisor` must not call `sudo` or run as root**.
 - FoldOps unavailability must not block node boot, provisioning services, or
   Folding@home operation.
 
@@ -155,11 +193,23 @@ Rejected. Running `foldops-supervisor` as root or invoking unrestricted
 `sudo foldingosctl` from the service expands blast radius beyond fleet mutation
 and conflicts with the unprivileged FoldOps service model.
 
-### Setuid `foldingosctl` helper
+### Setuid `foldingosctl`
 
-Rejected for Milestone 4. Group permissions on explicit state paths plus a
-fixed automation policy file are simpler to audit and match the existing
-`foldops` service identity.
+**Accepted (amended 2026-06-18).** Milestone 4 initially relied on group-writable
+state paths alone. Milestone 5 software apply (`foldops acquire`, `tools acquire`)
+and recovery require root privileges (`/usr/bin` replacement, systemd restarts,
+root-owned state trees). Group permissions alone cannot satisfy those commands.
+
+The project installs `/usr/bin/foldingosctl` setuid root. The binary drops to the
+real invoking UID by default, re-elevates only for policy-approved commands when
+invoked by the `foldops` user, and never grants FoldOps HTTP services direct
+root access.
+
+### systemd path-trigger delegation
+
+Rejected. An intermediate trigger directory and root oneshot dispatcher added
+operational complexity without keeping privilege enforcement inside
+`foldingosctl`.
 
 ### Reimplement mutation in `foldops-supervisor`
 

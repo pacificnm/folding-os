@@ -120,8 +120,9 @@ fn extract_fah_tar_entry(
         }
         tar::EntryType::Regular => {
             if let Some(parent) = target.parent() {
-                fs::create_dir_all(parent)
-                    .map_err(|error| format!("create parent directory for {:?}: {error}", relative))?;
+                fs::create_dir_all(parent).map_err(|error| {
+                    format!("create parent directory for {:?}: {error}", relative)
+                })?;
             }
             let mut mode = header.mode().unwrap_or(0) & 0o777;
             if mode == 0 {

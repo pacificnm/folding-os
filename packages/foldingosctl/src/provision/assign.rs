@@ -3,9 +3,15 @@ use crate::assignments::{
     apply_supervisor_local_assignments_if_needed,
 };
 use crate::automation_policy::require_supervisor_automation_mutation;
-use crate::enrollment::{load_enrollment_record, load_enrollment_records_sorted, save_enrollment_record};
+use crate::enrollment::{
+    load_enrollment_record, load_enrollment_records_sorted, save_enrollment_record,
+};
 use crate::fs_atomic::contains_string;
+use crate::identity::read_node_id;
 use crate::paths::AppliancePaths;
+use crate::registry_foldops_tools::{
+    ensure_foldops_release_in_registry, ensure_tools_release_in_registry,
+};
 use crate::registry_image::{
     is_bootstrap_assignment_label, load_foldops_registry_entry, load_registry_entry,
     load_tools_registry_entry,
@@ -203,6 +209,13 @@ pub(crate) fn assign_software_versions(
     require_supervisor_automation_mutation(paths, "provision", "assign")?;
     validate_assignment_update(paths, &update)?;
 
+    if scope == "node" {
+        let local_node_id = read_node_id(paths).unwrap_or_default();
+        if !local_node_id.is_empty() && node_id.trim() == local_node_id.trim() {
+            return apply_local_supervisor_assignment(paths, update);
+        }
+    }
+
     let index = crate::enrollment::load_enrollment_index_internal(paths)?;
     if index.node_ids().is_empty() {
         return Err("no enrolled agents are available".into());
@@ -256,7 +269,29 @@ pub(crate) fn assign_software_versions(
     Ok(updated)
 }
 
-fn validate_assignment_update(paths: &AppliancePaths, update: &AssignmentUpdate) -> Result<(), String> {
+fn apply_local_supervisor_assignment(
+    paths: &AppliancePaths,
+    update: AssignmentUpdate,
+) -> Result<i32, String> {
+    if let Some(release) = update.foldops_manifest_release.as_ref() {
+        let release = release.trim();
+        if !release.is_empty() {
+            apply_assigned_foldops_manifest_for_release(paths, release)?;
+        }
+    }
+    if let Some(version) = update.tools_version.as_ref() {
+        let version = version.trim();
+        if !version.is_empty() {
+            apply_assigned_tools_version_for_release(paths, version)?;
+        }
+    }
+    Ok(1)
+}
+
+fn validate_assignment_update(
+    paths: &AppliancePaths,
+    update: &AssignmentUpdate,
+) -> Result<(), String> {
     if let Some(version) = update.image_version.as_ref() {
         let version = version.trim();
         if version.is_empty() {
@@ -274,6 +309,7 @@ fn validate_assignment_update(paths: &AppliancePaths, update: &AssignmentUpdate)
     if let Some(release) = update.foldops_manifest_release.as_ref() {
         let release = release.trim();
         if !release.is_empty() && !is_bootstrap_assignment_label(release) {
+            ensure_foldops_release_in_registry(paths, release)?;
             let entry = load_foldops_registry_entry(paths, release)?;
             if entry.rollout_state != "ready" {
                 return Err(format!(
@@ -285,6 +321,7 @@ fn validate_assignment_update(paths: &AppliancePaths, update: &AssignmentUpdate)
     if let Some(version) = update.tools_version.as_ref() {
         let version = version.trim();
         if !version.is_empty() && !is_bootstrap_assignment_label(version) {
+            ensure_tools_release_in_registry(paths, version)?;
             let entry = load_tools_registry_entry(paths, version)?;
             if entry.rollout_state != "ready" {
                 return Err(format!(

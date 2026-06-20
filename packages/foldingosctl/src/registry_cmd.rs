@@ -8,7 +8,11 @@ use crate::registry_import::import_bootstrap;
 use crate::registry_poll::poll;
 use crate::role::require_supervisor_role;
 
-pub fn run(paths: &AppliancePaths, subcommand: &str, args: &[String]) -> Result<RegistryOutput, String> {
+pub fn run(
+    paths: &AppliancePaths,
+    subcommand: &str,
+    args: &[String],
+) -> Result<RegistryOutput, String> {
     match subcommand {
         "list" => {
             require_supervisor_role(paths)?;
@@ -71,7 +75,8 @@ mod tests {
 
     #[test]
     fn list_registry_returns_empty_versions() {
-        let root = std::env::temp_dir().join(format!("foldingosctl-registry-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("foldingosctl-registry-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
         let paths = AppliancePaths {
@@ -94,10 +99,8 @@ mod tests {
 
     #[test]
     fn show_registry_returns_entry() {
-        let root = std::env::temp_dir().join(format!(
-            "foldingosctl-registry-show-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("foldingosctl-registry-show-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
         let paths = AppliancePaths {
@@ -133,7 +136,8 @@ mod tests {
         )
         .unwrap();
 
-        let RegistryOutput::Json(data) = run(&paths, "show", &[String::from("0.2.0")]).unwrap() else {
+        let RegistryOutput::Json(data) = run(&paths, "show", &[String::from("0.2.0")]).unwrap()
+        else {
             panic!("expected json output");
         };
         assert_eq!(data["foldingos_version"], "0.2.0");

@@ -73,7 +73,10 @@ fn clear_assigned_foldops_manifest(paths: &AppliancePaths) -> Result<(), String>
     }
 }
 
-fn write_assigned_tools_version(paths: &AppliancePaths, assignment: &ToolsAssignment) -> Result<(), String> {
+fn write_assigned_tools_version(
+    paths: &AppliancePaths,
+    assignment: &ToolsAssignment,
+) -> Result<(), String> {
     if let Some(parent) = paths.tools_assigned_version.parent() {
         fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     }
@@ -93,16 +96,13 @@ fn clear_assigned_tools_version(paths: &AppliancePaths) -> Result<(), String> {
 
 pub fn should_apply_local_supervisor_assignments(
     paths: &AppliancePaths,
-    scope: &str,
+    _scope: &str,
     target_node_id: &str,
 ) -> Result<bool, String> {
     if require_supervisor_role(paths).is_err() {
         return Ok(false);
     }
     let local_node_id = read_node_id(paths).unwrap_or_default();
-    if scope == "fleet" {
-        return Ok(true);
-    }
     Ok(target_node_id.trim() == local_node_id)
 }
 
@@ -116,6 +116,23 @@ pub fn apply_supervisor_local_assignments_if_needed(
         apply_local_software_assignments(paths, record)?;
     }
     Ok(())
+}
+
+pub fn sync_enrolled_agent_software_assignments(paths: &AppliancePaths) -> Result<(), String> {
+    use crate::provision::util::{
+        agent_enrollment_node_id, read_enrollment_token, read_supervisor_base_url,
+    };
+
+    let node_id = match agent_enrollment_node_id(paths) {
+        Ok(node_id) => node_id,
+        Err(_) => return Ok(()),
+    };
+    let supervisor_url = read_supervisor_base_url(paths)?;
+    if supervisor_url.is_empty() {
+        return Ok(());
+    }
+    let token = read_enrollment_token(paths)?;
+    sync_local_software_assignments_from_supervisor(paths, &supervisor_url, &node_id, &token)
 }
 
 #[derive(Debug, Deserialize)]

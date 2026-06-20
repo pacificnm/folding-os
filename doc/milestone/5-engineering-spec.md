@@ -203,12 +203,15 @@ Same shape as apply-foldops; proxies to agent `POST /software/tools-acquire`.
 
 ## `POST /api/software/apply-local`
 
-Runs on the **supervisor role only**:
+Runs on the **supervisor role only** via `foldops-supervisor` subprocess:
 
 1. `foldingosctl foldops acquire --format json` when FoldOps assignment differs
    from active or when `force` is true
 2. `foldingosctl tools acquire --format json` under the same rules
-3. restarts approved services
+
+Privileged steps execute inside setuid `/usr/bin/foldingosctl` per
+[ADR-0024](../adr/0024-foldops-supervisor-fleet-mutation-authorization.md).
+FoldOps does not invoke `sudo` or perform privileged OS operations directly.
 
 Request:
 
@@ -282,7 +285,7 @@ Agent automation policy must authorize recovery commands only on supervisor role
 | Script | Action |
 | --- | --- |
 | `scripts/build-foldops-bundles` | build bundles (existing) |
-| `scripts/build-foldingosctl-release` | build tools binary (existing) |
+| `scripts/build-foldingosctl-release` | build tools binary; `--sync-overlay` pins next image bootstrap tools assignment (existing) |
 | `scripts/publish-foldops-bundles <release>` | rclone upload FoldOps release (existing) |
 | `scripts/publish-foldingos-tools <version>` | rclone upload tools release (**new**) |
 | `scripts/publish-packages-release` | build (optional) + publish both + refresh indexes (**new**) |
@@ -294,6 +297,17 @@ Operator workflow:
 ```bash
 ./scripts/publish-packages-release --foldops 0.1.0-2 --tools 0.1.1 --build
 ```
+
+Tools-only workflow:
+
+```bash
+./scripts/build-foldingosctl-release --version 0.1.1 --sync-overlay
+./scripts/publish-foldingos-tools 0.1.1
+```
+
+Publishing tools does not require `./scripts/build`; `--sync-overlay` writes the
+overlay `tools.json` pin so the next OS image build embeds the current tools
+assignment.
 
 Requires rclone remote configured at `~/.config/rclone/rclone.conf`.
 

@@ -1,5 +1,59 @@
 export type LogSource = "fah" | "work";
 
+export type SupervisorLogSource = "foldops" | "foldingosctl";
+
+export interface SupervisorLogsResponse {
+  source: SupervisorLogSource;
+  lines: string[];
+  path: string | null;
+  updated_at: string | null;
+  live: boolean;
+}
+
+export type NetworkInstallStatus =
+  | "awaiting_install"
+  | "online"
+  | "offline"
+  | "installed";
+
+export interface AllowBootDevice {
+  mac_address: string;
+  install_disk?: string | null;
+  install_status?: "pending" | "installed";
+  network_status?: NetworkInstallStatus;
+  hostname?: string | null;
+  node_id?: string | null;
+  primary_ipv4?: string | null;
+  online?: boolean | null;
+  registered_at?: string | null;
+  last_seen_at?: string | null;
+}
+
+export interface AllowBootDevicesResponse {
+  devices: AllowBootDevice[];
+}
+
+export interface AllowBootResult {
+  mac_address: string;
+  already_allowed: boolean;
+  install_disk?: string | null;
+}
+
+export interface DenyBootResult {
+  mac_address: string;
+  already_removed: boolean;
+}
+
+export interface DenyBootMutationResponse {
+  ok: boolean;
+  result: DenyBootResult;
+}
+
+export interface AllowBootMutationResponse {
+  ok: boolean;
+  result: AllowBootResult;
+}
+
 export interface NodeLogs {
   fah: string[];
   work: string[];
@@ -25,6 +79,9 @@ export interface MachineSummary {
   first_seen: string;
   last_seen: string;
   online: boolean;
+  node_id?: string | null;
+  installation_role?: string | null;
+  foldingos_version?: string | null;
   latest: {
     created_at: string;
     fah_status: string;
@@ -42,18 +99,58 @@ export interface MachineSummary {
     apt_updates: number;
     reboot_required: boolean;
     payload?: {
+      hostname?: string;
+      nodeId?: string | null;
+      installationRole?: string | null;
+      foldingosVersion?: string | null;
+      primaryIpv4?: string | null;
       fah: {
+        activeClientVersion?: string | null;
+        expectedClientVersion?: string | null;
+        clientInstalled?: boolean | null;
+        clientVerified?: boolean | null;
+        acquisitionFailures?: number | null;
+        acquisitionNextAttemptUnix?: number | null;
+        acquisitionLastFailureReason?: string | null;
+        logPath?: string | null;
+        logReadable?: boolean | null;
         tpf: string | null;
+        foldingState?: string | null;
+        unitState?: string | null;
+        foldingDetail?: string | null;
         recentErrors: string[];
         statsDonor?: string | null;
         statsTeam?: string | null;
+        configUsername?: string | null;
+        configTeam?: number | null;
+        configPasskeyConfigured?: boolean | null;
+        configCpus?: number | null;
       };
       logs?: NodeLogs;
       system: {
         loadAvg: [number, number, number];
         uptime: number;
+        cpuUsage?: number | null;
         cpuTemp: number | null;
         chassisTemp: number | null;
+        memory?: {
+          total: number;
+          used: number;
+          free: number;
+          percent: number;
+        };
+        disk?: {
+          total: number;
+          used: number;
+          free: number;
+          percent: number;
+        };
+        network?: {
+          rxBytes: number;
+          txBytes: number;
+          rxSec?: number | null;
+          txSec?: number | null;
+        };
       };
     };
   } | null;
@@ -124,40 +221,6 @@ export interface AlertsStatusResponse {
   };
 }
 
-export type DeployRunStatus = "running" | "completed" | "failed";
-
-export type DeployHostStatus =
-  | "pending"
-  | "running"
-  | "success"
-  | "failed"
-  | "offline"
-  | "skipped";
-
-export interface DeployHostResult {
-  hostname: string;
-  status: DeployHostStatus;
-  exit_code: number | null;
-  message: string;
-  stdout: string;
-  stderr: string;
-  duration_ms: number | null;
-  started_at: string | null;
-  finished_at: string | null;
-}
-
-export interface DeployRun {
-  id: string;
-  created_at: string;
-  status: DeployRunStatus;
-  hostnames: string[];
-  results: Record<string, DeployHostResult>;
-}
-
-export interface DeployRunsResponse {
-  runs: DeployRun[];
-}
-
 export type ControlAction =
   | "agent.start"
   | "agent.stop"
@@ -174,6 +237,9 @@ export interface ControlStatus {
   hostname?: string;
   foldops_agent: string;
   fah_client: string;
+  fah_folding_state?: string;
+  fah_unit_state?: string | null;
+  fah_folding_detail?: string | null;
 }
 
 export interface ControlResult {
@@ -264,6 +330,7 @@ export interface SoftwareUpdatesResponse {
 }
 
 export interface FleetAssignRequest {
+  local?: boolean;
   node_id?: string;
   all?: boolean;
   version?: string;
@@ -305,6 +372,25 @@ export interface FleetSoftwareApplyResponse {
   results: FleetSoftwareApplyResult[];
 }
 
+export interface SoftwareInstallLogEntry {
+  timestamp: string;
+  phase: string;
+  operation: string;
+  command: string;
+  ok: boolean;
+  exit_code?: number | null;
+  message: string;
+  stdout?: string;
+  stderr?: string;
+  detail?: unknown;
+}
+
+export interface SoftwareInstallLogResponse {
+  path: string;
+  updated_at: string;
+  entries: SoftwareInstallLogEntry[];
+}
+
 export interface RecoveryExportResponse {
   ok: boolean;
   path: string;
@@ -315,4 +401,49 @@ export interface RecoveryExportResponse {
   include_secrets?: boolean;
   file_count?: number;
   download_url?: string;
+}
+
+export interface FoldinghomeConfigRequest {
+  username: string;
+  team: number;
+  passkey?: string;
+  passkey_secret?: string;
+}
+
+export interface FoldinghomeConfigResponse {
+  hostname: string;
+  ok: boolean;
+  domain?: string;
+  candidate?: string;
+  activated?: boolean;
+  ingested?: boolean;
+  ingest_error?: string | null;
+  error?: string;
+}
+
+export interface ManagedService {
+  unit: string;
+  name: string;
+  status: string;
+  loaded: boolean;
+  restartable: boolean;
+}
+
+export interface ServicesResponse {
+  installation_role?: string;
+  services: ManagedService[];
+}
+
+export interface ServiceRestartResponse {
+  unit: string;
+  name: string;
+  restarted: boolean;
+  scheduled?: boolean;
+  message?: string;
+}
+
+export interface ServicesRestartAllResponse {
+  restarted: string[];
+  count: number;
+  message?: string;
 }

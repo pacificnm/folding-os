@@ -18,9 +18,8 @@ const FAH_MANIFEST_MINIMUM_VERSION: &str = "0.1.0";
 
 static FAH_SHA256_PATTERN: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[0-9a-f]{64}$").expect("sha256 pattern compiles"));
-static FAH_CLIENT_VERSION_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^8\.5\.[0-9]+$").expect("fah client version pattern compiles")
-});
+static FAH_CLIENT_VERSION_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^8\.5\.[0-9]+$").expect("fah client version pattern compiles"));
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FahManifest {
@@ -47,7 +46,10 @@ pub fn validate_fah_manifest_embedded(paths: &AppliancePaths) -> Result<(), Stri
     Ok(())
 }
 
-pub fn load_fah_manifest(paths: &AppliancePaths, path: &std::path::Path) -> Result<FahManifest, String> {
+pub fn load_fah_manifest(
+    paths: &AppliancePaths,
+    path: &std::path::Path,
+) -> Result<FahManifest, String> {
     if path != paths.fah_embedded_manifest {
         return Err("v0.1.0 accepts only the embedded approved manifest".into());
     }
@@ -172,20 +174,18 @@ pub fn parse_fah_manifest(content: &str) -> Result<FahManifest, String> {
 
         match key {
             "schema_version" => {
-                let parsed = value
-                    .parse::<i32>()
-                    .map_err(|_| format!("line {}: schema_version must be an integer", number + 1))?;
+                let parsed = value.parse::<i32>().map_err(|_| {
+                    format!("line {}: schema_version must be an integer", number + 1)
+                })?;
                 manifest.schema_version = parsed;
             }
             "artifact_size" => {
-                let parsed = value
-                    .parse::<i64>()
-                    .map_err(|_| {
-                        format!(
-                            "line {}: artifact_size must be a positive integer",
-                            number + 1
-                        )
-                    })?;
+                let parsed = value.parse::<i64>().map_err(|_| {
+                    format!(
+                        "line {}: artifact_size must be a positive integer",
+                        number + 1
+                    )
+                })?;
                 if parsed <= 0 {
                     return Err(format!(
                         "line {}: artifact_size must be a positive integer",
@@ -196,7 +196,10 @@ pub fn parse_fah_manifest(content: &str) -> Result<FahManifest, String> {
             }
             "client_version" => {
                 manifest.client_version = parse_quoted_string(value).map_err(|_| {
-                    format!("line {}: client_version must be a quoted string", number + 1)
+                    format!(
+                        "line {}: client_version must be a quoted string",
+                        number + 1
+                    )
                 })?;
             }
             "architecture" => {
@@ -210,13 +213,15 @@ pub fn parse_fah_manifest(content: &str) -> Result<FahManifest, String> {
                 })?;
             }
             "sha256" => {
-                manifest.sha256 = parse_quoted_string(value).map_err(|_| {
-                    format!("line {}: sha256 must be a quoted string", number + 1)
-                })?;
+                manifest.sha256 = parse_quoted_string(value)
+                    .map_err(|_| format!("line {}: sha256 must be a quoted string", number + 1))?;
             }
             "artifact_format" => {
                 manifest.artifact_format = parse_quoted_string(value).map_err(|_| {
-                    format!("line {}: artifact_format must be a quoted string", number + 1)
+                    format!(
+                        "line {}: artifact_format must be a quoted string",
+                        number + 1
+                    )
                 })?;
             }
             "minimum_foldingos_version" => {
@@ -234,7 +239,10 @@ pub fn parse_fah_manifest(content: &str) -> Result<FahManifest, String> {
             }
             "executable_path" => {
                 manifest.executable_path = parse_quoted_string(value).map_err(|_| {
-                    format!("line {}: executable_path must be a quoted string", number + 1)
+                    format!(
+                        "line {}: executable_path must be a quoted string",
+                        number + 1
+                    )
                 })?;
             }
             _ => return Err(format!("line {}: unknown key {key:?}", number + 1)),
@@ -339,7 +347,8 @@ pub fn validate_fah_manifest(manifest: &FahManifest) -> Result<(), String> {
             "manifest artifact_url must use HTTPS from the approved official origin: {FAH_APPROVED_ARTIFACT_ORIGIN}"
         )
     })?;
-    if artifact_url.scheme() != "https" || artifact_url.host_str() != Some(FAH_APPROVED_ARTIFACT_ORIGIN)
+    if artifact_url.scheme() != "https"
+        || artifact_url.host_str() != Some(FAH_APPROVED_ARTIFACT_ORIGIN)
     {
         return Err(format!(
             "manifest artifact_url must use HTTPS from the approved official origin: {FAH_APPROVED_ARTIFACT_ORIGIN}"
@@ -348,6 +357,12 @@ pub fn validate_fah_manifest(manifest: &FahManifest) -> Result<(), String> {
     let path = artifact_url.path();
     if path.ends_with("/latest.deb") || path.ends_with("latest.deb") {
         return Err("manifest artifact_url must not reference an unpinned latest artifact".into());
+    }
+    if path.contains("/releases/beta/") {
+        return Err("manifest artifact_url must use the public release channel, not beta".into());
+    }
+    if manifest.client_version != "8.5.5" {
+        return Err("manifest client_version must be pinned to 8.5.5".into());
     }
 
     let terms_url = Url::parse(&manifest.terms_url)
@@ -374,30 +389,31 @@ pub fn validate_fah_executable_path(path: &str) -> Result<(), String> {
     if !path.starts_with(FAH_EXECUTABLE_PATH_PREFIX) {
         return Err("manifest executable_path must remain under /data/apps/fah/current".into());
     }
-    let cleaned = std::path::Path::new(path)
-        .components()
-        .fold(String::new(), |mut acc, component| {
-            use std::path::Component;
-            match component {
-                Component::RootDir => acc.push('/'),
-                Component::Normal(part) => {
-                    if !acc.is_empty() && !acc.ends_with('/') {
-                        acc.push('/');
+    let cleaned =
+        std::path::Path::new(path)
+            .components()
+            .fold(String::new(), |mut acc, component| {
+                use std::path::Component;
+                match component {
+                    Component::RootDir => acc.push('/'),
+                    Component::Normal(part) => {
+                        if !acc.is_empty() && !acc.ends_with('/') {
+                            acc.push('/');
+                        }
+                        acc.push_str(&part.to_string_lossy());
                     }
-                    acc.push_str(&part.to_string_lossy());
-                }
-                Component::ParentDir => {
-                    if let Some(pos) = acc.rfind('/') {
-                        acc.truncate(pos);
-                    } else {
-                        acc.clear();
+                    Component::ParentDir => {
+                        if let Some(pos) = acc.rfind('/') {
+                            acc.truncate(pos);
+                        } else {
+                            acc.clear();
+                        }
                     }
+                    Component::CurDir => {}
+                    Component::Prefix(_) => {}
                 }
-                Component::CurDir => {}
-                Component::Prefix(_) => {}
-            }
-            acc
-        });
+                acc
+            });
     if cleaned != path || path.contains("..") {
         return Err("manifest executable_path must not contain path traversal".into());
     }
@@ -436,11 +452,11 @@ mod tests {
     use super::*;
 
     const VALID_FAH_MANIFEST: &str = r#"schema_version = 1
-client_version = "8.5.6"
+client_version = "8.5.5"
 architecture = "x86_64"
-artifact_url = "https://download.foldingathome.org/releases/beta/fah-client/debian-10-64bit/release/fah-client_8.5.6_amd64.deb"
-artifact_size = 3205180
-sha256 = "643de04033a1cb972a81e3a193d710e919a4f34634a987f11adc4cee61fdaefe"
+artifact_url = "https://download.foldingathome.org/releases/public/fah-client/debian-10-64bit/release/fah-client_8.5.5_amd64.deb"
+artifact_size = 3180500
+sha256 = "4f9c8bed9b2893752afb87e2796512ca0ca300ffc3d6035c518d56360370886c"
 artifact_format = "deb"
 minimum_foldingos_version = "0.1.0"
 terms_url = "https://foldingathome.org/faq/opensource/"
@@ -456,7 +472,7 @@ arguments = [
     fn parse_approved_fah_manifest() {
         let manifest = parse_fah_manifest(VALID_FAH_MANIFEST).expect("parse manifest");
         validate_fah_manifest(&manifest).expect("validate manifest");
-        assert_eq!(manifest.client_version, "8.5.6");
+        assert_eq!(manifest.client_version, "8.5.5");
         assert_eq!(manifest.arguments.len(), 3);
     }
 
@@ -471,11 +487,16 @@ latest = true"#,
     }
 
     #[test]
+    fn reject_beta_artifact_url() {
+        let content = VALID_FAH_MANIFEST.replace("/releases/public/", "/releases/beta/");
+        let manifest = parse_fah_manifest(&content).expect("parse manifest");
+        assert!(validate_fah_manifest(&manifest).is_err());
+    }
+
+    #[test]
     fn reject_unpinned_latest_artifact_url() {
-        let content = VALID_FAH_MANIFEST.replace(
-            r#"fah-client_8.5.6_amd64.deb""#,
-            r#"latest.deb""#,
-        );
+        let content =
+            VALID_FAH_MANIFEST.replace(r#"fah-client_8.5.5_amd64.deb""#, r#"latest.deb""#);
         let manifest = parse_fah_manifest(&content).expect("parse manifest");
         assert!(validate_fah_manifest(&manifest).is_err());
     }
@@ -509,8 +530,8 @@ latest = true"#,
     #[test]
     fn reject_uppercase_sha256() {
         let content = VALID_FAH_MANIFEST.replace(
-            "643de04033a1cb972a81e3a193d710e919a4f34634a987f11adc4cee61fdaefe",
-            "643DE04033A1CB972A81E3A193D710E919A4F34634A987F11ADC4CEE61FDAEFE",
+            "4f9c8bed9b2893752afb87e2796512ca0ca300ffc3d6035c518d56360370886c",
+            "4F9C8BED9B2893752AFB87E2796512CA0CA300FFC3D6035C518D56360370886C",
         );
         let manifest = parse_fah_manifest(&content).expect("parse manifest");
         assert!(validate_fah_manifest(&manifest).is_err());

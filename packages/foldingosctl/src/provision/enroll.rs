@@ -1,11 +1,13 @@
 use serde::{Deserialize, Serialize};
 
 use crate::config_host::read_hostname;
-use crate::identity::{collect_mac_addresses, ensure_identity, read_installed_foldingos_version, read_node_id};
+use crate::identity::{
+    collect_mac_addresses, ensure_identity, read_installed_foldingos_version, read_node_id,
+};
 use crate::paths::AppliancePaths;
 use crate::provision::util::{
-    empty_human_result, fah_service_active, http_post_json, join_supervisor_url, mark_agent_enrolled,
-    agent_enrollment_node_id, read_enrollment_token, read_supervisor_base_url,
+    agent_enrollment_node_id, empty_human_result, fah_service_active, http_post_json,
+    join_supervisor_url, mark_agent_enrolled, read_enrollment_token, read_supervisor_base_url,
 };
 use crate::role::require_agent_role;
 
@@ -100,10 +102,7 @@ pub fn query_desired_version(
         supervisor_url,
         &format!("/v1/agents/desired-version?node_id={node_id}"),
     )?;
-    let (status, body) = http_get_json(
-        &endpoint,
-        &[("X-FoldingOS-Enrollment-Token", token)],
-    )?;
+    let (status, body) = http_get_json(&endpoint, &[("X-FoldingOS-Enrollment-Token", token)])?;
     if status != 200 {
         return Err(format!(
             "desired-version query failed with status {status}: {}",

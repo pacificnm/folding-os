@@ -13,8 +13,14 @@ implements first-boot provisioning, configuration management, storage expansion,
 Folding@home client lifecycle, and Milestone 3 supervisor/agent fleet
 provisioning.
 
-The binary is installed at `/usr/bin/foldingosctl` and is invoked directly by
-operators or by `systemd` units on boot and timer schedules.
+The binary is installed at `/usr/bin/foldingosctl` with mode **`4755`
+(setuid root)** and is invoked directly by operators, FoldOps services, or
+`systemd` units on boot and timer schedules.
+
+On appliance images the binary drops to the real invoking UID on startup and
+re-elevates to root only for policy-approved privileged commands. See
+[Privilege model](#privilege-model) and
+[ADR-0024](adr/0024-foldops-supervisor-fleet-mutation-authorization.md).
 
 Most commands are not interactive menus. They perform one operation, print a
 short status line on success, and exit non-zero on failure.
@@ -35,6 +41,28 @@ usage: foldingosctl <boot|config|fah|foldops|identity|provision|registry|storage
 
 There is no built-in `--help` flag. This document is the authoritative
 reference.
+
+---
+
+# Privilege model
+
+Appliance images install `/usr/bin/foldingosctl` as **`root:root` mode
+`4755`**.
+
+| Invoker | Behavior |
+| --- | --- |
+| `systemd` (root) | runs with real UID 0; no drop |
+| `foldingos-admin` | drops to operator UID; may re-elevate for privileged commands |
+| `foldops` (FoldOps services) | drops to `foldops`; re-elevates only for commands listed in the automation policy file |
+
+Privileged commands include `foldops acquire`, `tools acquire`, `recovery
+export`, `recovery import`, and `config activate` (agent policy). Read-only
+commands and fleet assignment to group-writable paths run without
+re-elevation.
+
+FoldOps HTTP services **must not** invoke `sudo` or perform privileged OS
+operations directly. They subprocess `foldingosctl` only; elevation is enforced
+inside the binary per [ADR-0024](adr/0024-foldops-supervisor-fleet-mutation-authorization.md).
 
 ---
 
@@ -530,6 +558,23 @@ Execs the active Folding@home client with validated runtime configuration.
 Drops privileges to the `fah` user.
 
 Long-running. Invoked by `folding-at-home.service`.
+
+## `inspect fah --format json`
+
+Reports machine-readable Folding@home acquisition and runtime status for
+FoldOps and operators. The response includes:
+
+- `installed` and `active_client_version` for `/data/apps/fah/current`
+- `expected_client_version` from the embedded manifest
+- `verified`, based on the `.foldingos-verified` marker and manifest digest
+- `acquisition.consecutive_failures`, `next_attempt_unix`, and
+  `last_failure_reason` from `/data/state/fah-acquire.state`
+- `service_active`, runtime project/progress fields, and recent log errors
+- `log_path` and `log_readable`
+
+This inspection path is read-only. It does not download or install the client;
+automatic acquisition remains owned by `foldingos-fah-acquire.service` and
+`foldingos-fah-acquire.timer`.
 
 ---
 

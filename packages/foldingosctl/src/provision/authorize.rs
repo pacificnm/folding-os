@@ -76,7 +76,9 @@ pub fn authorize_provision_install(
         return Err("target_disk is required".into());
     }
     if !target_disk.starts_with("/dev/") {
-        return Err(format!("target_disk must be a block device path: {target_disk:?}"));
+        return Err(format!(
+            "target_disk must be a block device path: {target_disk:?}"
+        ));
     }
     let target_serial = request.target_serial.trim();
     if target_serial.is_empty() {
@@ -172,7 +174,10 @@ pub fn validate_install_stream_access(
     Ok((session, entry))
 }
 
-pub fn save_install_session(paths: &AppliancePaths, session: &InstallSession) -> Result<(), String> {
+pub fn save_install_session(
+    paths: &AppliancePaths,
+    session: &InstallSession,
+) -> Result<(), String> {
     let content = serde_json::to_string_pretty(session).map_err(|error| error.to_string())?;
     atomic_write(
         &paths.install_session_path(&session.session_id),
@@ -181,11 +186,14 @@ pub fn save_install_session(paths: &AppliancePaths, session: &InstallSession) ->
     )
 }
 
-pub fn load_install_session(paths: &AppliancePaths, session_id: &str) -> Result<InstallSession, String> {
+pub fn load_install_session(
+    paths: &AppliancePaths,
+    session_id: &str,
+) -> Result<InstallSession, String> {
     let content = fs::read_to_string(paths.install_session_path(session_id))
         .map_err(|error| error.to_string())?;
-    let session: InstallSession =
-        serde_json::from_str(&content).map_err(|error| format!("invalid install session: {error}"))?;
+    let session: InstallSession = serde_json::from_str(&content)
+        .map_err(|error| format!("invalid install session: {error}"))?;
     if session.schema_version != 1 {
         return Err(format!(
             "unsupported install session schema version {}",
@@ -198,7 +206,10 @@ pub fn load_install_session(paths: &AppliancePaths, session_id: &str) -> Result<
     Ok(session)
 }
 
-fn resolve_provision_image_version(paths: &AppliancePaths, version: &str) -> Result<RegistryEntry, String> {
+fn resolve_provision_image_version(
+    paths: &AppliancePaths,
+    version: &str,
+) -> Result<RegistryEntry, String> {
     if !version.is_empty() {
         return load_registry_entry(paths, version);
     }
@@ -231,8 +242,9 @@ fn read_supervisor_authorized_keys(paths: &AppliancePaths) -> Result<String, Str
         }
         Err(error) => return Err(error.to_string()),
     };
-    let keys = validate_authorized_keys(&content)
-        .map_err(|error| format!("supervisor administrator authorized keys are invalid: {error}"))?;
+    let keys = validate_authorized_keys(&content).map_err(|error| {
+        format!("supervisor administrator authorized keys are invalid: {error}")
+    })?;
     Ok(String::from_utf8_lossy(&keys).into_owned())
 }
 
@@ -242,7 +254,9 @@ fn load_supervisor_foldops_install_materials(
     let content = match fs::read_to_string(&paths.foldops_ingest_token) {
         Ok(content) => content,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Err("supervisor FoldOps provisioning must complete before network agent install".into());
+            return Err(
+                "supervisor FoldOps provisioning must complete before network agent install".into(),
+            );
         }
         Err(error) => return Err(format!("read supervisor ingest token: {error}")),
     };
@@ -250,7 +264,9 @@ fn load_supervisor_foldops_install_materials(
     let ca_bytes = match fs::read(paths.foldops_supervisor_ca_pem()) {
         Ok(bytes) => bytes,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Err("supervisor FoldOps TLS material is unavailable for network agent install".into());
+            return Err(
+                "supervisor FoldOps TLS material is unavailable for network agent install".into(),
+            );
         }
         Err(error) => return Err(format!("read supervisor TLS CA: {error}")),
     };

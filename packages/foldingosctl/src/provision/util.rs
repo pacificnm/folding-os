@@ -99,7 +99,8 @@ pub fn read_supervisor_base_url(paths: &AppliancePaths) -> Result<String, String
             if raw.is_empty() {
                 return Ok(String::new());
             }
-            let parsed = Url::parse(raw).map_err(|error| format!("invalid supervisor url: {error}"))?;
+            let parsed =
+                Url::parse(raw).map_err(|error| format!("invalid supervisor url: {error}"))?;
             if parsed.scheme() != "http" && parsed.scheme() != "https" {
                 return Err(format!("supervisor url must use http or https: {raw:?}"));
             }
@@ -120,8 +121,8 @@ pub fn read_provision_listen_host(paths: &AppliancePaths) -> Result<String, Stri
             if raw.is_empty() {
                 return Ok("0.0.0.0:8743".into());
             }
-            let parsed =
-                Url::parse(raw).map_err(|error| format!("invalid provision listen url: {error}"))?;
+            let parsed = Url::parse(raw)
+                .map_err(|error| format!("invalid provision listen url: {error}"))?;
             if parsed.scheme() != "http" {
                 return Err(format!(
                     "provision listen url must use http for Milestone 3 step 3: {raw:?}"
@@ -147,8 +148,7 @@ pub fn join_supervisor_url(base: &str, path: &str) -> Result<String, String> {
 }
 
 pub fn read_enrollment_token(paths: &AppliancePaths) -> Result<String, String> {
-    let content = fs::read_to_string(&paths.enrollment_token)
-        .map_err(|error| error.to_string())?;
+    let content = fs::read_to_string(&paths.enrollment_token).map_err(|error| error.to_string())?;
     let token = content.trim();
     if token.is_empty() {
         return Err("enrollment token is empty".into());
@@ -204,8 +204,8 @@ pub fn mark_agent_enrolled(paths: &AppliancePaths, node_id: &str) -> Result<(), 
 }
 
 pub fn agent_enrollment_node_id(paths: &AppliancePaths) -> Result<String, String> {
-    let content = fs::read_to_string(&paths.agent_enrollment_state)
-        .map_err(|error| error.to_string())?;
+    let content =
+        fs::read_to_string(&paths.agent_enrollment_state).map_err(|error| error.to_string())?;
     let node_id = content.trim();
     if crate::enrollment::is_valid_node_id(node_id) {
         Ok(node_id.to_string())
@@ -263,7 +263,10 @@ pub fn mounted(device: &str) -> bool {
         .unwrap_or(false)
 }
 
-pub fn copy_regular_file(source: &std::path::Path, destination: &std::path::Path) -> Result<(), String> {
+pub fn copy_regular_file(
+    source: &std::path::Path,
+    destination: &std::path::Path,
+) -> Result<(), String> {
     let content = fs::read(source).map_err(|error| error.to_string())?;
     if let Some(parent) = destination.parent() {
         fs::create_dir_all(parent).map_err(|error| error.to_string())?;
@@ -290,7 +293,11 @@ pub fn http_get_json(url: &str, headers: &[(&str, &str)]) -> Result<(u16, String
     }
 }
 
-pub fn http_post_json(url: &str, body: &str, headers: &[(&str, &str)]) -> Result<(u16, String), String> {
+pub fn http_post_json(
+    url: &str,
+    body: &str,
+    headers: &[(&str, &str)],
+) -> Result<(u16, String), String> {
     let mut request = ureq::post(url).set("Content-Type", "application/json");
     for (name, value) in headers {
         request = request.set(*name, *value);

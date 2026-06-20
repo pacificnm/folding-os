@@ -71,8 +71,12 @@ mod tests {
     #[test]
     fn latest_backup_path_selects_newest_matching_archive() {
         let temp = TempDir::new().expect("tempdir");
-        let older = temp.path().join("foldingos-supervisor-backup-host-20260101T120000.tar.zst");
-        let newer = temp.path().join("foldingos-supervisor-backup-host-20260102T120000.tar.zst");
+        let older = temp
+            .path()
+            .join("foldingos-supervisor-backup-host-20260101T120000.tar.zst");
+        let newer = temp
+            .path()
+            .join("foldingos-supervisor-backup-host-20260102T120000.tar.zst");
         fs::write(&older, b"old").expect("write older");
         fs::write(&newer, b"new").expect("write newer");
         std::thread::sleep(std::time::Duration::from_millis(10));

@@ -1,5 +1,30 @@
 use serde::Serialize;
 use serde_json::Value;
+use std::cell::Cell;
+
+thread_local! {
+    static SUPPRESS_HUMAN_STDOUT: Cell<bool> = const { Cell::new(false) };
+}
+
+pub fn with_suppressed_human_stdout<R>(run: impl FnOnce() -> R) -> R {
+    SUPPRESS_HUMAN_STDOUT.with(|flag| {
+        let previous = flag.get();
+        flag.set(true);
+        let result = run();
+        flag.set(previous);
+        result
+    })
+}
+
+pub fn human_stdout_enabled() -> bool {
+    SUPPRESS_HUMAN_STDOUT.with(|flag| !flag.get())
+}
+
+pub fn say_stdout(message: impl AsRef<str>) {
+    if human_stdout_enabled() {
+        println!("{}", message.as_ref());
+    }
+}
 
 pub const SCHEMA_VERSION: i32 = 1;
 pub const MIGRATION_MARKER: &str = "FOLDINGOSCTL_RUST_COMPLETE";
@@ -84,6 +109,8 @@ pub fn classify_automation_error(message: &str) -> AutomationErrorBody {
         "automation_denied"
     } else if lower.contains("permission denied") {
         "permission_denied"
+    } else if lower.contains("configuration candidate") {
+        "invalid_input"
     } else if lower.contains("unknown configuration domain")
         || lower.contains("unknown inspect subcommand")
         || lower.contains("missing value for")
@@ -188,5 +215,13 @@ mod tests {
             "automation policy does not authorize provision assign for the foldops user",
         );
         assert_eq!(body.code, "automation_denied");
+    }
+
+    #[test]
+    fn suppresses_human_stdout_during_automation() {
+        super::with_suppressed_human_stdout(|| {
+            assert!(!super::human_stdout_enabled());
+        });
+        assert!(super::human_stdout_enabled());
     }
 }

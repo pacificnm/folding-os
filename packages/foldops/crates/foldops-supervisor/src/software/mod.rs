@@ -1,9 +1,12 @@
-mod upstream;
 mod apply;
 mod assign_local;
+mod upstream;
 
-pub use apply::{apply_local, fleet_apply_foldops, fleet_apply_tools, ApplyLocalRequest, FleetSoftwareApplyRequest};
-pub use assign_local::{assign_local, ensure_foldops_release_imported, AssignLocalBody};
+pub use apply::{
+    apply_local, fleet_apply_foldops, fleet_apply_tools, ApplyLocalRequest,
+    FleetSoftwareApplyRequest,
+};
+pub use assign_local::{ensure_foldops_release_imported, ensure_tools_release_imported};
 
 use std::sync::Arc;
 
@@ -57,12 +60,13 @@ pub async fn build_updates_response(
             message: error.to_string(),
         })?;
 
-    let node = foldingos::inspect_node(delegate())
-        .await
-        .map_err(|error| UpstreamError::FetchFailed {
-            channel: "inspect node",
-            message: error.to_string(),
-        })?;
+    let node =
+        foldingos::inspect_node(delegate())
+            .await
+            .map_err(|error| UpstreamError::FetchFailed {
+                channel: "inspect node",
+                message: error.to_string(),
+            })?;
 
     let supervisor_hostname = node
         .get("hostname")
@@ -107,7 +111,6 @@ pub async fn build_updates_response(
     ]);
     let supervisor_assigned_tools = first_non_empty(&[
         string_field(&supervisor_tools, "assigned_tools_version"),
-        string_field(&supervisor_tools, "effective_tools_version"),
         supervisor_assignment_tools(&enrollments, &supervisor_hostname),
     ]);
 
@@ -234,11 +237,7 @@ fn upstream_latest_tools(upstream: &UpstreamLatest) -> String {
         .to_string()
 }
 
-async fn fetch_agent_versions(
-    hostname: &str,
-    port: u16,
-    token: &str,
-) -> (String, String) {
+async fn fetch_agent_versions(hostname: &str, port: u16, token: &str) -> (String, String) {
     let foldops = fetch_agent_inspect_foldops(hostname, port, token)
         .await
         .ok()

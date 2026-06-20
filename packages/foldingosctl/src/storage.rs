@@ -30,7 +30,9 @@ pub fn expand_data(_paths: &AppliancePaths) -> Result<(), String> {
     let root_source = command_output("findmnt", &["-n", "-o", "SOURCE", "/"])?;
     let root_source = root_source.trim();
     if !root_source.starts_with("/dev/") {
-        return Err(format!("root source is not a block device: {root_source:?}"));
+        return Err(format!(
+            "root source is not a block device: {root_source:?}"
+        ));
     }
 
     let parent_name = command_output("lsblk", &["-n", "-o", "PKNAME", root_source])?;
@@ -103,10 +105,7 @@ pub fn expand_data(_paths: &AppliancePaths) -> Result<(), String> {
             &disk,
         ],
     )?;
-    run_command(
-        "partx",
-        &["--update", "--nr", DATA_PARTITION_NUMBER, &disk],
-    )?;
+    run_command("partx", &["--update", "--nr", DATA_PARTITION_NUMBER, &disk])?;
     run_command("resize2fs", &[&data_device])?;
 
     println!("Expanded {data_device} to sector {target_end}.");
@@ -165,7 +164,11 @@ fn validate_layout(disk: &str, partitions: &HashMap<i32, Partition>) -> Result<(
                 "partition {number} name does not match approved layout"
             ));
         }
-        if number == 3 && !info.to_uppercase().contains(&DATA_PARTITION_GUID.to_uppercase()) {
+        if number == 3
+            && !info
+                .to_uppercase()
+                .contains(&DATA_PARTITION_GUID.to_uppercase())
+        {
             return Err("data partition identity does not match approved layout".into());
         }
     }
@@ -177,11 +180,7 @@ pub fn partition_device(disk: &str, number: &str) -> String {
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or("");
-    if base
-        .chars()
-        .last()
-        .is_some_and(|ch| ch.is_ascii_digit())
-    {
+    if base.chars().last().is_some_and(|ch| ch.is_ascii_digit()) {
         format!("{disk}p{number}")
     } else {
         format!("{disk}{number}")
@@ -204,7 +203,9 @@ pub fn resolve_boot_disk() -> Result<String, String> {
     let root_source = command_output("findmnt", &["-n", "-o", "SOURCE", "/"])?;
     let root_source = root_source.trim();
     if !root_source.starts_with("/dev/") {
-        return Err(format!("root source is not a block device: {root_source:?}"));
+        return Err(format!(
+            "root source is not a block device: {root_source:?}"
+        ));
     }
 
     let parent_name = command_output("lsblk", &["-n", "-o", "PKNAME", root_source])?;

@@ -7,6 +7,9 @@ ConditionPathExists=/data/state/foldops/provisioned.json
 
 [Service]
 Type=simple
+User=foldops
+Group=foldops
+SupplementaryGroups=fah systemd-journal
 EnvironmentFile=/data/config/foldops/agent.env
 ExecStart=/data/apps/foldops/current/foldops-agent/usr/bin/foldops-agent
 Restart=on-failure

@@ -1,9 +1,14 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
+use std::os::unix::io::AsRawFd;
 use std::path::Path;
 
+#[cfg(unix)]
+const FOLDINGOSCTL_INSTALL_MODE: u32 = 0o4755;
+
 pub fn verify_tools_executable_elf(path: &Path) -> Result<(), String> {
-    let header = fs::read(path).map_err(|error| format!("read tools executable ELF header: {error}"))?;
+    let header =
+        fs::read(path).map_err(|error| format!("read tools executable ELF header: {error}"))?;
     if header.len() < 20 {
         return Err("read tools executable ELF header: file too short".into());
     }
@@ -16,9 +21,65 @@ pub fn verify_tools_executable_elf(path: &Path) -> Result<(), String> {
     }
     let machine = u16::from_le_bytes([header[18], header[19]]);
     if machine != 62 {
-        return Err(format!("tools executable architecture {machine} is not x86_64"));
+        return Err(format!(
+            "tools executable architecture {machine} is not x86_64"
+        ));
     }
     Ok(())
+}
+
+/// Ensure `/usr/bin/foldingosctl` keeps root ownership and the setuid bit required
+/// for the foldops automation user to re-elevate during acquire.
+pub fn restore_setuid_install_mode(destination: &Path) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        use nix::sys::stat::{fchmod, Mode};
+        use nix::unistd::{chown, geteuid, Gid, Uid};
+
+        if geteuid() != Uid::from_raw(0) {
+            return Ok(());
+        }
+
+        chown(destination, Some(Uid::from_raw(0)), Some(Gid::from_raw(0)))
+            .map_err(|error| format!("restore tools binary ownership: {error}"))?;
+
+        let file = OpenOptions::new()
+            .read(true)
+            .open(destination)
+            .map_err(|error| format!("open tools binary for chmod: {error}"))?;
+        fchmod(
+            file.as_raw_fd(),
+            Mode::from_bits_truncate(FOLDINGOSCTL_INSTALL_MODE),
+        )
+        .map_err(|error| format!("restore setuid tools binary mode: {error}"))?;
+
+        if !setuid_bit_set(destination)? {
+            let path = destination
+                .to_str()
+                .ok_or_else(|| "tools binary path is not valid UTF-8".to_string())?;
+            crate::process::command_output("chmod", &["4755", path])
+                .map_err(|error| format!("chmod tools binary: {error}"))?;
+        }
+
+        if !setuid_bit_set(destination)? {
+            return Err(format!(
+                "tools binary at {} is missing the setuid bit after install",
+                destination.display()
+            ));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn setuid_bit_set(path: &Path) -> Result<bool, String> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let mode = fs::metadata(path)
+        .map_err(|error| format!("inspect tools binary mode: {error}"))?
+        .permissions()
+        .mode();
+    Ok(mode & 0o4000 != 0)
 }
 
 pub fn atomic_replace_tools_binary(staged_path: &Path, destination: &Path) -> Result<(), String> {
@@ -43,16 +104,11 @@ pub fn atomic_replace_tools_binary(staged_path: &Path, destination: &Path) -> Re
     let temp_path = parent.join(format!(".{file_name}.tmp-{}", std::process::id()));
     let _ = fs::remove_file(&temp_path);
 
-    let content = fs::read(staged_path).map_err(|error| format!("read staged tools binary: {error}"))?;
+    let content =
+        fs::read(staged_path).map_err(|error| format!("read staged tools binary: {error}"))?;
     {
         let mut temp = File::create(&temp_path)
             .map_err(|error| format!("create temporary tools binary: {error}"))?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(&temp_path, fs::Permissions::from_mode(0o755))
-                .map_err(|error| format!("chmod temporary tools binary: {error}"))?;
-        }
         temp.write_all(&content)
             .map_err(|error| format!("write temporary tools binary: {error}"))?;
         temp.sync_all()
@@ -61,7 +117,9 @@ pub fn atomic_replace_tools_binary(staged_path: &Path, destination: &Path) -> Re
             .map_err(|error| format!("flush temporary tools binary: {error}"))?;
     }
 
-    fs::rename(&temp_path, destination).map_err(|error| format!("replace tools binary: {error}"))?;
+    fs::rename(&temp_path, destination)
+        .map_err(|error| format!("replace tools binary: {error}"))?;
+    restore_setuid_install_mode(destination)?;
 
     let dir = OpenOptions::new()
         .read(true)
@@ -78,10 +136,8 @@ mod tests {
 
     #[test]
     fn atomic_replace_tools_binary_replaces_destination() {
-        let root = std::env::temp_dir().join(format!(
-            "foldingosctl-tools-replace-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("foldingosctl-tools-replace-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
 

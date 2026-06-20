@@ -18,16 +18,10 @@ impl IngestClient {
         let mut builder = reqwest::Client::builder().timeout(Duration::from_secs(30));
         if let Some(ca_path) = &config.supervisor_tls_ca {
             let ca_pem = fs::read(ca_path).unwrap_or_else(|error| {
-                panic!(
-                    "read SUPERVISOR_TLS_CA at {}: {error}",
-                    ca_path.display()
-                )
+                panic!("read SUPERVISOR_TLS_CA at {}: {error}", ca_path.display())
             });
             let certificate = reqwest::Certificate::from_pem(&ca_pem).unwrap_or_else(|error| {
-                panic!(
-                    "parse SUPERVISOR_TLS_CA at {}: {error}",
-                    ca_path.display()
-                )
+                panic!("parse SUPERVISOR_TLS_CA at {}: {error}", ca_path.display())
             });
             builder = builder
                 .tls_built_in_root_certs(false)
@@ -84,13 +78,13 @@ impl IngestClient {
         Ok(())
     }
 
-    pub async fn collect_and_post(&self) -> Result<(), String> {
+    pub async fn collect_payload(&self) -> IngestPayload {
         let fah_stats = FahStats {
             donor: self.config.fah_donor_id.clone(),
             team: self.config.fah_team_number.clone(),
         };
 
-        let payload = if self.config.uses_foldingos_delegation() {
+        if self.config.uses_foldingos_delegation() {
             tracing::debug!(
                 foldingosctl = %self.config.foldingosctl_path.display(),
                 "collecting ingest payload via foldingosctl inspect"
@@ -110,7 +104,11 @@ impl IngestClient {
                 fah_stats,
             };
             collect_snapshot(paths).await
-        };
+        }
+    }
+
+    pub async fn collect_and_post(&self) -> Result<(), String> {
+        let payload = self.collect_payload().await;
 
         self.post_snapshot(&payload).await?;
 

@@ -7,9 +7,8 @@ pub static HOSTNAME_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$").expect("hostname pattern compiles")
 });
 
-static SECRET_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^[A-Za-z0-9._-]+$").expect("secret pattern compiles")
-});
+static SECRET_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[A-Za-z0-9._-]+$").expect("secret pattern compiles"));
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConfigValue {

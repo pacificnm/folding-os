@@ -22,8 +22,7 @@ pub fn fah_run(paths: &AppliancePaths) -> Result<(), String> {
         return Err(format!("runtime configuration is missing: {error}"));
     }
 
-    let executable =
-        fah_executable_for_version(paths, &active_version, &manifest.executable_path)?;
+    let executable = fah_executable_for_version(paths, &active_version, &manifest.executable_path)?;
     verify_fah_executable_under_resolved_current(paths, &executable)?;
 
     let mut command = Command::new(&executable);

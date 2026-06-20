@@ -97,8 +97,10 @@ Milestone 4 implementation merged:
 
 1. Add `scripts/publish-foldingos-tools`
 2. Add `scripts/publish-packages-release` with `--build` and `--dry-run`
-3. Define and publish initial `index.json` for both channels
-4. Document operator commands in [operations.md](../operations.md)
+3. Keep tools publication independent of OS image builds; use
+   `build-foldingosctl-release --sync-overlay` to pin the next image bootstrap
+4. Define and publish initial `index.json` for both channels
+5. Document operator commands in [operations.md](../operations.md)
 
 **Exit criteria:** test release visible at `packages.folding-os.com` from build
 host using existing `~/.config/rclone/rclone.conf`.

@@ -9,9 +9,8 @@ use crate::fs_atomic::atomic_write;
 use crate::paths::AppliancePaths;
 use crate::role::require_supervisor_role;
 
-static MAC_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^([0-9a-f]{2}:){5}[0-9a-f]{2}$").expect("mac pattern compiles")
-});
+static MAC_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^([0-9a-f]{2}:){5}[0-9a-f]{2}$").expect("mac pattern compiles"));
 static DISK_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^/dev/(sd[a-z]+|vd[a-z]+|nvme[0-9]+n[0-9]+)$").expect("disk pattern compiles")
 });
@@ -25,6 +24,16 @@ pub fn list_allow_boot(paths: &AppliancePaths) -> Result<serde_json::Value, Stri
 pub fn allow_boot(paths: &AppliancePaths, args: &[String]) -> Result<serde_json::Value, String> {
     let (mac, install_disk) = parse_allow_boot_args(args)?;
     allow_boot_mac(paths, &mac, install_disk.as_deref())
+}
+
+pub fn deny_boot(paths: &AppliancePaths, args: &[String]) -> Result<serde_json::Value, String> {
+    if args.len() != 1 {
+        return Err(format!(
+            "deny-boot requires exactly one MAC address (got {})",
+            args.len()
+        ));
+    }
+    deny_boot_mac(paths, &args[0])
 }
 
 fn parse_allow_boot_args(args: &[String]) -> Result<(String, Option<String>), String> {
@@ -91,6 +100,27 @@ fn allow_boot_mac(
     }))
 }
 
+fn deny_boot_mac(paths: &AppliancePaths, mac: &str) -> Result<serde_json::Value, String> {
+    require_supervisor_role(paths)?;
+    require_supervisor_automation_mutation(paths, "provision", "deny-boot")?;
+    let mac = parse_mac_address(mac)?;
+    let mut allowed = read_boot_allowlist_entries(paths)?;
+    let was_allowed = allowed.iter().any(|value| value == &mac);
+    if !was_allowed {
+        return Ok(serde_json::json!({
+            "mac_address": mac,
+            "already_removed": true,
+        }));
+    }
+    allowed.retain(|value| value != &mac);
+    save_boot_allowlist(paths, &allowed)?;
+    remove_boot_install_disk_mapping(paths, &mac)?;
+    Ok(serde_json::json!({
+        "mac_address": mac,
+        "already_removed": false,
+    }))
+}
+
 fn collect_boot_allow_devices(paths: &AppliancePaths) -> Result<Vec<serde_json::Value>, String> {
     let macs = read_boot_allowlist_entries(paths)?;
     let mut sorted = macs;
@@ -100,7 +130,9 @@ fn collect_boot_allow_devices(paths: &AppliancePaths) -> Result<Vec<serde_json::
         .into_iter()
         .map(|mac| {
             let mut device = serde_json::json!({ "mac_address": mac });
-            if let Some(disk) = disk_mappings.get(device["mac_address"].as_str().unwrap_or_default()) {
+            if let Some(disk) =
+                disk_mappings.get(device["mac_address"].as_str().unwrap_or_default())
+            {
                 device["install_disk"] = serde_json::Value::String(disk.clone());
             }
             device
@@ -132,7 +164,8 @@ fn save_boot_allowlist(paths: &AppliancePaths, allowed: &[String]) -> Result<(),
     if !allowed.is_empty() {
         content.push('\n');
     }
-    atomic_write(&paths.boot_allowlist, content.as_bytes(), 0o644)
+    atomic_write(&paths.boot_allowlist, content.as_bytes(), 0o664)?;
+    finalize_boot_allowlist_metadata(&paths.boot_allowlist)
 }
 
 pub(crate) fn boot_install_disk_for_mac(paths: &AppliancePaths, mac: &str) -> String {
@@ -161,10 +194,16 @@ fn read_boot_install_disk_allowlist_entries(
             continue;
         }
         let mut fields = line.split_whitespace();
-        let Some(mac_raw) = fields.next() else { continue };
-        let Some(disk_raw) = fields.next() else { continue };
-        if let (Ok(mac), Ok(disk)) = (parse_mac_address(mac_raw), parse_install_disk_path(disk_raw))
-        {
+        let Some(mac_raw) = fields.next() else {
+            continue;
+        };
+        let Some(disk_raw) = fields.next() else {
+            continue;
+        };
+        if let (Ok(mac), Ok(disk)) = (
+            parse_mac_address(mac_raw),
+            parse_install_disk_path(disk_raw),
+        ) {
             mappings.insert(mac, disk);
         }
     }
@@ -178,6 +217,19 @@ fn save_boot_install_disk_mapping(
 ) -> Result<(), String> {
     let mut mappings = read_boot_install_disk_allowlist_entries(paths)?;
     mappings.insert(mac.to_string(), install_disk.to_string());
+    write_boot_install_disk_mappings(paths, &mappings)
+}
+
+fn remove_boot_install_disk_mapping(paths: &AppliancePaths, mac: &str) -> Result<(), String> {
+    let mut mappings = read_boot_install_disk_allowlist_entries(paths)?;
+    mappings.remove(mac);
+    write_boot_install_disk_mappings(paths, &mappings)
+}
+
+fn write_boot_install_disk_mappings(
+    paths: &AppliancePaths,
+    mappings: &BTreeMap<String, String>,
+) -> Result<(), String> {
     let lines: Vec<String> = mappings
         .iter()
         .map(|(mac, disk)| format!("{mac} {disk}"))
@@ -186,7 +238,33 @@ fn save_boot_install_disk_mapping(
     if !lines.is_empty() {
         content.push('\n');
     }
-    atomic_write(&paths.boot_install_disk_allowlist, content.as_bytes(), 0o644)
+    atomic_write(
+        &paths.boot_install_disk_allowlist,
+        content.as_bytes(),
+        0o664,
+    )?;
+    finalize_boot_allowlist_metadata(&paths.boot_install_disk_allowlist)
+}
+
+fn finalize_boot_allowlist_metadata(path: &std::path::Path) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        use nix::unistd::{chown, geteuid, Group, Uid};
+        use std::os::unix::fs::PermissionsExt;
+
+        if geteuid() != Uid::from_raw(0) {
+            return Ok(());
+        }
+        let gid = Group::from_name("foldops")
+            .map_err(|error| format!("resolve foldops group: {error}"))?
+            .map(|group| group.gid)
+            .ok_or_else(|| "foldops group is not configured".to_string())?;
+        chown(path, Some(Uid::from_raw(0)), Some(gid))
+            .map_err(|error| format!("restore boot allowlist ownership: {error}"))?;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o664))
+            .map_err(|error| format!("restore boot allowlist mode: {error}"))?;
+    }
+    Ok(())
 }
 
 fn parse_mac_address(value: &str) -> Result<String, String> {

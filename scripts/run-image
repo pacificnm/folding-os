@@ -1,14 +1,28 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+fresh=0
+if [ "${1:-}" = "--fresh" ]; then
+  fresh=1
+elif [ "$#" -gt 0 ]; then
+  echo "Usage: $0 [--fresh]" >&2
+  exit 2
+fi
+
 mkdir -p build/manual-qemu
 
-cp --reflink=auto --sparse=always \
-  build/output/images/foldingos-x86_64-0.1.0.img \
-  build/manual-qemu/foldingos.img
+if [ "${fresh}" -eq 1 ] || [ ! -f build/manual-qemu/foldingos.img ]; then
+  cp --reflink=auto --sparse=always \
+    build/output/images/foldingos-x86_64-0.1.0.img \
+    build/manual-qemu/foldingos.img
+else
+  echo "Reusing existing build/manual-qemu/foldingos.img. Use --fresh to reset it."
+fi
 
-cp /usr/share/OVMF/OVMF_VARS_4M.fd \
-  build/manual-qemu/OVMF_VARS_4M.fd
+if [ "${fresh}" -eq 1 ] || [ ! -f build/manual-qemu/OVMF_VARS_4M.fd ]; then
+  cp /usr/share/OVMF/OVMF_VARS_4M.fd \
+    build/manual-qemu/OVMF_VARS_4M.fd
+fi
 
 qemu-system-x86_64 \
   -machine q35,accel=tcg \

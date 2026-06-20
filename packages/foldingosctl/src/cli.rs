@@ -1,6 +1,6 @@
 use crate::automation::{
-    format_automation_command, write_failure, write_success, AutomationContext, MIGRATION_MARKER,
-    OutputFormat,
+    format_automation_command, write_failure, write_success, AutomationContext, OutputFormat,
+    MIGRATION_MARKER,
 };
 use crate::boot_cmd::{self, boot_status};
 use crate::config_cmd::{self, ConfigCommandOutput};
@@ -16,13 +16,16 @@ use crate::storage::expand_data;
 use crate::tools;
 
 const USAGE: &str =
-    "usage: foldingosctl <boot|config|fah|foldops|identity|inspect|provision|recovery|registry|storage|tools> <command> [arguments]";
+    "usage: foldingosctl <boot|config|fah|foldops|identity|inspect|provision|recovery|registry|services|storage|tools> <command> [arguments]";
 
 const PROVISION_JSON_COMMANDS: &[&str] = &[
     "list-enrollments",
     "assign",
+    "assign-local",
     "list-allow-boot",
     "allow-boot",
+    "deny-boot",
+    "sync-software-assignments",
 ];
 
 #[derive(Debug)]
@@ -57,6 +60,10 @@ pub fn dispatch(mut args: Vec<String>) -> Result<(), CliError> {
     }
 
     let paths = AppliancePaths::default();
+    let _privilege_guard = match crate::setuid_privilege::guard_for_parsed_command(&paths, &args) {
+        Ok(guard) => guard,
+        Err(message) => return publish_guard_failure(&args, format, message),
+    };
 
     if args[0] == "inspect" {
         return dispatch_json_group(
@@ -106,7 +113,20 @@ pub fn dispatch(mut args: Vec<String>) -> Result<(), CliError> {
         let ctx = AutomationContext::new(format, command);
         return match registry_cmd::run(&paths, &subcommand, &extra) {
             Ok(RegistryOutput::Json(data)) => publish_success(&ctx, data, &subcommand),
-            Ok(RegistryOutput::Silent) => Ok(()),
+            Ok(RegistryOutput::Silent) => {
+                if matches!(
+                    subcommand.as_str(),
+                    "import-foldops-manifest" | "import-tools-release"
+                ) {
+                    crate::software_install_log::log_automation_outcome(
+                        &ctx.command,
+                        true,
+                        &serde_json::json!({ "message": "registry import completed" }),
+                        None,
+                    );
+                }
+                Ok(())
+            }
             Err(message) => publish_failure(&ctx, message),
         };
     }
@@ -169,11 +189,14 @@ pub fn dispatch(mut args: Vec<String>) -> Result<(), CliError> {
         let extra = args[2..].to_vec();
         if subcommand == "acquire" {
             if !extra.is_empty() {
-                return Err(CliError::Failed(format!("unknown {group} option {:?}", extra[0])));
+                return Err(CliError::Failed(format!(
+                    "unknown {group} option {:?}",
+                    extra[0]
+                )));
             }
             let command = format_automation_command(&[group, "acquire"]);
             let ctx = AutomationContext::new(format, command);
-            return match if group == "foldops" {
+            let run_acquire = || match if group == "foldops" {
                 foldops::acquire_json(&paths)
             } else {
                 tools::acquire_json(&paths)
@@ -181,6 +204,10 @@ pub fn dispatch(mut args: Vec<String>) -> Result<(), CliError> {
                 Ok(data) => publish_success(&ctx, data, &subcommand),
                 Err(message) => publish_failure(&ctx, message),
             };
+            if format == OutputFormat::Json {
+                return crate::automation::with_suppressed_human_stdout(run_acquire);
+            }
+            return run_acquire();
         }
         return match group {
             "foldops" => foldops::run(&paths, &subcommand, &extra).map_err(CliError::Failed),
@@ -224,11 +251,7 @@ pub fn dispatch(mut args: Vec<String>) -> Result<(), CliError> {
                     }
                     index += 1;
                 }
-                match recovery_export(
-                    &paths,
-                    output_path.as_deref(),
-                    include_secrets,
-                ) {
+                match recovery_export(&paths, output_path.as_deref(), include_secrets) {
                     Ok(data) => publish_success(&ctx, data, &subcommand),
                     Err(message) => publish_failure(&ctx, message),
                 }
@@ -256,31 +279,36 @@ pub fn dispatch(mut args: Vec<String>) -> Result<(), CliError> {
                         "recovery import requires an archive path".into(),
                     );
                 };
-                match recovery_import(
-                    &paths,
-                    &archive_path,
-                    ImportOptions { dry_run },
-                ) {
+                match recovery_import(&paths, &archive_path, ImportOptions { dry_run }) {
                     Ok(data) => publish_success(&ctx, data, &subcommand),
                     Err(message) => publish_failure(&ctx, message),
                 }
             }
-            _ => publish_failure(
-                &ctx,
-                format!("unknown recovery subcommand {subcommand:?}"),
-            ),
+            _ => publish_failure(&ctx, format!("unknown recovery subcommand {subcommand:?}")),
+        };
+    }
+
+    if args[0] == "services" {
+        if args.len() < 2 {
+            return Err(CliError::Usage);
+        }
+        let subcommand = args[1].clone();
+        let extra = args[2..].to_vec();
+        let command = if subcommand == "restart" && !extra.is_empty() {
+            format_automation_command(&["services", &subcommand, &extra[0]])
+        } else {
+            format_automation_command(&["services", &subcommand])
+        };
+        let ctx = AutomationContext::new(format, command);
+        return match crate::services::run(&paths, &subcommand, &extra) {
+            Ok(data) => publish_success(&ctx, data, &subcommand),
+            Err(message) => publish_failure(&ctx, message),
         };
     }
 
     let command = infer_command_name(&args);
     let ctx = AutomationContext::new(format, command);
-    publish_failure(
-        &ctx,
-        format!(
-            "command {} is not implemented",
-            ctx.command
-        ),
-    )
+    publish_failure(&ctx, format!("command {} is not implemented", ctx.command))
 }
 
 fn dispatch_json_group(
@@ -295,7 +323,10 @@ fn dispatch_json_group(
         return Err(CliError::Usage);
     }
     if !extra.is_empty() {
-        return Err(CliError::Failed(format!("unknown inspect option {:?}", extra[0])));
+        return Err(CliError::Failed(format!(
+            "unknown inspect option {:?}",
+            extra[0]
+        )));
     }
     let command = format_automation_command(command_parts);
     let ctx = AutomationContext::new(format, command);
@@ -305,11 +336,25 @@ fn dispatch_json_group(
     }
 }
 
+fn publish_guard_failure(
+    args: &[String],
+    format: OutputFormat,
+    message: String,
+) -> Result<(), CliError> {
+    if format == OutputFormat::Json && args.len() >= 2 {
+        let command = format_automation_command(&[args[0].as_str(), args[1].as_str()]);
+        let ctx = AutomationContext::new(format, command);
+        return publish_failure(&ctx, message);
+    }
+    Err(CliError::Failed(message))
+}
+
 fn publish_success(
     ctx: &AutomationContext,
     data: serde_json::Value,
     subcommand: &str,
 ) -> Result<(), CliError> {
+    crate::software_install_log::log_automation_outcome(&ctx.command, true, &data, None);
     match ctx.format {
         OutputFormat::Json => {
             print!(
@@ -326,6 +371,12 @@ fn publish_success(
 }
 
 fn publish_failure(ctx: &AutomationContext, message: String) -> Result<(), CliError> {
+    crate::software_install_log::log_automation_outcome(
+        &ctx.command,
+        false,
+        &serde_json::Value::Null,
+        Some(&message),
+    );
     if ctx.format == OutputFormat::Json {
         print!("{}", write_failure(ctx, message));
         return Err(CliError::AlreadyReported);
@@ -401,6 +452,20 @@ fn print_human_summary(data: &serde_json::Value, subcommand: &str) {
     if subcommand == "allow-boot" {
         if let Some(mac) = data.get("mac_address").and_then(|value| value.as_str()) {
             println!("Allowed MAC {mac} for network boot.");
+            return;
+        }
+    }
+    if subcommand == "deny-boot" {
+        if let Some(mac) = data.get("mac_address").and_then(|value| value.as_str()) {
+            if data
+                .get("already_removed")
+                .and_then(|value| value.as_bool())
+                == Some(true)
+            {
+                println!("MAC {mac} was not on the network boot allowlist.");
+            } else {
+                println!("Removed MAC {mac} from the network boot allowlist.");
+            }
             return;
         }
     }

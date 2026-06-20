@@ -180,6 +180,9 @@ fn unit_to_state(unit: &FahUnitState) -> Option<FahLogState> {
         progress: progress_percent(unit),
         ppd: unit.ppd.filter(|p| *p > 0.0),
         tpf,
+        folding_state: None,
+        unit_state: None,
+        folding_detail: None,
         recent_errors: vec![],
     })
 }

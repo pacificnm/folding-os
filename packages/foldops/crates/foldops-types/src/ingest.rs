@@ -50,6 +50,24 @@ pub enum FahSystemdStatus {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Fah {
     pub systemdStatus: FahSystemdStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub activeClientVersion: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expectedClientVersion: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clientInstalled: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clientVerified: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub acquisitionFailures: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub acquisitionNextAttemptUnix: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub acquisitionLastFailureReason: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub logPath: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub logReadable: Option<bool>,
     pub project: Option<String>,
     pub run: Option<f64>,
     pub clone: Option<f64>,
@@ -57,11 +75,25 @@ pub struct Fah {
     pub progress: Option<f64>,
     pub ppd: Option<f64>,
     pub tpf: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub foldingState: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unitState: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub foldingDetail: Option<String>,
     pub recentErrors: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub statsDonor: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub statsTeam: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub configUsername: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub configTeam: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub configPasskeyConfigured: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub configCpus: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -93,6 +125,8 @@ pub struct IngestPayload {
     pub installationRole: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub foldingosVersion: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub primaryIpv4: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub logs: Option<NodeLogs>,
 }

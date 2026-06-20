@@ -1,4 +1,5 @@
 use serde::Deserialize;
+use serde::Serialize;
 use serde_json::{json, Value};
 
 use crate::agent::software::{push_foldops_acquire, push_tools_acquire};
@@ -13,7 +14,7 @@ pub struct FleetSoftwareApplyRequest {
     pub all: Option<bool>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct ApplyLocalRequest {
     pub foldops: Option<bool>,
     pub tools: Option<bool>,
@@ -52,7 +53,11 @@ pub async fn fleet_apply_foldops(
         }
 
         match push_foldops_acquire(&target.hostname, port, &token).await {
-            Ok(body) => results.push(fleet_apply_success_result(&target.hostname, "foldops", &body)),
+            Ok(body) => results.push(fleet_apply_success_result(
+                &target.hostname,
+                "foldops",
+                &body,
+            )),
             Err(error) => results.push(json!({
                 "hostname": target.hostname,
                 "ok": false,
@@ -167,6 +172,9 @@ fn resolve_fleet_targets(
 
 fn fleet_apply_success_result(hostname: &str, kind: &str, body: &Value) -> Value {
     let data = body.get("data").unwrap_or(body);
+    let acquired = data.get("acquired").and_then(|value| value.as_bool()) == Some(true);
+    let already_active = data.get("already_active").and_then(|value| value.as_bool()) == Some(true);
+    let skipped = already_active && !acquired;
     let message = data
         .get("message")
         .and_then(|value| value.as_str())
@@ -179,22 +187,21 @@ fn fleet_apply_success_result(hostname: &str, kind: &str, body: &Value) -> Value
         "foldops" => json!({
             "hostname": hostname,
             "ok": true,
+            "skipped": skipped,
             "active_manifest_release": data.get("manifest_release").cloned().unwrap_or(Value::Null),
             "message": message,
         }),
         _ => json!({
             "hostname": hostname,
             "ok": true,
+            "skipped": skipped,
             "active_tools_version": data.get("tools_version").cloned().unwrap_or(Value::Null),
             "message": message,
         }),
     }
 }
 
-pub async fn apply_local(
-    config: &Config,
-    request: ApplyLocalRequest,
-) -> Result<Value, String> {
+pub async fn apply_local(config: &Config, request: ApplyLocalRequest) -> Result<Value, String> {
     if !config.uses_supervisor_fleet_delegation() {
         return Err(
             "FoldingOS fleet delegation is unavailable on this host (requires supervisor role with foldingosctl)"
@@ -267,14 +274,16 @@ async fn apply_local_tools(
 ) -> Result<Value, FleetCommandError> {
     if !force {
         let inspect = foldingos::inspect_tools(*config).await?;
-        let assigned = first_non_empty(&[
-            string_field(&inspect, "assigned_tools_version"),
-            string_field(&inspect, "effective_tools_version"),
-        ]);
-        let active = first_non_empty(&[
-            string_field(&inspect, "active_tools_version"),
-            string_field(&inspect, "effective_tools_version"),
-        ]);
+        let assigned = string_field(&inspect, "assigned_tools_version");
+        let active = string_field(&inspect, "active_tools_version");
+        if assigned.is_empty() {
+            return Ok(json!({
+                "component": "tools",
+                "ok": true,
+                "skipped": true,
+                "message": "no supervisor-assigned tools version is configured",
+            }));
+        }
         if !apply_pending(&assigned, &active) {
             return Ok(json!({
                 "component": "tools",
@@ -312,17 +321,26 @@ fn string_field(data: &Value, key: &str) -> String {
         .to_string()
 }
 
-fn first_non_empty(values: &[String]) -> String {
-    values
-        .iter()
-        .find(|value| !value.trim().is_empty())
-        .cloned()
-        .unwrap_or_default()
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::fleet_apply_success_result;
+    use serde_json::json;
+
+    #[test]
+    fn fleet_apply_success_result_marks_already_active_as_skipped() {
+        let body = json!({
+            "ok": true,
+            "data": {
+                "tools_version": "0.1.0-55",
+                "acquired": false,
+                "already_active": true,
+                "message": "Verified foldingosctl tools release 0.1.0-55 is already active; acquisition not required.",
+            }
+        });
+        let result = fleet_apply_success_result("agent-01", "tools", &body);
+        assert_eq!(result["ok"], true);
+        assert_eq!(result["skipped"], true);
+    }
 
     #[test]
     fn fleet_apply_success_result_includes_manifest_release() {

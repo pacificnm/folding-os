@@ -114,6 +114,7 @@ pub async fn collect_snapshot(paths: CollectPaths<'_>) -> IngestPayload {
         nodeId: None,
         installationRole: None,
         foldingosVersion: None,
+        primaryIpv4: None,
         system: System {
             uptime,
             loadAvg: load_avg,
@@ -162,6 +163,15 @@ pub async fn collect_snapshot(paths: CollectPaths<'_>) -> IngestPayload {
 fn fah_log_to_payload(state: FahLogState, systemd: FahSystemdStatus, stats: &FahStats) -> Fah {
     Fah {
         systemdStatus: systemd,
+        activeClientVersion: None,
+        expectedClientVersion: None,
+        clientInstalled: None,
+        clientVerified: None,
+        acquisitionFailures: None,
+        acquisitionNextAttemptUnix: None,
+        acquisitionLastFailureReason: None,
+        logPath: None,
+        logReadable: None,
         project: state.project,
         run: state.run,
         clone: state.clone,
@@ -169,9 +179,16 @@ fn fah_log_to_payload(state: FahLogState, systemd: FahSystemdStatus, stats: &Fah
         progress: state.progress,
         ppd: state.ppd,
         tpf: state.tpf,
+        foldingState: state.folding_state,
+        unitState: state.unit_state,
+        foldingDetail: state.folding_detail,
         recentErrors: state.recent_errors,
         statsDonor: stats.donor.clone(),
         statsTeam: stats.team.clone(),
+        configUsername: None,
+        configTeam: None,
+        configPasskeyConfigured: None,
+        configCpus: None,
     }
 }
 
@@ -226,7 +243,12 @@ fn collect_network_rates() -> (u64, u64, Option<f64>, Option<f64>) {
     let rx_bytes = primary.map(|n| n.total_received()).unwrap_or(0);
     let tx_bytes = primary.map(|n| n.total_transmitted()).unwrap_or(0);
     let network = network_with_rates(rx_bytes, tx_bytes);
-    (network.rxBytes, network.txBytes, network.rxSec, network.txSec)
+    (
+        network.rxBytes,
+        network.txBytes,
+        network.rxSec,
+        network.txSec,
+    )
 }
 
 pub fn network_with_rates(rx_bytes: u64, tx_bytes: u64) -> Network {
@@ -262,7 +284,7 @@ pub fn network_with_rates(rx_bytes: u64, tx_bytes: u64) -> Network {
 
 async fn get_fah_systemd_status() -> FahSystemdStatus {
     let output = tokio::process::Command::new("systemctl")
-        .args(["is-active", "fah-client"])
+        .args(["is-active", crate::foldingos::FAH_CLIENT_UNIT])
         .output()
         .await;
 

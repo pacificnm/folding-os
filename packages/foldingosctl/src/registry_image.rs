@@ -106,7 +106,10 @@ fn validate_registry_entry(mut entry: RegistryEntry) -> Result<RegistryEntry, St
     }
     entry.rollout_state = entry.rollout_state.trim().to_string();
     if !VALID_ROLLOUT_STATES.contains(&entry.rollout_state.as_str()) {
-        return Err(format!("unsupported rollout state \"{}\"", entry.rollout_state));
+        return Err(format!(
+            "unsupported rollout state \"{}\"",
+            entry.rollout_state
+        ));
     }
     entry.local_image_path = entry.local_image_path.trim().to_string();
     if entry.local_image_path.is_empty() {
@@ -166,8 +169,7 @@ pub fn save_registry_entry(paths: &AppliancePaths, mut entry: RegistryEntry) -> 
         entry.import_timestamp = current_import_timestamp();
     }
     let validated = validate_registry_entry(entry)?;
-    let content = serde_json::to_string_pretty(&validated)
-        .map_err(|error| error.to_string())?;
+    let content = serde_json::to_string_pretty(&validated).map_err(|error| error.to_string())?;
     atomic_write(
         &paths.registry_entry_path(&validated.foldingos_version),
         format!("{content}\n").as_bytes(),
@@ -184,9 +186,12 @@ fn save_registry_index(paths: &AppliancePaths, index: &RegistryIndex) -> Result<
     let mut index = index.clone();
     index.schema_version = 1;
     index.versions.sort();
-    let content = serde_json::to_string_pretty(&index)
-        .map_err(|error| error.to_string())?;
-    atomic_write(&paths.registry_index, format!("{content}\n").as_bytes(), 0o644)
+    let content = serde_json::to_string_pretty(&index).map_err(|error| error.to_string())?;
+    atomic_write(
+        &paths.registry_index,
+        format!("{content}\n").as_bytes(),
+        0o644,
+    )
 }
 
 pub fn verify_registry_image_file(
@@ -317,15 +322,28 @@ pub fn is_bootstrap_assignment_label(value: &str) -> bool {
 }
 
 fn validate_release_label(release: &str) -> Result<(), String> {
-    if release.is_empty() || release.contains('/') || release.contains('\\') || release.contains("..") {
-        return Err("release must be non-empty and must not contain path separators or traversal".into());
+    if release.is_empty()
+        || release.contains('/')
+        || release.contains('\\')
+        || release.contains("..")
+    {
+        return Err(
+            "release must be non-empty and must not contain path separators or traversal".into(),
+        );
     }
     Ok(())
 }
 
 fn validate_tools_version_label(version: &str) -> Result<(), String> {
-    if version.is_empty() || version.contains('/') || version.contains('\\') || version.contains("..") {
-        return Err("tools version must be non-empty and must not contain path separators or traversal".into());
+    if version.is_empty()
+        || version.contains('/')
+        || version.contains('\\')
+        || version.contains("..")
+    {
+        return Err(
+            "tools version must be non-empty and must not contain path separators or traversal"
+                .into(),
+        );
     }
     Ok(())
 }

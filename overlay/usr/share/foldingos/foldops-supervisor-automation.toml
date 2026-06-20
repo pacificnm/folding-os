@@ -18,6 +18,10 @@ group = "provision"
 name = "allow-boot"
 
 [[commands]]
+group = "provision"
+name = "deny-boot"
+
+[[commands]]
 group = "foldops"
 name = "acquire"
 
@@ -32,3 +36,19 @@ name = "export"
 [[commands]]
 group = "recovery"
 name = "import"
+
+[[commands]]
+group = "services"
+name = "restart"
+
+[[commands]]
+group = "services"
+name = "restart-all"
+
+[[commands]]
+group = "config"
+name = "activate"
+
+[[commands]]
+group = "config"
+name = "set-passkey"

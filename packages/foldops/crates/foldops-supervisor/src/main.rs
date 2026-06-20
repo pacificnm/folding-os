@@ -6,8 +6,11 @@ mod db;
 mod deploy;
 mod fah_projects;
 mod foldingos;
+mod install_log;
 mod recovery;
+mod services;
 mod software;
+mod supervisor_logs;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -40,6 +43,10 @@ async fn main() {
         }
     };
 
+    if let Err(error) = install_log::ensure_ready() {
+        tracing::warn!(error = %error, "software install log is unavailable");
+    }
+
     let db = match Db::open(&config.db_path) {
         Ok(db) => Arc::new(db),
         Err(e) => {
@@ -60,9 +67,7 @@ async fn main() {
     let mut app = Router::new().nest("/api", api_router(state.clone()));
 
     if web_root.is_dir() {
-        app = app.fallback_service(
-            ServeDir::new(&web_root).not_found_service(ServeFile::new(&index_path)),
-        );
+        app = app.fallback_service(ServeDir::new(&web_root).fallback(ServeFile::new(&index_path)));
     } else {
         tracing::warn!(path = %web_root.display(), "WEB_ROOT not found — dashboard static files unavailable");
     }

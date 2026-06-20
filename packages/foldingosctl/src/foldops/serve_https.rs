@@ -20,9 +20,7 @@ pub fn foldops_serve_https(paths: &AppliancePaths) -> Result<(), String> {
     let (_cert_path, _key_path) = crate::foldops::tls::load_foldops_tls_certificate(paths)?;
     let config = Arc::new(load_rustls_config(paths)?);
     let upstream = format!("http://127.0.0.1:{FOLDOPS_SUPERVISOR_LOOPBACK_PORT}");
-    println!(
-        "FoldOps HTTPS front end listening on https://{LISTEN_ADDRESS} -> {upstream}"
-    );
+    println!("FoldOps HTTPS front end listening on https://{LISTEN_ADDRESS} -> {upstream}");
     serve_tls_reverse_proxy(LISTEN_ADDRESS, &upstream, config)
 }
 
@@ -33,7 +31,13 @@ fn serve_tls_reverse_proxy(
 ) -> Result<(), String> {
     let listener = TcpListener::bind(listen_addr).map_err(|error| error.to_string())?;
     for stream in listener.incoming() {
-        let mut stream = stream.map_err(|error| error.to_string())?;
+        let mut stream = match stream {
+            Ok(stream) => stream,
+            Err(error) => {
+                eprintln!("foldops serve-https: accept failed: {error}");
+                continue;
+            }
+        };
         let config = config.clone();
         let upstream_base = upstream_base.to_string();
         if let Err(error) = handle_client(&mut stream, config, &upstream_base) {
@@ -48,9 +52,7 @@ fn handle_client(
     config: Arc<rustls::ServerConfig>,
     upstream_base: &str,
 ) -> Result<(), String> {
-    stream
-        .set_read_timeout(Some(Duration::from_secs(15)))
-        .ok();
+    stream.set_read_timeout(Some(Duration::from_secs(15))).ok();
     let mut tls = ServerConnection::new(config).map_err(|error| error.to_string())?;
     let mut tls_stream = rustls::Stream::new(&mut tls, stream);
     let request = read_http_request(&mut tls_stream)?;
@@ -97,7 +99,9 @@ fn read_http_request(stream: &mut impl Read) -> Result<HttpRequest, String> {
         + 4;
     let header_text = String::from_utf8_lossy(&buffer[..header_end]);
     let mut lines = header_text.split("\r\n");
-    let request_line = lines.next().ok_or_else(|| "missing request line".to_string())?;
+    let request_line = lines
+        .next()
+        .ok_or_else(|| "missing request line".to_string())?;
     let mut parts = request_line.split_whitespace();
     let method = parts.next().unwrap_or_default().to_string();
     let path = parts.next().unwrap_or_default().to_string();

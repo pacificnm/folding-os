@@ -76,8 +76,10 @@ def validate_manifest(manifest):
             "manifest artifact_url must use HTTPS from the approved official "
             f"origin: {APPROVED_ORIGIN}"
         )
-    if parsed.path.endswith("/latest.deb"):
-        fail("manifest artifact_url must not reference an unpinned latest artifact")
+    if "/releases/beta/" in artifact_url:
+        fail("manifest artifact_url must use the public release channel, not beta")
+    if manifest.get("client_version") != "8.5.5":
+        fail("manifest client_version must be pinned to 8.5.5")
 
     terms_url = manifest["terms_url"]
     terms_parsed = urlparse(terms_url)

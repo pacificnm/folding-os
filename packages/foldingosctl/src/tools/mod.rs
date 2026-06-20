@@ -20,14 +20,29 @@ use self::acquire_state::{
 use self::download::{download_and_stage_tools_binary, tools_http_agent};
 use self::replace::atomic_replace_tools_binary;
 
-const TOOLS_DEPENDENT_SYSTEMD_UNITS: &[&str] = &[
+const TOOLS_SYNC_RESTART_UNITS: &[&str] = &[
     "foldingos-provision.service",
     "foldingos-provision-boot.service",
-    "foldingos-foldops-serve-https.service",
 ];
 
+/// HTTPS requests from the dashboard reach the supervisor through this unit.
+/// Restarting it during an in-flight apply-local call drops the browser connection.
+const TOOLS_DEFERRED_RESTART_UNITS: &[&str] = &["foldingos-foldops-serve-https.service"];
+
 pub fn acquire_json(paths: &AppliancePaths) -> Result<serde_json::Value, String> {
-    tools_acquire(paths, &ToolsAcquireHooks::default())
+    finalize_tools_acquire(paths, tools_acquire(paths, &ToolsAcquireHooks::default()))
+}
+
+fn finalize_tools_acquire(
+    paths: &AppliancePaths,
+    result: Result<serde_json::Value, String>,
+) -> Result<serde_json::Value, String> {
+    if let Err(error) = replace::restore_setuid_install_mode(&paths.tools_binary) {
+        if result.is_ok() {
+            return Err(error);
+        }
+    }
+    result
 }
 
 pub fn run(paths: &AppliancePaths, subcommand: &str, args: &[String]) -> Result<(), String> {
@@ -36,7 +51,8 @@ pub fn run(paths: &AppliancePaths, subcommand: &str, args: &[String]) -> Result<
     }
     match subcommand {
         "acquire" => {
-            let data = tools_acquire(paths, &ToolsAcquireHooks::default())?;
+            let data =
+                finalize_tools_acquire(paths, tools_acquire(paths, &ToolsAcquireHooks::default()))?;
             if let Some(message) = data.get("message").and_then(|value| value.as_str()) {
                 println!("{message}");
             }
@@ -67,8 +83,12 @@ impl Default for ToolsAcquireHooks {
     }
 }
 
-fn tools_acquire(paths: &AppliancePaths, hooks: &ToolsAcquireHooks) -> Result<serde_json::Value, String> {
+fn tools_acquire(
+    paths: &AppliancePaths,
+    hooks: &ToolsAcquireHooks,
+) -> Result<serde_json::Value, String> {
     require_acquire_automation_mutation(paths, "tools")?;
+    crate::assignments::sync_enrolled_agent_software_assignments(paths)?;
 
     let assignment = match resolve_effective_tools_assignment(paths)? {
         Some(assignment) => assignment,
@@ -123,19 +143,29 @@ fn tools_acquire(paths: &AppliancePaths, hooks: &ToolsAcquireHooks) -> Result<se
     }
 
     let downloads_dir = tools_downloads_dir(paths);
-    let staged_path = (hooks.download_and_stage)(&downloads_dir, &assignment).map_err(|error| {
-        record_tools_acquisition_failure(&acquire_state_path, &error, now_unix).unwrap_err();
-        error
-    })?;
+    let staged_path = match (hooks.download_and_stage)(&downloads_dir, &assignment) {
+        Ok(staged_path) => staged_path,
+        Err(error) => {
+            record_tools_acquisition_failure(&acquire_state_path, &error, now_unix)?;
+            unreachable!("record_tools_acquisition_failure always returns Err")
+        }
+    };
 
     if let Err(error) = atomic_replace_tools_binary(&staged_path, &paths.tools_binary) {
         record_tools_acquisition_failure(&acquire_state_path, &error, now_unix)?;
     }
 
-    let digest = hash_file_at_path(&paths.tools_binary, assignment.artifact_size).map_err(|error| {
-        record_tools_acquisition_failure(&acquire_state_path, &error, now_unix).unwrap_err();
-        error
-    })?;
+    if let Err(error) = crate::automation_policy::sync_automation_policies_to_system_share(paths) {
+        record_tools_acquisition_failure(&acquire_state_path, &error, now_unix)?;
+    }
+
+    let digest = match hash_file_at_path(&paths.tools_binary, assignment.artifact_size) {
+        Ok(digest) => digest,
+        Err(error) => {
+            record_tools_acquisition_failure(&acquire_state_path, &error, now_unix)?;
+            unreachable!("record_tools_acquisition_failure always returns Err")
+        }
+    };
     if digest != assignment.sha256 {
         record_tools_acquisition_failure(
             &acquire_state_path,
@@ -235,14 +265,22 @@ fn require_tools_acquisition_prerequisites() -> Result<(), String> {
 }
 
 fn restart_tools_dependent_units() -> Result<(), String> {
-    for unit in TOOLS_DEPENDENT_SYSTEMD_UNITS {
-        let status = Command::new("systemctl")
-            .args(["try-restart", unit])
-            .status()
-            .map_err(|error| format!("restart {unit}: {error}"))?;
-        if !status.success() {
-            return Err(format!("restart {unit}: {status}"));
-        }
+    for unit in TOOLS_SYNC_RESTART_UNITS {
+        try_restart_systemd_unit(unit)?;
+    }
+    for unit in TOOLS_DEFERRED_RESTART_UNITS {
+        crate::process::schedule_deferred_systemd_restart(unit)?;
+    }
+    Ok(())
+}
+
+fn try_restart_systemd_unit(unit: &str) -> Result<(), String> {
+    let status = Command::new("systemctl")
+        .args(["try-restart", unit])
+        .status()
+        .map_err(|error| format!("restart {unit}: {error}"))?;
+    if !status.success() {
+        return Err(format!("restart {unit}: {status}"));
     }
     Ok(())
 }
@@ -254,12 +292,12 @@ mod tests {
 
     use sha2::{Digest, Sha256};
 
+    use super::download::write_staged_tools_binary;
     use super::*;
     use crate::inspect::tools::parse_tools_assignment;
     use crate::inspect::{
         save_tools_active_state, validate_tools_assignment_public, ToolsActiveState,
     };
-    use super::download::write_staged_tools_binary;
 
     const VALID_TOOLS_ASSIGNMENT_JSON: &str = r#"{
   "schema_version": 1,
@@ -307,10 +345,8 @@ mod tests {
 
     #[test]
     fn resolve_effective_tools_assignment_prefers_assigned() {
-        let root = std::env::temp_dir().join(format!(
-            "foldingosctl-tools-resolve-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("foldingosctl-tools-resolve-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
         fs::write(
@@ -354,7 +390,8 @@ mod tests {
         fs::create_dir_all(&root).unwrap();
         let paths = test_paths(&root);
         let payload = test_elf_bytes();
-        let mut assignment = parse_tools_assignment(VALID_TOOLS_ASSIGNMENT_JSON.as_bytes()).unwrap();
+        let mut assignment =
+            parse_tools_assignment(VALID_TOOLS_ASSIGNMENT_JSON.as_bytes()).unwrap();
         assignment.artifact_size = payload.len() as i64;
         assignment.sha256 = format!("{:x}", Sha256::digest(&payload));
         fs::write(&paths.tools_binary, &payload).unwrap();
@@ -378,10 +415,8 @@ mod tests {
 
     #[test]
     fn tools_acquire_installs_verified_binary() {
-        let root = std::env::temp_dir().join(format!(
-            "foldingosctl-tools-acquire-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("foldingosctl-tools-acquire-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
 

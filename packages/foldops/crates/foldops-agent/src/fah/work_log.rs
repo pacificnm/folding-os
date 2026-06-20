@@ -17,6 +17,13 @@ static STEPS_RE: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 pub async fn get_newest_work_log_path(work_dir: &Path) -> Option<PathBuf> {
+    if let Some(path) = newest_logfile_in_work_dir(work_dir).await {
+        return Some(path);
+    }
+    newest_rotated_fah_log(work_dir).await
+}
+
+async fn newest_logfile_in_work_dir(work_dir: &Path) -> Option<PathBuf> {
     let mut newest: Option<(PathBuf, SystemTime)> = None;
 
     let mut units = match tokio::fs::read_dir(work_dir).await {
@@ -50,6 +57,34 @@ pub async fn get_newest_work_log_path(work_dir: &Path) -> Option<PathBuf> {
     }
 
     newest.map(|(p, _)| p)
+}
+
+/// FAH 8.x rotates client logs under `<data>/log/` rather than per-WU files in `work/`.
+async fn newest_rotated_fah_log(work_dir: &Path) -> Option<PathBuf> {
+    let rotate_dir = work_dir
+        .parent()
+        .map(|parent| parent.join("log"))
+        .filter(|path| path.is_dir())
+        .unwrap_or_else(|| work_dir.join("../log").to_path_buf());
+
+    let mut newest: Option<(PathBuf, SystemTime)> = None;
+    let mut entries = tokio::fs::read_dir(&rotate_dir).await.ok()?;
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if !name.starts_with("log-") || !name.ends_with(".txt") {
+            continue;
+        }
+        let meta = tokio::fs::metadata(&path).await.ok()?;
+        if !meta.is_file() {
+            continue;
+        }
+        let mtime = meta.modified().unwrap_or(SystemTime::UNIX_EPOCH);
+        if newest.as_ref().is_none_or(|(_, t)| mtime > *t) {
+            newest = Some((path, mtime));
+        }
+    }
+    newest.map(|(path, _)| path)
 }
 
 pub async fn parse_fah_work_log(work_dir: &Path) -> Option<FahLogState> {

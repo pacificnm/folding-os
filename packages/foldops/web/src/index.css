@@ -213,6 +213,11 @@ body {
   color: var(--warn);
 }
 
+.badge-danger {
+  background: color-mix(in srgb, var(--danger) 20%, transparent);
+  color: var(--danger);
+}
+
 .card-section {
   padding: 1rem 1.25rem;
 }
@@ -894,6 +899,13 @@ body {
   color: var(--accent);
 }
 
+.deploy-results {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
 .deploy-table {
   width: 100%;
   border-collapse: collapse;
@@ -912,6 +924,11 @@ body {
   font-weight: 600;
   font-size: 0.75rem;
   text-transform: uppercase;
+  background: var(--surface-2);
+}
+
+.deploy-results .deploy-table tbody tr:last-child td {
+  border-bottom: none;
 }
 
 .deploy-history {
@@ -1027,6 +1044,17 @@ body {
   margin-bottom: 2rem;
 }
 
+.admin-section-title {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.admin-form-actions {
+  display: flex;
+  align-items: flex-end;
+}
+
 .admin-upstream-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -1083,11 +1111,157 @@ body {
 
 .admin-table td,
 .admin-table th {
-  vertical-align: top;
+  vertical-align: middle;
+}
+
+.admin-table-link {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.admin-table-link:hover {
+  text-decoration: underline;
+}
+
+.admin-table-actions {
+  text-align: right;
+  white-space: nowrap;
+  width: 1%;
 }
 
 .admin-pending {
   color: var(--warn);
+}
+
+.admin-detail {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.admin-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.admin-detail-back {
+  display: inline-block;
+  margin-bottom: 0.35rem;
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.admin-detail-back:hover {
+  text-decoration: underline;
+}
+
+.admin-detail-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.admin-detail-title-row h2 {
+  margin-bottom: 0;
+}
+
+.admin-detail-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.25rem;
+}
+
+.admin-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+
+.admin-detail-card,
+.admin-detail-placeholder {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.admin-detail-card h3,
+.admin-detail-placeholder h3 {
+  margin: 0 0 0.8rem;
+  font-size: 0.95rem;
+}
+
+.admin-detail-list {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+}
+
+.admin-detail-list div {
+  display: grid;
+  grid-template-columns: minmax(9rem, 0.42fr) 1fr;
+  gap: 0.75rem;
+  align-items: baseline;
+}
+
+.admin-detail-list dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.admin-detail-list dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.admin-machine-tabs .tabs-panel {
+  display: grid;
+  gap: 1.35rem;
+  align-content: start;
+  min-height: 16rem;
+}
+
+.admin-machine-tabs .range-bar,
+.admin-machine-tabs .project-panel {
+  margin-bottom: 0;
+}
+
+.admin-detail-charts {
+  margin-top: 0;
+}
+
+.admin-detail-placeholder p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.admin-detail-fah-stats {
+  margin-top: -0.35rem;
+}
+
+@media (max-width: 900px) {
+  .admin-detail-header {
+    flex-direction: column;
+  }
+
+  .admin-detail-summary,
+  .admin-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-detail-list div {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
+  }
 }
 
 .admin-token-form {
@@ -1141,41 +1315,6 @@ body {
 .admin-export-meta dd {
   margin: 0;
   word-break: break-all;
-}
-
-.admin-backup-cta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem 1.5rem;
-  margin-bottom: 1.5rem;
-  padding: 1.1rem 1.25rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 0.75rem;
-}
-
-.admin-backup-cta-title {
-  margin: 0 0 0.35rem;
-  font-size: 1.05rem;
-  font-weight: 600;
-}
-
-.admin-backup-cta-text {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.92rem;
-  max-width: 42ch;
-}
-
-.admin-backup-panel {
-  max-width: 36rem;
-}
-
-.deploy-btn--large {
-  padding: 0.75rem 1.5rem;
-  font-size: 1rem;
 }
 
 .admin-advanced-toggle {
@@ -1380,17 +1519,81 @@ body {
   font-size: 0.85em;
 }
 
+.machine-controls-status-wrap {
+  margin-bottom: 1rem;
+}
+
 .machine-controls-status {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem 1.25rem;
-  margin-bottom: 1rem;
   padding: 0.55rem 0.75rem;
-  border-radius: 8px;
+  border-radius: 8px 8px 0 0;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  background: var(--surface);
+  font-size: 0.88rem;
+}
+
+.machine-controls-folding {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 0 0 8px 8px;
   border: 1px solid var(--border);
   background: var(--surface);
   font-size: 0.88rem;
+}
+
+.machine-controls-folding-label {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.machine-controls-folding-unit {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.machine-controls-folding-detail {
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.machine-controls-ingest-hint {
+  margin: 0.45rem 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.machine-controls-folding-badge--folding {
+  background: color-mix(in srgb, var(--ok) 18%, transparent);
+  color: var(--ok);
+}
+
+.machine-controls-folding-badge--paused,
+.machine-controls-folding-badge--waiting,
+.machine-controls-folding-badge--idle {
+  background: color-mix(in srgb, var(--warn) 18%, transparent);
+  color: var(--warn);
+}
+
+.machine-controls-folding-badge--stopped,
+.machine-controls-folding-badge--unreachable {
+  background: color-mix(in srgb, var(--danger) 15%, transparent);
+  color: var(--danger);
+}
+
+.machine-controls-folding-badge--finishing,
+.machine-controls-folding-badge--download,
+.machine-controls-folding-badge--upload,
+.machine-controls-folding-badge--ready,
+.machine-controls-folding-badge--core {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
 }
 
 .machine-controls-refresh {

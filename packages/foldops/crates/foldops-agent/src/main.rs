@@ -40,18 +40,19 @@ async fn main() {
         "FoldOps agent starting"
     );
 
-    let config_http = config.clone();
-    tokio::spawn(async move {
-        http::start_agent_http(config_http).await;
-    });
+    let ingest = Arc::new(IngestClient::new(config.clone()));
+    ingest.probe_supervisor().await;
 
-    let client = IngestClient::new(config.clone());
-    client.probe_supervisor().await;
+    let config_http = config.clone();
+    let ingest_http = ingest.clone();
+    tokio::spawn(async move {
+        http::start_agent_http(config_http, ingest_http).await;
+    });
 
     let interval = Duration::from_millis(config.interval_ms);
 
     loop {
-        if let Err(e) = client.collect_and_post().await {
+        if let Err(e) = ingest.collect_and_post().await {
             tracing::error!(error = %e, "ingest error");
         }
         tokio::time::sleep(interval).await;

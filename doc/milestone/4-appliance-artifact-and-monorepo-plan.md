@@ -129,10 +129,10 @@ Routine FoldOps and `foldingosctl` updates without OS reflash are acceptable whe
 ./scripts/build
 
 # FoldOps layout bundles + manifest (new)
-./scripts/build-foldops-bundles
+./scripts/build-foldops-bundles --sync-overlay
 
 # foldingosctl static binary for tools channel (new or extended)
-./scripts/build-foldingosctl-release
+./scripts/build-foldingosctl-release --version <tools-version> --sync-overlay
 ```
 
 FoldOps bundle build uses **Rust `cargo`** and repository shell scripts only. There is no Node.js or `npm` in the FoldingOS build path.

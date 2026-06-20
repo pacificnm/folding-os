@@ -1,18 +1,10 @@
 use serde_json::Value;
 
-pub async fn push_foldops_acquire(
-    hostname: &str,
-    port: u16,
-    token: &str,
-) -> Result<Value, String> {
+pub async fn push_foldops_acquire(hostname: &str, port: u16, token: &str) -> Result<Value, String> {
     push_software_acquire(hostname, port, token, "foldops-acquire").await
 }
 
-pub async fn push_tools_acquire(
-    hostname: &str,
-    port: u16,
-    token: &str,
-) -> Result<Value, String> {
+pub async fn push_tools_acquire(hostname: &str, port: u16, token: &str) -> Result<Value, String> {
     push_software_acquire(hostname, port, token, "tools-acquire").await
 }
 

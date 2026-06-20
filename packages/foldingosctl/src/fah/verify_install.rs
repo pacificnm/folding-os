@@ -80,7 +80,10 @@ pub fn extract_and_install_fah_artifact(
     }
 
     if fs::metadata(&staged_deb).is_err() {
-        return Err(format!("staged deb artifact is missing: {}", staged_deb.display()));
+        return Err(format!(
+            "staged deb artifact is missing: {}",
+            staged_deb.display()
+        ));
     }
     if let Err(error) = extract_fah_deb_data(&staged_deb, &staging_dir) {
         let _ = remove_fah_path(&staging_dir);
@@ -139,10 +142,9 @@ pub fn fah_installation_verified(
     if values.get("artifact_sha256") != Some(&manifest.sha256) {
         return false;
     }
-    let Ok(executable) = fah_executable_in_root(
-        &paths.fah_version_dir(version),
-        &manifest.executable_path,
-    ) else {
+    let Ok(executable) =
+        fah_executable_in_root(&paths.fah_version_dir(version), &manifest.executable_path)
+    else {
         return false;
     };
     fs::metadata(executable)
@@ -181,14 +183,20 @@ fn walk_install_tree(root_clean: &Path, current: &Path) -> Result<(), String> {
             return Err(format!("symlinks are not permitted: {relative}"));
         }
         if metadata.mode() & (0o4000 | 0o2000 | 0o1000) != 0 {
-            return Err(format!("special permission bits are not permitted: {relative}"));
+            return Err(format!(
+                "special permission bits are not permitted: {relative}"
+            ));
         }
         if require_fah_root_ownership() && !is_root_owned(&metadata) {
-            return Err(format!("installed file is not owned by root:root: {relative}"));
+            return Err(format!(
+                "installed file is not owned by root:root: {relative}"
+            ));
         }
         let perm = metadata.mode() & 0o777;
         if perm & 0o002 != 0 {
-            return Err(format!("world-writable permissions are not permitted: {relative}"));
+            return Err(format!(
+                "world-writable permissions are not permitted: {relative}"
+            ));
         }
         if metadata.is_dir() {
             if perm != 0o755 {
@@ -204,7 +212,9 @@ fn walk_install_tree(root_clean: &Path, current: &Path) -> Result<(), String> {
                     ));
                 }
             } else if perm != 0o644 {
-                return Err(format!("file permissions are unsafe: {relative} ({perm:04o})"));
+                return Err(format!(
+                    "file permissions are unsafe: {relative} ({perm:04o})"
+                ));
             }
         } else {
             return Err(format!("unsupported file type: {relative}"));
@@ -231,8 +241,12 @@ fn normalize_fah_install_tree(root: &Path) -> Result<(), String> {
             return Err(format!("unsupported file type: {}", path.display()));
         }
         if require_fah_root_ownership() {
-            nix::unistd::chown(&path, Some(nix::unistd::Uid::from_raw(0)), Some(nix::unistd::Gid::from_raw(0)))
-                .map_err(|error| format!("normalize ownership for {}: {error}", path.display()))?;
+            nix::unistd::chown(
+                &path,
+                Some(nix::unistd::Uid::from_raw(0)),
+                Some(nix::unistd::Gid::from_raw(0)),
+            )
+            .map_err(|error| format!("normalize ownership for {}: {error}", path.display()))?;
         }
         let mut mode = metadata.mode() & !0o7000;
         mode = if metadata.is_dir() {
@@ -332,8 +346,8 @@ pub fn verify_fah_artifact_file(path: &Path, manifest: &FahManifest) -> Result<(
     let file = File::open(path).map_err(|error| error.to_string())?;
     let mut hasher = Sha256::new();
     let mut reader = file.take((manifest.artifact_size + 1) as u64);
-    let written = copy(&mut reader, &mut hasher)
-    .map_err(|error| format!("hash artifact: {error}"))?;
+    let written =
+        copy(&mut reader, &mut hasher).map_err(|error| format!("hash artifact: {error}"))?;
     if written != manifest.artifact_size as u64 {
         return Err(format!(
             "artifact size {written} does not match expected size {}",

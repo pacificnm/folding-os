@@ -42,7 +42,9 @@ pub fn collect_inspect_foldops_data(paths: &AppliancePaths) -> Result<serde_json
     Ok(data)
 }
 
-fn resolve_effective_foldops_manifest_path(paths: &AppliancePaths) -> Result<std::path::PathBuf, String> {
+fn resolve_effective_foldops_manifest_path(
+    paths: &AppliancePaths,
+) -> Result<std::path::PathBuf, String> {
     if paths.foldops_assigned_manifest.exists() {
         return Ok(paths.foldops_assigned_manifest.clone());
     }

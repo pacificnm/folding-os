@@ -1,5 +1,5 @@
 import { Navigate } from "react-router-dom";
 
 export function AdminIndex() {
-  return <Navigate to="/admin/recovery" replace />;
+  return <Navigate to="/admin/software" replace />;
 }

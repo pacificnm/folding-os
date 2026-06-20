@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { HistoryChart } from "../components/HistoryChart";
-import { MachineControlsPanel } from "../components/MachineControlsPanel";
-import { MachineLogsPanel } from "../components/MachineLogsPanel";
 import { PageLayout } from "../components/PageLayout";
+import {
+  fahAcquisitionLabel,
+  fahAcquisitionTitle,
+  fahClientClass,
+  fahClientLabel,
+} from "../components/FahClientStatus";
 import { FahStatsLinks } from "../components/FahStatsLinks";
 import { ProjectInfoPanel } from "../components/ProjectInfoPanel";
-import { Tabs, type TabItem } from "../components/Tabs";
 import { fetchFahProject, fetchMachine, fetchSnapshots } from "../api";
 import { snapshotsToHistory } from "../history";
 import type { FahProjectInfo, HistoryPoint, MachineSummary } from "../types";
@@ -22,17 +25,10 @@ const RANGES = [
   { label: "24 hours", limit: 500 },
 ] as const;
 
-const PAGE_TABS: TabItem[] = [
-  { id: "overview", label: "Overview" },
-  { id: "logs", label: "Logs" },
-  { id: "control", label: "Control" },
-];
-
 export function MachineDetail() {
   const { hostname: encoded } = useParams<{ hostname: string }>();
   const hostname = encoded ? decodeURIComponent(encoded) : "";
 
-  const [pageTab, setPageTab] = useState("overview");
   const [machine, setMachine] = useState<MachineSummary | null>(null);
   const [history, setHistory] = useState<HistoryPoint[]>([]);
   const [limit, setLimit] = useState<number>(480);
@@ -67,6 +63,7 @@ export function MachineDetail() {
   }, [load]);
 
   const latest = machine?.latest;
+  const fah = latest?.payload?.fah;
   const projectId = latest?.project ?? null;
 
   useEffect(() => {
@@ -124,9 +121,12 @@ export function MachineDetail() {
         ) : undefined
       }
       footer={
-        pageTab === "overview"
-          ? "History refreshes every 60s"
-          : "Logs refresh on demand · snapshot cache updates every 60s"
+        <>
+          History refreshes every 60s -{" "}
+          <Link to={`/admin/folding/${encodeURIComponent(hostname)}`}>
+            Admin details
+          </Link>
+        </>
       }
       headerAside={
         <div className="header-meta">
@@ -147,179 +147,177 @@ export function MachineDetail() {
         </div>
       }
     >
-      <Tabs
-        tabs={PAGE_TABS}
-        active={pageTab}
-        onChange={setPageTab}
-        className="machine-page-tabs"
-      >
-        {pageTab === "overview" && (
-          <>
-            <div className="range-bar">
-              <span className="range-label">Time range</span>
-              <div className="range-buttons">
-                {RANGES.map((r) => (
-                  <button
-                    key={r.limit}
-                    type="button"
-                    className={`range-btn ${limit === r.limit ? "active" : ""}`}
-                    onClick={() => setLimit(r.limit)}
-                  >
-                    {r.label}
-                  </button>
-                ))}
-              </div>
-              <span className="range-hint">
-                {snapshotCount} snapshots · ~1/min · {rangeLabel}
+      <div className="range-bar">
+        <span className="range-label">Time range</span>
+        <div className="range-buttons">
+          {RANGES.map((r) => (
+            <button
+              key={r.limit}
+              type="button"
+              className={`range-btn ${limit === r.limit ? "active" : ""}`}
+              onClick={() => setLimit(r.limit)}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+        <span className="range-hint">
+          {snapshotCount} snapshots - ~1/min - {rangeLabel}
+        </span>
+      </div>
+
+      {loading && !history.length && (
+        <p className="message">Loading history...</p>
+      )}
+      {error && <p className="message error">{error}</p>}
+
+      {projectId && (
+        <ProjectInfoPanel
+          projectId={projectId}
+          run={latest?.run ?? null}
+          clone={latest?.clone ?? null}
+          gen={latest?.gen ?? null}
+          info={projectInfo}
+          loading={projectLoading}
+          error={projectError}
+        />
+      )}
+
+      {!loading && history.length > 0 && (
+        <>
+          <div className="detail-stats">
+            <div className="detail-stat">
+              <span className="label">Client</span>
+              <span
+                className={`value mono ${fahClientClass(fah)}`}
+                title={fahAcquisitionTitle(fah)}
+              >
+                {fahClientLabel(fah)}
               </span>
             </div>
+            <div className="detail-stat">
+              <span className="label">Acquire</span>
+              <span
+                className={`value mono ${fahClientClass(fah)}`}
+                title={fahAcquisitionTitle(fah)}
+              >
+                {fahAcquisitionLabel(fah)}
+              </span>
+            </div>
+            <div className="detail-stat">
+              <span className="label">Current PPD</span>
+              <span className="value mono highlight">
+                {formatPpd(latest?.ppd ?? null)}
+              </span>
+            </div>
+            <div className="detail-stat">
+              <span className="label">Progress</span>
+              <span className="value mono">
+                {latest?.progress != null
+                  ? `${latest.progress.toFixed(1)}%`
+                  : "-"}
+              </span>
+            </div>
+            <div className="detail-stat">
+              <span className="label">CPU</span>
+              <span className="value mono">
+                {latest?.cpu_usage != null ? `${latest.cpu_usage}%` : "-"}
+              </span>
+            </div>
+            <div className="detail-stat">
+              <span className="label">Temps</span>
+              <span className="value mono">
+                {formatTemp(latest?.cpu_temp)} / {formatTemp(latest?.chassis_temp)}
+              </span>
+            </div>
+          </div>
 
-            {loading && !history.length && (
-              <p className="message">Loading history…</p>
-            )}
-            {error && <p className="message error">{error}</p>}
+          <div className="charts-grid">
+            <HistoryChart
+              title="FAH progress"
+              data={history}
+              series={[
+                {
+                  key: "progress",
+                  name: "Progress",
+                  color: "#3d9eff",
+                  unit: "%",
+                  domain: [0, 100],
+                },
+              ]}
+            />
+            <HistoryChart
+              title="Points per day"
+              data={history}
+              series={[
+                {
+                  key: "ppd",
+                  name: "PPD",
+                  color: "#34d399",
+                  unit: "ppd",
+                },
+              ]}
+            />
+            <HistoryChart
+              title="CPU & memory"
+              data={history}
+              series={[
+                {
+                  key: "cpu",
+                  name: "CPU",
+                  color: "#fbbf24",
+                  unit: "%",
+                  domain: [0, 100],
+                },
+                {
+                  key: "memory",
+                  name: "Memory",
+                  color: "#a78bfa",
+                  unit: "%",
+                  domain: [0, 100],
+                },
+              ]}
+              height={220}
+            />
+            <HistoryChart
+              title="Disk usage"
+              data={history}
+              series={[
+                {
+                  key: "disk",
+                  name: "Disk",
+                  color: "#fb923c",
+                  unit: "%",
+                  domain: [0, 100],
+                },
+              ]}
+            />
+            <HistoryChart
+              title="Temperatures"
+              data={history}
+              series={[
+                {
+                  key: "cpuTemp",
+                  name: "CPU",
+                  color: "#f87171",
+                  unit: "°C",
+                },
+                {
+                  key: "chassisTemp",
+                  name: "Chassis",
+                  color: "#38bdf8",
+                  unit: "°C",
+                },
+              ]}
+              height={220}
+            />
+          </div>
+        </>
+      )}
 
-            {projectId && (
-              <ProjectInfoPanel
-                projectId={projectId}
-                run={latest?.run ?? null}
-                clone={latest?.clone ?? null}
-                gen={latest?.gen ?? null}
-                info={projectInfo}
-                loading={projectLoading}
-                error={projectError}
-              />
-            )}
-
-            {!loading && history.length > 0 && (
-              <>
-                <div className="detail-stats">
-                  <div className="detail-stat">
-                    <span className="label">Current PPD</span>
-                    <span className="value mono highlight">
-                      {formatPpd(latest?.ppd ?? null)}
-                    </span>
-                  </div>
-                  <div className="detail-stat">
-                    <span className="label">Progress</span>
-                    <span className="value mono">
-                      {latest?.progress != null
-                        ? `${latest.progress.toFixed(1)}%`
-                        : "—"}
-                    </span>
-                  </div>
-                  <div className="detail-stat">
-                    <span className="label">CPU</span>
-                    <span className="value mono">
-                      {latest?.cpu_usage != null ? `${latest.cpu_usage}%` : "—"}
-                    </span>
-                  </div>
-                  <div className="detail-stat">
-                    <span className="label">Temps</span>
-                    <span className="value mono">
-                      {formatTemp(latest?.cpu_temp)} /{" "}
-                      {formatTemp(latest?.chassis_temp)}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="charts-grid">
-                  <HistoryChart
-                    title="FAH progress"
-                    data={history}
-                    series={[
-                      {
-                        key: "progress",
-                        name: "Progress",
-                        color: "#3d9eff",
-                        unit: "%",
-                        domain: [0, 100],
-                      },
-                    ]}
-                  />
-                  <HistoryChart
-                    title="Points per day"
-                    data={history}
-                    series={[
-                      {
-                        key: "ppd",
-                        name: "PPD",
-                        color: "#34d399",
-                        unit: "ppd",
-                      },
-                    ]}
-                  />
-                  <HistoryChart
-                    title="CPU & memory"
-                    data={history}
-                    series={[
-                      {
-                        key: "cpu",
-                        name: "CPU",
-                        color: "#fbbf24",
-                        unit: "%",
-                        domain: [0, 100],
-                      },
-                      {
-                        key: "memory",
-                        name: "Memory",
-                        color: "#a78bfa",
-                        unit: "%",
-                        domain: [0, 100],
-                      },
-                    ]}
-                    height={220}
-                  />
-                  <HistoryChart
-                    title="Disk usage"
-                    data={history}
-                    series={[
-                      {
-                        key: "disk",
-                        name: "Disk",
-                        color: "#fb923c",
-                        unit: "%",
-                        domain: [0, 100],
-                      },
-                    ]}
-                  />
-                  <HistoryChart
-                    title="Temperatures"
-                    data={history}
-                    series={[
-                      {
-                        key: "cpuTemp",
-                        name: "CPU",
-                        color: "#f87171",
-                        unit: "°C",
-                      },
-                      {
-                        key: "chassisTemp",
-                        name: "Chassis",
-                        color: "#38bdf8",
-                        unit: "°C",
-                      },
-                    ]}
-                    height={220}
-                  />
-                </div>
-              </>
-            )}
-
-            {!loading && !error && history.length === 0 && (
-              <p className="message">No snapshot history for this node yet.</p>
-            )}
-          </>
-        )}
-
-        {pageTab === "logs" && (
-          <MachineLogsPanel hostname={hostname} machine={machine} />
-        )}
-
-        {pageTab === "control" && (
-          <MachineControlsPanel hostname={hostname} machine={machine} />
-        )}
-      </Tabs>
+      {!loading && !error && history.length === 0 && (
+        <p className="message">No snapshot history for this node yet.</p>
+      )}
     </PageLayout>
   );
 }

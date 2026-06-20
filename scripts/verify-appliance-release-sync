@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# Fail unless overlay, FoldOps bundles, tools staging, and image foldingosctl agree.
+set -euo pipefail
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=lib/appliance-release.sh
+source "${PROJECT_ROOT}/scripts/lib/appliance-release.sh"
+
+require_image="${1:-}"
+
+RELEASE="$(appliance_release_read)"
+OVERLAY_MANIFEST="$(appliance_release_overlay_manifest)"
+FOLDOPS_DIR="$(appliance_release_foldops_dir)"
+TOOLS_DIR="$(appliance_release_tools_dir)"
+IMAGE_FOLDINGOSCTL="$(appliance_release_image_foldingosctl)"
+TOOLS_BINARY="${TOOLS_DIR}/foldingosctl-x86_64"
+
+echo "Verifying appliance release sync for ${RELEASE}"
+
+if [ ! -f "${OVERLAY_MANIFEST}" ]; then
+  echo "ERROR: missing overlay manifest: ${OVERLAY_MANIFEST}" >&2
+  exit 1
+fi
+
+if [ ! -d "${FOLDOPS_DIR}" ]; then
+  echo "ERROR: missing FoldOps build output: ${FOLDOPS_DIR}" >&2
+  echo "Run ./scripts/build-foldops-bundles --sync-overlay first." >&2
+  exit 1
+fi
+
+if ! cmp -s "${OVERLAY_MANIFEST}" "${FOLDOPS_DIR}/manifest.toml"; then
+  echo "ERROR: overlay manifest does not match ${FOLDOPS_DIR}/manifest.toml" >&2
+  echo "Run ./scripts/build-foldops-bundles --sync-overlay" >&2
+  exit 1
+fi
+
+for bundle in \
+  foldops-agent-x86_64.tar.zst \
+  foldops-supervisor-x86_64.tar.zst \
+  foldops-web-x86_64.tar.zst \
+  manifest.toml; do
+  if [ ! -f "${FOLDOPS_DIR}/${bundle}" ]; then
+    echo "ERROR: missing FoldOps artifact: ${FOLDOPS_DIR}/${bundle}" >&2
+    exit 1
+  fi
+done
+
+if [ ! -x "${IMAGE_FOLDINGOSCTL}" ]; then
+  echo "ERROR: missing image foldingosctl: ${IMAGE_FOLDINGOSCTL}" >&2
+  echo "Run ./scripts/build to produce the OS image binary." >&2
+  exit 1
+fi
+
+if [ ! -x "${TOOLS_BINARY}" ]; then
+  echo "ERROR: missing staged tools binary: ${TOOLS_BINARY}" >&2
+  echo "Run ./scripts/stage-foldingosctl-tools-release" >&2
+  exit 1
+fi
+
+IMAGE_SHA="$(appliance_release_sha256_file "${IMAGE_FOLDINGOSCTL}")"
+TOOLS_SHA="$(appliance_release_sha256_file "${TOOLS_BINARY}")"
+if [ "${IMAGE_SHA}" != "${TOOLS_SHA}" ]; then
+  echo "ERROR: image foldingosctl does not match staged tools release" >&2
+  echo "  image: ${IMAGE_SHA}" >&2
+  echo "  tools: ${TOOLS_SHA}" >&2
+  echo "Run ./scripts/stage-foldingosctl-tools-release after ./scripts/build" >&2
+  exit 1
+fi
+
+if [ -f "${TOOLS_DIR}/SHA256SUMS" ]; then
+  LISTED_SHA="$(awk '{print $1}' "${TOOLS_DIR}/SHA256SUMS")"
+  if [ "${LISTED_SHA}" != "${TOOLS_SHA}" ]; then
+    echo "ERROR: tools SHA256SUMS does not match staged binary" >&2
+    exit 1
+  fi
+fi
+
+ROOTFS_TAR="${PROJECT_ROOT}/build/output/images/rootfs.tar"
+if [ "${require_image}" = "--require-image" ] || [ -f "${ROOTFS_TAR}" ]; then
+  if [ ! -f "${ROOTFS_TAR}" ]; then
+    echo "ERROR: missing rootfs.tar: ${ROOTFS_TAR}" >&2
+    exit 1
+  fi
+  echo "Verifying embedded FoldOps bootstrap cache in rootfs"
+  "${PROJECT_ROOT}/scripts/verify-foldops-manifest" "${ROOTFS_TAR}"
+fi
+
+echo "Appliance release ${RELEASE} is in sync:"
+echo "  overlay manifest: ${OVERLAY_MANIFEST}"
+echo "  foldops bundles:  ${FOLDOPS_DIR}/"
+echo "  foldingosctl:     ${IMAGE_SHA} (image == tools channel staging)"

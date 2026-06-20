@@ -112,7 +112,9 @@ fn collect_tree(
         });
         return Ok(());
     }
-    for entry in fs::read_dir(current).map_err(|error| format!("read {}: {error}", current.display()))? {
+    for entry in
+        fs::read_dir(current).map_err(|error| format!("read {}: {error}", current.display()))?
+    {
         let entry = entry.map_err(|error| error.to_string())?;
         let path = entry.path();
         if path.is_dir() {
@@ -140,9 +142,7 @@ pub fn archive_path_for(paths: &AppliancePaths, path: &Path) -> Result<String, S
     })?;
     let archive = format!(
         "data/{}",
-        relative
-            .to_string_lossy()
-            .trim_start_matches('/')
+        relative.to_string_lossy().trim_start_matches('/')
     );
     validate_archive_path(&archive)?;
     Ok(archive)
@@ -185,7 +185,9 @@ pub fn validate_restore_target(path: &str, include_secrets: bool) -> Result<(), 
         .iter()
         .any(|prefix| path == *prefix || path.starts_with(prefix));
     if !allowed {
-        return Err(format!("restore path {path:?} is not in the approved export scope"));
+        return Err(format!(
+            "restore path {path:?} is not in the approved export scope"
+        ));
     }
     Ok(())
 }
@@ -248,14 +250,20 @@ pub fn resolve_export_source<'a>(
     db_backup: Option<&'a Path>,
 ) -> Result<&'a Path, String> {
     if db_backup.is_some()
-        && file.source_path.file_name().is_some_and(|name| name == "foldops.db")
+        && file
+            .source_path
+            .file_name()
+            .is_some_and(|name| name == "foldops.db")
     {
         return Ok(db_backup.expect("db backup path"));
     }
     Ok(&file.source_path)
 }
 
-fn resolve_file_source<'a>(file: &'a StagedBundleFile, db_backup: Option<&'a Path>) -> Result<&'a Path, String> {
+fn resolve_file_source<'a>(
+    file: &'a StagedBundleFile,
+    db_backup: Option<&'a Path>,
+) -> Result<&'a Path, String> {
     resolve_export_source(file, db_backup)
 }
 

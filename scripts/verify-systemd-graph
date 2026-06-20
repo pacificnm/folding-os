@@ -42,6 +42,7 @@ FOLDOPS_RUNTIME_UNITS = {
     "foldingos-foldops-serve-https.service",
     "foldingos-foldops-supervisor.service",
     "foldingos-foldops-agent.service",
+    "foldingos-tools-acquire.service",
 }
 APPROVED_FOLDOPS_UNIT_NAMES = FOLDOPS_RUNTIME_UNITS
 REQUIRED_LINKS = {
@@ -396,6 +397,17 @@ UNIT_REQUIREMENTS = {
         ("Service", "EnvironmentFile"): {"/data/config/foldops/supervisor.env"},
         ("Service", "Type"): {"simple"},
         ("Service", "Restart"): {"on-failure"},
+    },
+    "foldingos-tools-acquire.service": {
+        ("Unit", "After"): {
+            "network-online.target",
+            "systemd-time-wait-sync.service",
+            "data.mount",
+            "foldingos-installation-role.service",
+        },
+        ("Unit", "Wants"): {"network-online.target"},
+        ("Unit", "ConditionPathExists"): {"/data/config/installation-role"},
+        ("Service", "Type"): {"oneshot"},
     },
     "foldingos-foldops-agent.service": {
         ("Unit", "After"): {

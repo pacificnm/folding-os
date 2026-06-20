@@ -1,5 +1,5 @@
 schema_version = 2
-manifest_release = "0.1.0-5"
+manifest_release = "0.1.0-80"
 architecture = "x86_64"
 artifact_format = "layout-tar-zst"
 minimum_foldingos_version = "0.1.0"
@@ -9,9 +9,9 @@ name = "foldops-agent"
 version = "0.1.0"
 roles = ["agent", "supervisor"]
 install_prefix = "foldops-agent"
-artifact_url = "https://packages.folding-os.com/foldops/0.1.0-5/foldops-agent-x86_64.tar.zst"
-artifact_size = 3793639
-sha256 = "9d92741314f128fcf1c5dcd35aed0c09dd853a4dddb8d0006b0c2f4cd77a89f6"
+artifact_url = "https://packages.folding-os.com/foldops/0.1.0-80/foldops-agent-x86_64.tar.zst"
+artifact_size = 3849249
+sha256 = "0a0142749cc15b03ced04be6d9dffb7a8549c8814644f1c43b9aa33ac1994fe3"
 verification_path = "/data/apps/foldops/current/foldops-agent/usr/bin/foldops-agent"
 
 [[packages]]
@@ -19,9 +19,9 @@ name = "foldops-supervisor"
 version = "0.1.0"
 roles = ["supervisor"]
 install_prefix = "foldops-supervisor"
-artifact_url = "https://packages.folding-os.com/foldops/0.1.0-5/foldops-supervisor-x86_64.tar.zst"
-artifact_size = 3898551
-sha256 = "6e518334773f047dfceb83cc1eceb6e744d6ce2d76529c197220e754b156ca0c"
+artifact_url = "https://packages.folding-os.com/foldops/0.1.0-80/foldops-supervisor-x86_64.tar.zst"
+artifact_size = 3997464
+sha256 = "7ed5512fefcbbd39dd45251faed0b1535d9fdb4a334586a5feadfd31a1d2aacd"
 verification_path = "/data/apps/foldops/current/foldops-supervisor/usr/bin/foldops-supervisor"
 
 [[packages]]
@@ -29,7 +29,7 @@ name = "foldops-web"
 version = "0.1.0"
 roles = ["supervisor"]
 install_prefix = "foldops-web"
-artifact_url = "https://packages.folding-os.com/foldops/0.1.0-5/foldops-web-x86_64.tar.zst"
-artifact_size = 177531
-sha256 = "58a32b152130fb9efbbc862ba4441662044ae5c89be8ba73ffd3a21292d12c20"
+artifact_url = "https://packages.folding-os.com/foldops/0.1.0-80/foldops-web-x86_64.tar.zst"
+artifact_size = 185058
+sha256 = "4bacb0000bdfc6ca33c5985945993e4c691b04cc708b40fab650ed96f4081422"
 verification_path = "/data/apps/foldops/current/foldops-web/usr/share/foldops/web/index.html"

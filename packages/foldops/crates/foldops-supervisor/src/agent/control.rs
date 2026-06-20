@@ -4,6 +4,12 @@ use serde::Deserialize;
 pub struct AgentControlStatus {
     pub foldops_agent: String,
     pub fah_client: String,
+    #[serde(default)]
+    pub fah_folding_state: String,
+    #[serde(default)]
+    pub fah_unit_state: Option<String>,
+    #[serde(default)]
+    pub fah_folding_detail: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

@@ -9,6 +9,9 @@ pub struct FahLogState {
     pub progress: Option<f64>,
     pub ppd: Option<f64>,
     pub tpf: Option<String>,
+    pub folding_state: Option<String>,
+    pub unit_state: Option<String>,
+    pub folding_detail: Option<String>,
     pub recent_errors: Vec<String>,
 }
 

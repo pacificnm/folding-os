@@ -29,7 +29,11 @@ pub fn provision_boot(paths: &AppliancePaths) -> Result<serde_json::Value, Strin
     let env = resolve_provision_boot_environment(paths)?;
     prepare_provision_boot_assets(paths, &env)?;
     let config = render_dnsmasq_config_from_environment(paths, &env);
-    atomic_write(&paths.provision_boot_dnsmasq_config, config.as_bytes(), 0o644)?;
+    atomic_write(
+        &paths.provision_boot_dnsmasq_config,
+        config.as_bytes(),
+        0o644,
+    )?;
     println!(
         "FoldingOS network boot assistance using {}",
         paths.provision_boot_dnsmasq_config.display()
@@ -38,15 +42,13 @@ pub fn provision_boot(paths: &AppliancePaths) -> Result<serde_json::Value, Strin
     Ok(empty_human_result())
 }
 
-fn resolve_provision_boot_environment(paths: &AppliancePaths) -> Result<ProvisionBootEnvironment, String> {
+fn resolve_provision_boot_environment(
+    paths: &AppliancePaths,
+) -> Result<ProvisionBootEnvironment, String> {
     let iface = read_provision_boot_interface(paths)?;
     let host = resolve_provision_boot_host(&iface)?;
     let listen_host = read_provision_listen_host(paths)?;
-    let port = listen_host
-        .split(':')
-        .nth(1)
-        .unwrap_or("8743")
-        .to_string();
+    let port = listen_host.split(':').nth(1).unwrap_or("8743").to_string();
     let subnet = interface_ipv4_subnet(&iface)?;
     let boot_base = if listen_host.contains(':') {
         format!("http://{host}:{port}")
@@ -63,7 +65,10 @@ fn resolve_provision_boot_environment(paths: &AppliancePaths) -> Result<Provisio
     })
 }
 
-fn prepare_provision_boot_assets(paths: &AppliancePaths, env: &ProvisionBootEnvironment) -> Result<(), String> {
+fn prepare_provision_boot_assets(
+    paths: &AppliancePaths,
+    env: &ProvisionBootEnvironment,
+) -> Result<(), String> {
     fs::create_dir_all(&paths.provision_boot_tftp_root).map_err(|error| error.to_string())?;
     let source = paths
         .provision_boot_assets_dir
@@ -130,11 +135,19 @@ fn render_provision_dhcp_range_line(paths: &AppliancePaths, subnet: &str) -> Str
         return format!("dhcp-range={subnet},proxy,255.255.255.0");
     };
     let octets = network.octets();
-    let start = Ipv4Addr::new(octets[0], octets[1], octets[2], octets[3].saturating_add(10));
-    let end = Ipv4Addr::new(octets[0], octets[1], octets[2], octets[3].saturating_add(200));
-    format!(
-        "dhcp-range={start},{end},255.255.255.0,12h"
-    )
+    let start = Ipv4Addr::new(
+        octets[0],
+        octets[1],
+        octets[2],
+        octets[3].saturating_add(10),
+    );
+    let end = Ipv4Addr::new(
+        octets[0],
+        octets[1],
+        octets[2],
+        octets[3].saturating_add(200),
+    );
+    format!("dhcp-range={start},{end},255.255.255.0,12h")
 }
 
 fn read_provision_boot_interface(paths: &AppliancePaths) -> Result<String, String> {
@@ -171,8 +184,10 @@ fn resolve_provision_boot_host(iface: &str) -> Result<String, String> {
 }
 
 fn routable_ipv4_address_for_interface(iface: &str) -> Result<String, String> {
-    if let Ok(status) = command_output("networkctl", &["--no-legend", "--no-pager", "status", iface])
-    {
+    if let Ok(status) = command_output(
+        "networkctl",
+        &["--no-legend", "--no-pager", "status", iface],
+    ) {
         if let Some(address) = parse_ipv4_address(&status) {
             return Ok(address);
         }
