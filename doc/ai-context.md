@@ -95,15 +95,15 @@ precedence or silently choose one statement.
 - Milestone 4 FoldOps integration is complete; runtime FoldOps and tools updates
   without OS reimage are defined in
   [ADR-0023](adr/0023-runtime-foldops-and-foldingosctl-updates-without-os-reimage.md).
-- Milestone 5 (Update and Recovery System) is the active implementation target:
-  supervisor-led FoldOps and `foldingosctl` update workflow, rclone publication,
-  and supervisor backup export per
+- Milestone 5 (Update and Recovery System) is complete: supervisor-led FoldOps
+  and `foldingosctl` update workflow, rclone publication, and supervisor backup
+  export per
   [ADR-0028](adr/0028-supervisor-fleet-software-update-workflow.md),
   [ADR-0029](adr/0029-packages-channel-publication-via-rclone.md),
   [ADR-0030](adr/0030-supervisor-recovery-backup-and-export.md), and
   [milestone/5-engineering-spec.md](milestone/5-engineering-spec.md).
-- FoldOps Upgrades (full dashboard rework) follows Milestone 5 per
-  [ROADMAP.md](../ROADMAP.md).
+- FoldOps Upgrades (full dashboard rework) is the active implementation target
+  and follows Milestone 5 per [ROADMAP.md](../ROADMAP.md).
 - Milestone 4 delegation references:
   [ADR-0020](adr/0020-foldops-delegates-node-operations-to-foldingosctl.md),
   [ADR-0021](adr/0021-machine-readable-foldingosctl-automation-interface.md),
