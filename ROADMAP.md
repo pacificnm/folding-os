@@ -93,9 +93,9 @@ Runtime assignment and layout-bundle transport extend that model in Milestone 4.
 
 ## Milestone 5: Update and Recovery System
 
-Status: **In planning** (2026-06-18)
+Status: **Complete** (2026-06-19)
 
-First implementation step **before** the FoldOps Upgrades dashboard rework.
+First implementation step before the FoldOps Upgrades dashboard rework.
 
 - Operator workflow to update **FoldOps** and **`foldingosctl`** without OS reimage
 - Supervisor admin UI: check for updates, assign versions, trigger fleet apply
@@ -112,6 +112,9 @@ See [ADR-0028](doc/adr/0028-supervisor-fleet-software-update-workflow.md),
 [ADR-0030](doc/adr/0030-supervisor-recovery-backup-and-export.md),
 [doc/milestone/5-engineering-spec.md](doc/milestone/5-engineering-spec.md), and
 [doc/milestone/5-implementation-spec.md](doc/milestone/5-implementation-spec.md).
+
+See [doc/milestone/5-readiness-review.md](doc/milestone/5-readiness-review.md)
+for the issue closure matrix and validation evidence.
 
 ## Milestone 6: FoldOps Upgrades
 

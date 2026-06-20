@@ -58,6 +58,8 @@ This index groups the project's documentation by purpose.
   proposed scope for fleet software updates and supervisor recovery
 - [Milestone 5 engineering specification](milestone/5-engineering-spec.md) -
   proposed update discovery, apply APIs, publication indexes, and recovery export
+- [Milestone 5 readiness review](milestone/5-readiness-review.md) - validation
+  evidence and milestone closeout
 - [Deployment and provisioning](installer.md) - supervisor bootstrap and network
   fleet provisioning
 - [Milestone 3 engineering specification](milestone/3-engineering-spec.md) -
