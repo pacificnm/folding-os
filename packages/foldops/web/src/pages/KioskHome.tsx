@@ -43,23 +43,18 @@ export function KioskHome() {
     <div className="kiosk-shell">
       <header className="kiosk-header">
         <div className="kiosk-header-main">
-          <p className="kiosk-eyebrow">FoldOps</p>
-          <h1 className="kiosk-title">Farm</h1>
+          <p className="kiosk-eyebrow">Folding@home Farm</p>
+          <h1 className="kiosk-title">FoldOps</h1>
         </div>
-        <p className="kiosk-summary">
+        <p className="kiosk-summary" aria-label="Nodes online">
           <span className="kiosk-summary-online">{onlineCount}</span>
           <span className="kiosk-summary-sep">/</span>
           <span>{machines.length}</span>
           <span className="kiosk-summary-label"> online</span>
         </p>
-        <div className="kiosk-header-links">
-          <Link to="/admin/recovery" className="kiosk-dashboard-link">
-            Backup
-          </Link>
-          <Link to="/dashboard" className="kiosk-dashboard-link">
-            Dashboard
-          </Link>
-        </div>
+        <Link to="/dashboard" className="kiosk-header-action">
+          Dashboard →
+        </Link>
       </header>
 
       <main className="kiosk-main">

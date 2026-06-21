@@ -10,17 +10,17 @@
 }
 
 .kiosk-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 1rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: end;
+  gap: 0.35rem 0.85rem;
   margin-bottom: 0.5rem;
   flex-shrink: 0;
 }
 
 .kiosk-header-main {
-  flex: 1 1 auto;
   min-width: 0;
+  align-self: center;
 }
 
 .kiosk-eyebrow {
@@ -42,9 +42,10 @@
 
 .kiosk-summary {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .kiosk-summary-online {
@@ -57,22 +58,16 @@
   font-weight: 500;
 }
 
-.kiosk-header-links {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.65rem 0.85rem;
-}
-
-.kiosk-dashboard-link {
+.kiosk-header-action {
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--accent);
   text-decoration: none;
   white-space: nowrap;
+  padding: 0.2rem 0;
 }
 
-.kiosk-dashboard-link:hover {
+.kiosk-header-action:hover {
   text-decoration: underline;
 }
 
@@ -259,6 +254,10 @@
 @media (max-height: 520px), (max-width: 860px) and (max-height: 600px) {
   .kiosk-shell {
     padding: 0.45rem 0.55rem 0.35rem;
+  }
+
+  .kiosk-header {
+    gap: 0.25rem 0.65rem;
   }
 
   .kiosk-title {
