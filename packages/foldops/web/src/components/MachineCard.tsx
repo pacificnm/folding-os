@@ -6,6 +6,7 @@ import {
   fahClientLabel,
 } from "./FahClientStatus";
 import { FahStatsLinks } from "./FahStatsLinks";
+import { getMachineFahTelemetry } from "../fahTelemetry";
 import type { MachineSummary } from "../types";
 import {
   formatLastSeen,
@@ -16,9 +17,9 @@ import {
 
 export function MachineCard({ machine }: { machine: MachineSummary }) {
   const latest = machine.latest;
+  const telemetry = getMachineFahTelemetry(latest);
   const load = latest?.payload?.system.loadAvg;
   const uptime = latest?.payload?.system.uptime;
-  const tpf = latest?.payload?.fah?.tpf;
   const fah = latest?.payload?.fah;
   const errors = latest?.payload?.fah?.recentErrors ?? [];
   const statsDonor = latest?.payload?.fah?.statsDonor;
@@ -63,32 +64,30 @@ export function MachineCard({ machine }: { machine: MachineSummary }) {
           </div>
           <div>
             <dt>Project</dt>
-            <dd>
-              {latest?.project
-                ? `${latest.project} (R${latest.run ?? "?"}/C${latest.clone ?? "?"}/G${latest.gen ?? "?"})`
-                : "—"}
-            </dd>
+            <dd>{telemetry.project ? telemetry.projectLabel : "—"}</dd>
           </div>
           <div>
             <dt>Progress</dt>
             <dd>
-              {latest?.progress != null ? `${latest.progress.toFixed(1)}%` : "—"}
+              {telemetry.progress != null
+                ? `${telemetry.progress.toFixed(1)}%`
+                : "—"}
             </dd>
           </div>
           <div>
             <dt>PPD</dt>
-            <dd className="mono highlight">{formatPpd(latest?.ppd ?? null)}</dd>
+            <dd className="mono highlight">{formatPpd(telemetry.ppd)}</dd>
           </div>
           <div>
             <dt>TPF</dt>
-            <dd className="mono">{tpf ?? "—"}</dd>
+            <dd className="mono">{telemetry.tpf ?? "—"}</dd>
           </div>
         </dl>
-        {latest?.progress != null && (
+        {telemetry.progress != null && (
           <div className="progress-bar">
             <div
               className="progress-fill"
-              style={{ width: `${Math.min(latest.progress, 100)}%` }}
+              style={{ width: `${Math.min(telemetry.progress, 100)}%` }}
             />
           </div>
         )}
@@ -124,17 +123,11 @@ export function MachineCard({ machine }: { machine: MachineSummary }) {
           </div>
           <div>
             <dt>CPU temp</dt>
-            <dd className="mono">
-              {formatTemp(latest?.cpu_temp ?? latest?.payload?.system.cpuTemp)}
-            </dd>
+            <dd className="mono">{formatTemp(telemetry.cpuTemp)}</dd>
           </div>
           <div>
             <dt>Chassis temp</dt>
-            <dd className="mono">
-              {formatTemp(
-                latest?.chassis_temp ?? latest?.payload?.system.chassisTemp,
-              )}
-            </dd>
+            <dd className="mono">{formatTemp(telemetry.chassisTemp)}</dd>
           </div>
           <div>
             <dt>Uptime</dt>

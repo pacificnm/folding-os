@@ -11,6 +11,7 @@ import {
 import { FahStatsLinks } from "../components/FahStatsLinks";
 import { ProjectInfoPanel } from "../components/ProjectInfoPanel";
 import { fetchFahProject, fetchMachine, fetchSnapshots } from "../api";
+import { getMachineFahTelemetry } from "../fahTelemetry";
 import { snapshotsToHistory } from "../history";
 import type { FahProjectInfo, HistoryPoint, MachineSummary } from "../types";
 import {
@@ -63,8 +64,9 @@ export function MachineDetail() {
   }, [load]);
 
   const latest = machine?.latest;
+  const telemetry = getMachineFahTelemetry(latest);
   const fah = latest?.payload?.fah;
-  const projectId = latest?.project ?? null;
+  const projectId = telemetry.project;
 
   useEffect(() => {
     if (!projectId) {
@@ -130,12 +132,8 @@ export function MachineDetail() {
       }
       headerAside={
         <div className="header-meta">
-          {latest?.project && (
-            <span className="mono">
-              Project {latest.project}
-              {latest.run != null &&
-                ` · R${latest.run}/C${latest.clone}/G${latest.gen}`}
-            </span>
+          {telemetry.project && (
+            <span className="mono">Project {telemetry.projectLabel}</span>
           )}
           {machine && (
             <span>Last seen {formatLastSeen(machine.last_seen)}</span>
@@ -207,15 +205,19 @@ export function MachineDetail() {
             <div className="detail-stat">
               <span className="label">Current PPD</span>
               <span className="value mono highlight">
-                {formatPpd(latest?.ppd ?? null)}
+                {formatPpd(telemetry.ppd)}
               </span>
+            </div>
+            <div className="detail-stat">
+              <span className="label">TPF</span>
+              <span className="value mono">{telemetry.tpf ?? "—"}</span>
             </div>
             <div className="detail-stat">
               <span className="label">Progress</span>
               <span className="value mono">
-                {latest?.progress != null
-                  ? `${latest.progress.toFixed(1)}%`
-                  : "-"}
+                {telemetry.progress != null
+                  ? `${telemetry.progress.toFixed(1)}%`
+                  : "—"}
               </span>
             </div>
             <div className="detail-stat">
@@ -227,7 +229,7 @@ export function MachineDetail() {
             <div className="detail-stat">
               <span className="label">Temps</span>
               <span className="value mono">
-                {formatTemp(latest?.cpu_temp)} / {formatTemp(latest?.chassis_temp)}
+                {formatTemp(telemetry.cpuTemp)} / {formatTemp(telemetry.chassisTemp)}
               </span>
             </div>
           </div>
