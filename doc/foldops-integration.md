@@ -153,7 +153,11 @@ fleet versions, trigger apply) and rclone publication automation. See
 [ADR-0028](adr/0028-supervisor-fleet-software-update-workflow.md),
 [ADR-0029](adr/0029-packages-channel-publication-via-rclone.md), and
 [milestone/5-engineering-spec.md](milestone/5-engineering-spec.md). Full dashboard
-rework follows in FoldOps Upgrades (Milestone 6).
+rework is defined in FoldOps Upgrades (Milestone 6). See
+[ADR-0031](adr/0031-foldops-upgrades-dashboard-and-navigation.md),
+[ADR-0032](adr/0032-unified-settings-model-and-first-boot-configuration-wizard.md),
+[ADR-0033](adr/0033-supervisor-recovery-restore-workflow-in-foldops-upgrades.md),
+and [milestone/6-engineering-spec.md](milestone/6-engineering-spec.md).
 
 ## On general Debian hosts
 

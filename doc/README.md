@@ -64,6 +64,8 @@ This index groups the project's documentation by purpose.
   proposed FoldOps Upgrades dashboard, settings, telemetry, and restore scope
 - [Milestone 6 engineering specification](milestone/6-engineering-spec.md) -
   proposed dashboard routes, settings contract, telemetry surfaces, and restore workflow
+- [Milestone 6 ADR acceptance review](milestone/6-adr-acceptance-review.md) -
+  ADR-0031 through ADR-0033 acceptance and Milestone 5 boundary reconciliation
 - [Deployment and provisioning](installer.md) - supervisor bootstrap and network
   fleet provisioning
 - [Milestone 3 engineering specification](milestone/3-engineering-spec.md) -
