@@ -68,12 +68,41 @@ pub struct AlertCandidate {
 }
 
 #[derive(Debug, Clone)]
+pub struct EmailAlertConfig {
+    pub enabled: bool,
+    pub smtp_host: Option<String>,
+    pub smtp_port: u16,
+    pub smtp_username: Option<String>,
+    pub smtp_password: Option<String>,
+    pub from_address: Option<String>,
+    pub to_addresses: Vec<String>,
+    pub use_tls: bool,
+}
+
+impl Default for EmailAlertConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            smtp_host: None,
+            smtp_port: 587,
+            smtp_username: None,
+            smtp_password: None,
+            from_address: None,
+            to_addresses: Vec::new(),
+            use_tls: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct AlertConfig {
     pub enabled: bool,
+    pub discord_enabled: bool,
     pub webhook_url: Option<String>,
     pub offline_threshold_ms: u64,
     pub cpu_temp_alert_c: f64,
     pub stuck_progress_hours: f64,
     pub dashboard_url: Option<String>,
     pub discord_username: String,
+    pub email: EmailAlertConfig,
 }

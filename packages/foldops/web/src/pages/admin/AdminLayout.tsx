@@ -8,6 +8,7 @@ const NAV = [
   { href: "/admin/services", label: "Services" },
   { href: "/admin/logs", label: "Logs" },
   { href: "/admin/recovery", label: "Backup" },
+  { href: "/admin/settings/alerts", label: "Alerts" },
 ] as const;
 
 export function AdminLayout() {

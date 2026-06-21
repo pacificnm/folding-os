@@ -5,6 +5,8 @@ import {
 import type {
   AlertHistoryFilter,
   AlertHistoryResponse,
+  AlertSettingsResponse,
+  AlertSettingsUpdateRequest,
   AlertsResponse,
   AlertsStatusResponse,
   ControlAction,
@@ -103,6 +105,36 @@ export async function sendAlertTest(): Promise<{
     throw new Error(body.error ?? `Test failed (${res.status})`);
   }
   return { ok: true, message: body.message ?? "Sent" };
+}
+
+export async function fetchAlertSettings(): Promise<AlertSettingsResponse> {
+  const res = await fetch("/api/settings/alerts");
+  if (!res.ok) {
+    throw new Error(`Failed to load alert settings (${res.status})`);
+  }
+  return res.json() as Promise<AlertSettingsResponse>;
+}
+
+export async function saveAlertSettings(
+  payload: AlertSettingsUpdateRequest,
+): Promise<AlertSettingsResponse> {
+  const res = await fetch("/api/settings/alerts", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const body = (await res.json().catch(() => ({}))) as {
+    ok?: boolean;
+    settings?: AlertSettingsResponse;
+    error?: string;
+  };
+  if (!res.ok) {
+    throw new Error(body.error ?? `Failed to save alert settings (${res.status})`);
+  }
+  if (!body.settings) {
+    throw new Error("Save succeeded but settings response was missing");
+  }
+  return body.settings;
 }
 
 export async function fetchAlertHistory(opts?: {
