@@ -103,7 +103,12 @@ precedence or silently choose one statement.
   [ADR-0030](adr/0030-supervisor-recovery-backup-and-export.md), and
   [milestone/5-engineering-spec.md](milestone/5-engineering-spec.md).
 - FoldOps Upgrades (full dashboard rework) is the active implementation target
-  and follows Milestone 5 per [ROADMAP.md](../ROADMAP.md).
+  and follows Milestone 5 per [ROADMAP.md](../ROADMAP.md). Accepted decisions:
+  [ADR-0031](adr/0031-foldops-upgrades-dashboard-and-navigation.md),
+  [ADR-0032](adr/0032-unified-settings-model-and-first-boot-configuration-wizard.md),
+  [ADR-0033](adr/0033-supervisor-recovery-restore-workflow-in-foldops-upgrades.md),
+  [milestone/6-engineering-spec.md](milestone/6-engineering-spec.md), and
+  [milestone/6-adr-acceptance-review.md](milestone/6-adr-acceptance-review.md).
 - Milestone 4 delegation references:
   [ADR-0020](adr/0020-foldops-delegates-node-operations-to-foldingosctl.md),
   [ADR-0021](adr/0021-machine-readable-foldingosctl-automation-interface.md),

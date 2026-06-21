@@ -1,6 +1,6 @@
 # ADR-0033: Supervisor Recovery Restore Workflow In FoldOps Upgrades
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Date:** 2026-06-20
 

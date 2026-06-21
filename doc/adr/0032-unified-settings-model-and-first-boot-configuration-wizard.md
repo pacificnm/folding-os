@@ -1,6 +1,6 @@
 # ADR-0032: Unified Settings Model And First-Boot Configuration Wizard
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Date:** 2026-06-20
 
