@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use axum::body::Body;
 use axum::extract::{Path, Query, State};
@@ -16,6 +16,7 @@ use crate::agent::config::{
 };
 use crate::agent::control::{fetch_agent_control_status, push_agent_control};
 use crate::agent::logs::{fetch_live_agent_logs, LogSource};
+use crate::alerts::types::AlertConfig;
 use crate::alerts::engine::{
     alerts_status_json, list_active_alerts_json, list_alert_history_json, run_test_alert,
 };
@@ -30,6 +31,7 @@ use crate::foldingos::{
 use crate::install_log;
 use crate::recovery::{self, BACKUPS_DIR};
 use crate::services;
+use crate::settings::{alert_settings_response, types::AlertSettingsUpdateRequest};
 use crate::software::{
     self, apply_local, ensure_foldops_release_imported, ensure_tools_release_imported,
     fleet_apply_foldops, fleet_apply_tools, ApplyLocalRequest, FleetSoftwareApplyRequest,
@@ -41,6 +43,7 @@ use crate::supervisor_logs::{fetch_supervisor_logs, SupervisorLogSource};
 pub struct AppState {
     pub db: Arc<Db>,
     pub config: Arc<Config>,
+    pub alert_config: Arc<RwLock<AlertConfig>>,
     pub software: Arc<SoftwareService>,
 }
 
@@ -63,6 +66,10 @@ pub fn router(state: AppState) -> Router {
         .route("/alerts/test", post(alerts_test))
         .route("/alerts/history", get(alerts_history))
         .route("/alerts", get(alerts_active))
+        .route(
+            "/settings/alerts",
+            get(settings_alerts_get).put(settings_alerts_put),
+        )
         .route("/projects/{id}", get(project_detail))
         .route("/snapshots/{name}", get(snapshots))
         .route("/fleet/enrollments", get(fleet_enrollments))
@@ -741,34 +748,84 @@ async fn deploy_agents(State(state): State<AppState>, Json(body): Json<DeployBod
 }
 
 async fn alerts_status(State(state): State<AppState>) -> Json<Value> {
-    Json(alerts_status_json(&state.config.alert_config))
+    let config = state
+        .alert_config
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    Json(alerts_status_json(&config))
 }
 
 async fn alerts_test(State(state): State<AppState>) -> Response {
-    let cfg = &state.config.alert_config;
+    let cfg = state
+        .alert_config
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
     if cfg.webhook_url.is_none() {
         return (
             StatusCode::BAD_REQUEST,
-            Json(json!({ "error": "ALERT_WEBHOOK_URL is not set" })),
+            Json(json!({ "error": "Discord webhook URL is not configured" })),
         )
             .into_response();
     }
-    if !cfg.enabled {
+    if !cfg.discord_enabled {
         return (
             StatusCode::BAD_REQUEST,
-            Json(json!({ "error": "Alerts disabled — set ALERTS_ENABLED=true or ALERT_WEBHOOK_URL" })),
+            Json(json!({ "error": "Discord alerts are disabled" })),
         )
             .into_response();
     }
 
-    match run_test_alert(cfg).await {
+    match run_test_alert(&cfg).await {
         Ok(()) => Json(json!({
             "ok": true,
             "message": "Test notification sent",
-            "status": alerts_status_json(cfg),
+            "status": alerts_status_json(&cfg),
         }))
         .into_response(),
         Err(msg) => (StatusCode::BAD_GATEWAY, Json(json!({ "error": msg }))).into_response(),
+    }
+}
+
+async fn settings_alerts_get(State(state): State<AppState>) -> Json<Value> {
+    let config = state
+        .alert_config
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    Json(serde_json::to_value(alert_settings_response(&config)).unwrap_or(json!({})))
+}
+
+async fn settings_alerts_put(
+    State(state): State<AppState>,
+    Json(body): Json<AlertSettingsUpdateRequest>,
+) -> Response {
+    let current = state
+        .alert_config
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+
+    match state
+        .config
+        .settings_store
+        .save_alert_settings(&current, body)
+    {
+        Ok(updated) => {
+            *state
+                .alert_config
+                .write()
+                .unwrap_or_else(|e| e.into_inner()) = updated;
+            Json(json!({
+                "ok": true,
+                "settings": alert_settings_response(
+                    &state.alert_config.read().unwrap_or_else(|e| e.into_inner()).clone(),
+                ),
+            }))
+            .into_response()
+        }
+        Err(error) => (StatusCode::BAD_REQUEST, Json(json!({ "error": error }))).into_response(),
     }
 }
 
@@ -1688,8 +1745,12 @@ async fn services_restart_all(State(state): State<AppState>) -> Response {
 
 pub fn spawn_alert_eval(state: AppState) {
     let db = state.db.clone();
-    let config = state.config.alert_config.clone();
+    let alert_config = state.alert_config.clone();
     tokio::spawn(async move {
+        let config = alert_config
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
         crate::alerts::engine::run_alert_evaluation(&db, &config).await;
     });
 }

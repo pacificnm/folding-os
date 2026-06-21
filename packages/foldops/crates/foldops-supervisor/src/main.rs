@@ -9,11 +9,12 @@ mod foldingos;
 mod install_log;
 mod recovery;
 mod services;
+mod settings;
 mod software;
 mod supervisor_logs;
 
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use axum::Router;
@@ -55,9 +56,12 @@ async fn main() {
         }
     };
 
+    let alert_config = Arc::new(RwLock::new(config.alert_config.clone()));
+
     let state = AppState {
         db: db.clone(),
         config: config.clone(),
+        alert_config: alert_config.clone(),
         software: software_service(),
     };
 
@@ -74,12 +78,15 @@ async fn main() {
 
     spawn_alert_eval(state.clone());
     let alert_db = db.clone();
-    let alert_config = config.alert_config.clone();
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(60));
         loop {
             interval.tick().await;
-            alerts::engine::run_alert_evaluation(&alert_db, &alert_config).await;
+            let config = alert_config
+                .read()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone();
+            alerts::engine::run_alert_evaluation(&alert_db, &config).await;
         }
     });
 

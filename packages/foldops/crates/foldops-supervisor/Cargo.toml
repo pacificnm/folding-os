@@ -49,6 +49,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 thiserror.workspace = true
 tokio-util = { version = "0.7", features = ["io"] }
+toml.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]

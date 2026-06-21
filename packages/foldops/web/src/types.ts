@@ -221,6 +221,57 @@ export interface AlertsStatusResponse {
   };
 }
 
+export interface AlertThresholdSettings {
+  offline_threshold_ms: number;
+  cpu_temp_alert_c: number;
+  stuck_progress_hours: number;
+  dashboard_url: string | null;
+}
+
+export interface DiscordAlertSettings {
+  enabled: boolean;
+  webhook_url_configured: boolean;
+  username: string;
+}
+
+export interface EmailAlertSettings {
+  enabled: boolean;
+  smtp_host: string | null;
+  smtp_port: number;
+  smtp_username: string | null;
+  smtp_password_configured: boolean;
+  from_address: string | null;
+  to_addresses: string[];
+  use_tls: boolean;
+}
+
+export interface AlertSettingsResponse {
+  discord: DiscordAlertSettings;
+  email: EmailAlertSettings;
+  thresholds: AlertThresholdSettings;
+}
+
+export interface AlertSettingsUpdateRequest {
+  discord: {
+    enabled: boolean;
+    webhook_url?: string | null;
+    username: string;
+    clear_webhook_url?: boolean;
+  };
+  email: {
+    enabled: boolean;
+    smtp_host?: string | null;
+    smtp_port: number;
+    smtp_username?: string | null;
+    smtp_password?: string | null;
+    from_address?: string | null;
+    to_addresses: string[];
+    use_tls: boolean;
+    clear_smtp_password?: boolean;
+  };
+  thresholds: AlertThresholdSettings;
+}
+
 export type ControlAction =
   | "agent.start"
   | "agent.stop"

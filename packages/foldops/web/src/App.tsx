@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from "react-router-dom";
+import { AdminAlertSettings } from "./pages/admin/AdminAlertSettings";
 import { AdminLayout } from "./pages/admin/AdminLayout";
 import { AdminIndex } from "./pages/admin/AdminIndex";
 import { AdminFoldingHome } from "./pages/admin/AdminFoldingHome";
@@ -27,6 +28,7 @@ export default function App() {
         <Route path="software" element={<AdminSoftwareUpdates />} />
         <Route path="services" element={<AdminServices />} />
         <Route path="recovery" element={<AdminRecovery />} />
+        <Route path="settings/alerts" element={<AdminAlertSettings />} />
       </Route>
       <Route path="/alerts" element={<AlertHistory />} />
       <Route path="/machine/:hostname" element={<MachineDetail />} />
