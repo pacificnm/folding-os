@@ -169,6 +169,7 @@ automation JSON, inspection commands, and FoldOps delegation boundaries.
 Read:
 
 - [foldingosctl.md](foldingosctl.md)
+- [foldingosctl-components.md](foldingosctl-components.md) — Rust module and command dispatch map
 - [foldops-integration.md](foldops-integration.md)
 - [milestone/4-engineering-spec.md](milestone/4-engineering-spec.md)
 - [adr/0020-foldops-delegates-node-operations-to-foldingosctl.md](adr/0020-foldops-delegates-node-operations-to-foldingosctl.md)
@@ -178,6 +179,7 @@ Read:
 
 Primary paths:
 
+- `packages/foldingosctl/README.md`
 - `packages/foldingosctl/src/main.rs`
 - `packages/foldingosctl/src/cli.rs`
 - `packages/foldingosctl/src/automation.rs`
