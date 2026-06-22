@@ -308,14 +308,23 @@ fn service_json(service: &ManagedService) -> serde_json::Value {
 }
 
 fn unit_status(unit: &str) -> (String, bool) {
-    let status = crate::process::command_output("systemctl", &["is-active", unit])
-        .map(|value| value.trim().to_string())
+    let status = crate::process::command_stdout("systemctl", &["is-active", unit])
+        .map(|value| normalize_active_state(&value))
         .unwrap_or_else(|_| "unknown".to_string());
     let loaded =
         crate::process::command_output("systemctl", &["show", "-p", "LoadState", "--value", unit])
             .map(|value| value.trim() == "loaded")
             .unwrap_or(false);
     (status, loaded)
+}
+
+fn normalize_active_state(raw: &str) -> String {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        "unknown".to_string()
+    } else {
+        trimmed.to_string()
+    }
 }
 
 fn service_in_restart_all(role: &str, unit: &str) -> bool {
@@ -416,5 +425,19 @@ mod tests {
         assert!(restart_should_be_deferred(FOLDOPS_SUPERVISOR_SERVICE));
         assert!(restart_should_be_deferred(FOLDOPS_SERVE_HTTPS_SERVICE));
         assert!(!restart_should_be_deferred(FOLDOPS_AGENT_SERVICE));
+    }
+
+    #[test]
+    fn normalize_active_state_preserves_systemd_states() {
+        assert_eq!(normalize_active_state("active"), "active");
+        assert_eq!(normalize_active_state("inactive"), "inactive");
+        assert_eq!(normalize_active_state("failed"), "failed");
+        assert_eq!(normalize_active_state("  activating  "), "activating");
+    }
+
+    #[test]
+    fn normalize_active_state_maps_empty_to_unknown() {
+        assert_eq!(normalize_active_state(""), "unknown");
+        assert_eq!(normalize_active_state("   "), "unknown");
     }
 }

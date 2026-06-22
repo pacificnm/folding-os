@@ -15,6 +15,19 @@ pub fn command_output(name: &str, args: &[&str]) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
+/// Run a command and return trimmed stdout regardless of exit status.
+///
+/// Use when the caller interprets stdout directly (for example `systemctl
+/// is-active`, which exits non-zero for inactive units while still printing
+/// the state on stdout).
+pub fn command_stdout(name: &str, args: &[&str]) -> Result<String, String> {
+    let output = Command::new(name)
+        .args(args)
+        .output()
+        .map_err(|error| format!("{name} failed: {error}"))?;
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
 pub fn run_command(name: &str, args: &[&str]) -> Result<(), String> {
     let status = Command::new(name)
         .args(args)
