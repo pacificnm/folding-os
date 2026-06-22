@@ -1,5 +1,6 @@
-import { Link } from "react-router-dom";
 import type { ReactNode } from "react";
+import type { BreadcrumbItem } from "../adminBreadcrumbs";
+import { Breadcrumbs } from "./Breadcrumbs";
 import { SiteFooter } from "./SiteFooter";
 
 interface PageLayoutProps {
@@ -7,7 +8,7 @@ interface PageLayoutProps {
   title: string;
   badge?: ReactNode;
   headerAside?: ReactNode;
-  backLink?: { href: string; label: string };
+  breadcrumbs?: BreadcrumbItem[];
   footerNote?: ReactNode;
   children: ReactNode;
 }
@@ -17,20 +18,14 @@ export function PageLayout({
   title,
   badge,
   headerAside,
-  backLink,
+  breadcrumbs = [],
   footerNote,
   children,
 }: PageLayoutProps) {
   return (
     <div className="page-shell">
       <div className="app">
-        <nav className="breadcrumb" aria-label="Breadcrumb">
-          {backLink ? (
-            <Link to={backLink.href}>{backLink.label}</Link>
-          ) : (
-            <span aria-hidden="true">&nbsp;</span>
-          )}
-        </nav>
+        <Breadcrumbs items={breadcrumbs} />
 
         <header className="page-header">
           <div className="page-header-main">

@@ -1,15 +1,6 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
+import { ADMIN_SECTIONS, buildAdminBreadcrumbs } from "../../adminBreadcrumbs";
 import { PageLayout } from "../../components/PageLayout";
-
-const NAV = [
-  { href: "/admin/folding", label: "Folding@Home" },
-  { href: "/admin/machines", label: "Network Install" },
-  { href: "/admin/software", label: "Software Updates" },
-  { href: "/admin/services", label: "Services" },
-  { href: "/admin/logs", label: "Logs" },
-  { href: "/admin/recovery", label: "Backup" },
-  { href: "/admin/settings/alerts", label: "Alerts" },
-] as const;
 
 export function AdminLayout() {
   const location = useLocation();
@@ -18,12 +9,12 @@ export function AdminLayout() {
 
   return (
     <PageLayout
-      backLink={{ href: "/dashboard", label: "← Farm dashboard" }}
+      breadcrumbs={buildAdminBreadcrumbs(location.pathname)}
       eyebrow="Settings"
       title="Supervisor admin"
     >
       <nav className="admin-nav" aria-label="Settings sections">
-        {NAV.map((item) => (
+        {ADMIN_SECTIONS.map((item) => (
           <Link
             key={item.href}
             to={item.href}

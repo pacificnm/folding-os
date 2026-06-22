@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { PageLayout } from "../components/PageLayout";
+import { buildAlertHistoryBreadcrumbs } from "../adminBreadcrumbs";
 import {
   fetchAlertHistory,
   fetchAlertsStatus,
@@ -81,7 +82,7 @@ export function AlertHistory() {
 
   return (
     <PageLayout
-      backLink={{ href: "/dashboard", label: "← Farm dashboard" }}
+      breadcrumbs={buildAlertHistoryBreadcrumbs()}
       eyebrow="Operations"
       title="Alert history"
       footerNote="Auto-refresh every 30s · Discord: one embed per event"
