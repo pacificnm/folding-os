@@ -55,7 +55,7 @@ pub struct SnapshotRow {
     pub reboot_required: i64,
 }
 
-fn init_schema(conn: &Connection) -> rusqlite::Result<()> {
+pub(crate) fn init_schema(conn: &Connection) -> rusqlite::Result<()> {
     conn.execute_batch(
         "
         CREATE TABLE IF NOT EXISTS machines (
@@ -94,6 +94,8 @@ fn init_schema(conn: &Connection) -> rusqlite::Result<()> {
     migrate_schema(conn)?;
     crate::deploy::db::init_deploy_tables(conn)?;
     crate::alerts::db::init_alert_tables(conn)?;
+    crate::work_units::init_work_unit_tables(conn)?;
+    crate::work_units::maybe_backfill_from_snapshots(conn)?;
     Ok(())
 }
 
@@ -183,6 +185,7 @@ pub fn ingest_snapshot(conn: &Connection, payload: &IngestPayload) -> rusqlite::
             },
         ],
     )?;
+    crate::work_units::process_ingest(&tx, payload)?;
     tx.commit()
 }
 

@@ -38,6 +38,7 @@ use crate::software::{
     SoftwareService,
 };
 use crate::supervisor_logs::{fetch_supervisor_logs, SupervisorLogSource};
+use crate::work_units;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -72,6 +73,7 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/projects/{id}", get(project_detail))
         .route("/snapshots/{name}", get(snapshots))
+        .route("/machines/{name}/work-units", get(machine_work_units))
         .route("/fleet/enrollments", get(fleet_enrollments))
         .route(
             "/fleet/allow-boot",
@@ -931,6 +933,66 @@ async fn snapshots(
         .collect();
 
     Json(json!({ "hostname": name, "snapshots": snapshots })).into_response()
+}
+
+#[derive(Debug, Deserialize)]
+struct WorkUnitsQuery {
+    limit: Option<i64>,
+}
+
+async fn machine_work_units(
+    State(state): State<AppState>,
+    Path(name): Path<String>,
+    Query(q): Query<WorkUnitsQuery>,
+) -> Response {
+    let conn = state.db.lock();
+    let Some(_machine) = db::get_machine(&conn, &name).ok().flatten() else {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": "Machine not found" })),
+        )
+            .into_response();
+    };
+
+    let limit = q.limit.unwrap_or(50).clamp(1, 500);
+    let rows = work_units::list_completed(&conn, &name, limit).unwrap_or_default();
+    let total = work_units::count_completed(&conn, &name).unwrap_or(0);
+    let active = work_units::get_active_work_unit(&conn, &name)
+        .ok()
+        .flatten()
+        .map(|row| {
+            json!({
+                "project": row.key.project,
+                "run": row.key.run,
+                "clone": row.key.clone,
+                "gen": row.key.gen,
+                "started_at": row.started_at,
+                "last_seen_at": row.last_seen_at,
+            })
+        });
+
+    let completed: Vec<Value> = rows
+        .into_iter()
+        .map(|row| {
+            json!({
+                "id": row.id,
+                "project": row.project,
+                "run": row.run,
+                "clone": row.clone,
+                "gen": row.gen,
+                "started_at": row.started_at,
+                "stopped_at": row.stopped_at,
+            })
+        })
+        .collect();
+
+    Json(json!({
+        "hostname": name,
+        "total": total,
+        "active": active,
+        "completed": completed,
+    }))
+    .into_response()
 }
 
 fn fleet_delegation_unavailable() -> Response {

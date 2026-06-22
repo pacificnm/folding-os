@@ -10,7 +10,7 @@ import { MachineControlsPanel } from "../../components/MachineControlsPanel";
 import { MachineLogsPanel } from "../../components/MachineLogsPanel";
 import { ProjectInfoPanel } from "../../components/ProjectInfoPanel";
 import { Tabs, type TabItem } from "../../components/Tabs";
-import { fetchFahProject, fetchMachine, fetchSnapshots } from "../../api";
+import { fetchFahProject, fetchMachine, fetchSnapshots, fetchWorkUnitHistory } from "../../api";
 import { machineFoldingActivityState } from "../../fahActivity";
 import {
   displayConfiguredCpus,
@@ -19,12 +19,14 @@ import {
   displayConfiguredToken,
 } from "../../fahConfig";
 import { snapshotsToHistory } from "../../history";
-import type { FahProjectInfo, HistoryPoint, MachineSummary } from "../../types";
+import type { FahProjectInfo, HistoryPoint, MachineSummary, WorkUnitHistoryResponse } from "../../types";
 import {
+  formatChartDate,
   formatLastSeen,
   formatPpd,
   formatTemp,
   formatUptime,
+  formatWorkUnitDuration,
 } from "../../utils/format";
 
 const RANGES = [
@@ -124,6 +126,15 @@ interface InfoItem {
   muted?: boolean;
 }
 
+function formatWorkUnitAssignment(
+  project: string,
+  run: number,
+  clone: number,
+  gen: number,
+): string {
+  return `Project ${project} R${run}/C${clone}/G${gen}`;
+}
+
 function InfoCard({
   title,
   items,
@@ -163,6 +174,9 @@ export function AdminFoldingMachineDetail() {
   const [projectInfo, setProjectInfo] = useState<FahProjectInfo | null>(null);
   const [projectLoading, setProjectLoading] = useState(false);
   const [projectError, setProjectError] = useState<string | null>(null);
+  const [workHistory, setWorkHistory] = useState<WorkUnitHistoryResponse | null>(null);
+  const [workHistoryLoading, setWorkHistoryLoading] = useState(false);
+  const [workHistoryError, setWorkHistoryError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!hostname) return;
@@ -181,12 +195,36 @@ export function AdminFoldingMachineDetail() {
     }
   }, [hostname, limit]);
 
+  const loadWorkHistory = useCallback(async () => {
+    if (!hostname) return;
+    setWorkHistoryLoading(true);
+    try {
+      const history = await fetchWorkUnitHistory(hostname);
+      setWorkHistory(history);
+      setWorkHistoryError(null);
+    } catch (err) {
+      setWorkHistory(null);
+      setWorkHistoryError(
+        err instanceof Error ? err.message : "Failed to load work unit history",
+      );
+    } finally {
+      setWorkHistoryLoading(false);
+    }
+  }, [hostname]);
+
   useEffect(() => {
     setLoading(true);
     load();
     const id = window.setInterval(load, 60_000);
     return () => window.clearInterval(id);
   }, [load]);
+
+  useEffect(() => {
+    if (tab !== "work") return;
+    loadWorkHistory();
+    const id = window.setInterval(loadWorkHistory, 60_000);
+    return () => window.clearInterval(id);
+  }, [tab, loadWorkHistory]);
 
   const latest = machine?.latest;
   const payload = latest?.payload;
@@ -466,53 +504,113 @@ export function AdminFoldingMachineDetail() {
             )}
 
             {tab === "work" && (
-              <div className="admin-detail-grid">
-                <InfoCard
-                  title="Current work unit"
-                  items={[
-                    { label: "Assignment", value: projectLabel(machine), mono: true },
-                    {
-                      label: "Activity",
-                      value: fah?.foldingDetail ?? activityLabel(activity),
-                    },
-                    {
-                      label: "Progress",
-                      value:
-                        latest?.progress != null
-                          ? `${latest.progress.toFixed(1)}%`
-                          : "-",
-                      mono: true,
-                    },
-                    { label: "TPF", value: fah?.tpf ?? "-", mono: true },
-                    { label: "PPD", value: formatPpd(latest?.ppd ?? null), mono: true },
-                  ]}
-                />
-                <InfoCard
-                  title="Work history"
-                  items={[
-                    {
-                      label: "Completed WUs",
-                      value: "Pending FAH completion collector",
-                      muted: true,
-                    },
-                    {
-                      label: "Failed WUs",
-                      value: "Pending FAH completion collector",
-                      muted: true,
-                    },
-                    {
-                      label: "Snapshot samples",
-                      value: formatNumber(snapshotCount),
-                      mono: true,
-                    },
-                    {
-                      label: "Estimated credit",
-                      value: "Pending FAH stats collector",
-                      muted: true,
-                    },
-                  ]}
-                />
-              </div>
+              <>
+                <div className="admin-detail-grid">
+                  <InfoCard
+                    title="Current work unit"
+                    items={[
+                      { label: "Assignment", value: projectLabel(machine), mono: true },
+                      {
+                        label: "Activity",
+                        value: fah?.foldingDetail ?? activityLabel(activity),
+                      },
+                      {
+                        label: "Progress",
+                        value:
+                          latest?.progress != null
+                            ? `${latest.progress.toFixed(1)}%`
+                            : "-",
+                        mono: true,
+                      },
+                      { label: "TPF", value: fah?.tpf ?? "-", mono: true },
+                      { label: "PPD", value: formatPpd(latest?.ppd ?? null), mono: true },
+                      {
+                        label: "Started",
+                        value: workHistory?.active
+                          ? formatChartDate(workHistory.active.started_at)
+                          : "Not tracked yet",
+                        mono: true,
+                      },
+                    ]}
+                  />
+                  <InfoCard
+                    title="Work history"
+                    items={[
+                      {
+                        label: "Completed WUs",
+                        value: formatNumber(workHistory?.total ?? 0),
+                        mono: true,
+                      },
+                      {
+                        label: "In progress",
+                        value: workHistory?.active
+                          ? formatWorkUnitAssignment(
+                              workHistory.active.project,
+                              workHistory.active.run,
+                              workHistory.active.clone,
+                              workHistory.active.gen,
+                            )
+                          : "None tracked",
+                        mono: true,
+                      },
+                      {
+                        label: "Snapshot samples",
+                        value: formatNumber(snapshotCount),
+                        mono: true,
+                      },
+                    ]}
+                  />
+                </div>
+
+                {workHistoryError && (
+                  <p className="message error">{workHistoryError}</p>
+                )}
+                {workHistoryLoading && !workHistory && (
+                  <p className="admin-muted">Loading completed work units...</p>
+                )}
+
+                {workHistory && workHistory.completed.length > 0 ? (
+                  <div className="alert-history-table-wrap">
+                    <table className="alert-history-table">
+                      <thead>
+                        <tr>
+                          <th>Assignment</th>
+                          <th>Started</th>
+                          <th>Stopped</th>
+                          <th>Duration</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {workHistory.completed.map((record) => (
+                          <tr key={record.id}>
+                            <td className="mono">
+                              {formatWorkUnitAssignment(
+                                record.project,
+                                record.run,
+                                record.clone,
+                                record.gen,
+                              )}
+                            </td>
+                            <td className="mono">{formatChartDate(record.started_at)}</td>
+                            <td className="mono">{formatChartDate(record.stopped_at)}</td>
+                            <td className="mono">
+                              {formatWorkUnitDuration(record.started_at, record.stopped_at)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  !workHistoryLoading &&
+                  !workHistoryError && (
+                    <p className="message">
+                      No completed work units recorded for this host yet. History is
+                      captured when ingest snapshots show a new assignment.
+                    </p>
+                  )
+                )}
+              </>
             )}
 
             {tab === "logs" && (

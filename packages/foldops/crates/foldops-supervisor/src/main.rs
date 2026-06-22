@@ -12,6 +12,7 @@ mod services;
 mod settings;
 mod software;
 mod supervisor_logs;
+mod work_units;
 
 use std::net::SocketAddr;
 use std::sync::{Arc, RwLock};

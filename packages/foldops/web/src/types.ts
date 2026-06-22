@@ -348,6 +348,32 @@ export interface HistoryPoint {
   chassisTemp: number | null;
 }
 
+export interface WorkUnitRecord {
+  id: number;
+  project: string;
+  run: number;
+  clone: number;
+  gen: number;
+  started_at: string;
+  stopped_at: string;
+}
+
+export interface ActiveWorkUnitRecord {
+  project: string;
+  run: number;
+  clone: number;
+  gen: number;
+  started_at: string;
+  last_seen_at: string;
+}
+
+export interface WorkUnitHistoryResponse {
+  hostname: string;
+  total: number;
+  active: ActiveWorkUnitRecord | null;
+  completed: WorkUnitRecord[];
+}
+
 export interface SoftwareUpstreamChannel {
   latest_manifest_release?: string;
   latest_tools_version?: string;
