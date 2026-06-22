@@ -239,6 +239,7 @@ bundle layout, ingest, machine controls, logs, and admin pages.
 Read:
 
 - [foldops-integration.md](foldops-integration.md)
+- [foldops-components.md](foldops-components.md) — Rust/React module and API map
 - [packages/foldops/README.md](../packages/foldops/README.md)
 - [milestone/4-appliance-artifact-and-monorepo-plan.md](milestone/4-appliance-artifact-and-monorepo-plan.md)
 - [milestone/4-engineering-spec.md](milestone/4-engineering-spec.md)
