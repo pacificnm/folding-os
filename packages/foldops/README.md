@@ -24,12 +24,15 @@ Install root: `/data/apps/foldops/<release>/`
 packages/foldops/
   Cargo.toml
   crates/
-    foldops-agent/
-    foldops-supervisor/
-    foldops-types/
+    foldops-agent/       # node ingest + HTTP control API
+    foldops-supervisor/  # fleet DB + /api + dashboard static files
+    foldops-types/       # shared ingest/control contracts
   web/                         # React dashboard (build host only)
   packaging/appliance-bundle/  # reserved for bundle helpers
 ```
+
+Component-level architecture (modules, routes, UI map):
+[doc/foldops-components.md](../../doc/foldops-components.md).
 
 FoldingOS-owned systemd units remain in the repository overlay; bundles ship
 application binaries and static web assets only.
@@ -69,4 +72,5 @@ next `./scripts/build` embeds the latest package-channel assignments.
 ## Related documents
 
 - [Milestone 4 appliance artifact and monorepo plan](../../doc/milestone/4-appliance-artifact-and-monorepo-plan.md)
+- [FoldOps component reference (Rust + React)](../../doc/foldops-components.md)
 - [Issue #83](https://github.com/pacificnm/folding-os/issues/83)
