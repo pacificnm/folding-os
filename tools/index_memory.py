@@ -14,6 +14,7 @@ PATHS = [
     "PRINCIPLES.md",
     "doc",
     "docs",
+    "wiki",
 ]
 
 
