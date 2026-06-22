@@ -100,6 +100,15 @@ The first planned Raspberry Pi target is:
 
 - Raspberry Pi 5
 
+Milestone 7 planning for Raspberry Pi 5 is proposed in
+[raspberry-pi-5-platform.md](raspberry-pi-5-platform.md),
+[milestone/7-implementation-spec.md](milestone/7-implementation-spec.md), and
+[milestone/7-engineering-spec.md](milestone/7-engineering-spec.md). The proposed
+minimum validation target is Raspberry Pi 5 booting from SD card with wired
+Ethernet DHCP and persistent data expansion. NVMe boot through an approved Pi 5
+M.2 HAT is a validation target, but support must be recorded as validated,
+deferred, or unsupported in the Milestone 7 readiness review.
+
 Future support may expand based on project priorities.
 
 ---
@@ -194,6 +203,11 @@ Planned architecture sequence:
 - first implementation architecture: x86_64
 
 - next planned architecture: ARM64
+
+ARM64 release artifacts and runtime bundles are proposed in
+[ADR-0035](adr/0035-arm64-release-artifacts-and-runtime-bundles.md). Platform
+support must distinguish generic architecture artifacts from Raspberry Pi
+5-specific boot images.
 
 Future architecture support should require documented engineering
 justification.

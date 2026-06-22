@@ -131,6 +131,14 @@ for the issue closure matrix and validation evidence.
 - Validate Ethernet and storage
 - Produce flashable Pi image
 
+Planning and architecture are tracked by
+[issue #153](https://github.com/pacificnm/folding-os/issues/153),
+[doc/milestone/7-implementation-spec.md](doc/milestone/7-implementation-spec.md),
+[doc/milestone/7-engineering-spec.md](doc/milestone/7-engineering-spec.md),
+[doc/milestone/7-adr-acceptance-review.md](doc/milestone/7-adr-acceptance-review.md),
+[ADR-0034](doc/adr/0034-raspberry-pi-5-boot-and-image-format.md), and
+[ADR-0035](doc/adr/0035-arm64-release-artifacts-and-runtime-bundles.md).
+
 ## Milestone 8: v1.0 Release
 
 - Publish first stable x86_64 release
@@ -140,6 +148,22 @@ for the issue closure matrix and validation evidence.
 - Validate IPv4-only, IPv6-only, and dual-stack networking
 - Verify stable release signatures
 - Publish release images
+
+## Milestone 9: Standalone Rust Apps
+
+- Port **FoldOps** Rust services and web assets to a documented standalone
+  deployment model outside a full FoldingOS appliance image
+- Port **`foldingosctl`** Rust command-line tooling to a documented standalone
+  mode where supported
+- Define standalone host targets, explicit non-goals, configuration paths,
+  service ownership, logging, TLS, authentication, and update behavior
+- Preserve appliance contracts for FoldingOS while documenting any standalone
+  differences explicitly
+- Publish standalone packaging and validation documentation before implementation
+  changes are treated as approved
+
+Planning starts with
+[issue #168](https://github.com/pacificnm/folding-os/issues/168).
 
 ---
 
@@ -158,5 +182,7 @@ sections above:
 | 6 | Milestone 6: FoldOps Upgrades |
 | 7 | Milestone 7: Raspberry Pi Support |
 | 8 | Milestone 8: v1.0 Release |
+| 9 | Milestone 9: Standalone Rust Apps |
 
 Milestone 7 planning umbrella: [issue #153](https://github.com/pacificnm/folding-os/issues/153).
+Milestone 9 documentation planning: [issue #168](https://github.com/pacificnm/folding-os/issues/168).

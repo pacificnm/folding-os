@@ -20,6 +20,8 @@ This index groups the project's documentation by purpose.
 - [Boot process](boot-process.md) - logical boot sequence and failure behavior
 - [Build system](build-system.md) - build goals, expected framework, and outputs
 - [Hardware support](hardware-support.md) - target platforms and support policy
+- [Raspberry Pi 5 platform design](raspberry-pi-5-platform.md) - proposed
+  Milestone 7 ARM64 platform design and validation boundary
 - [Physical validation](physical-validation.md) - Milestone 1 physical acceptance procedure and boot-media preparation
 - [Deployment and provisioning](installer.md) - supervisor bootstrap and network fleet provisioning
 - [ADR-0016: Network provisioning via supervisor](adr/0016-network-provisioning-via-supervisor.md)
@@ -68,6 +70,15 @@ This index groups the project's documentation by purpose.
   ADR-0031 through ADR-0033 acceptance and Milestone 5 boundary reconciliation
 - [Milestone 6 readiness review](milestone/6-readiness-review.md) - partial
   live-hardware validation evidence and milestone closeout status (issue #126)
+- [Milestone 7 implementation specification](milestone/7-implementation-spec.md) -
+  proposed Raspberry Pi 5 ARM64 board, image, runtime-bundle, and validation scope
+- [Milestone 7 engineering specification](milestone/7-engineering-spec.md) -
+  proposed Pi boot, image layout, release artifact, runtime, and hardware
+  validation contract
+- [Milestone 7 ADR acceptance review](milestone/7-adr-acceptance-review.md) -
+  draft acceptance gate for Raspberry Pi 5 boot and ARM64 artifact ADRs
+- [Milestone 7 readiness review](milestone/7-readiness-review.md) - readiness
+  evidence template for Raspberry Pi 5 validation
 - [Deployment and provisioning](installer.md) - supervisor bootstrap and network
   fleet provisioning
 - [Milestone 3 engineering specification](milestone/3-engineering-spec.md) -
