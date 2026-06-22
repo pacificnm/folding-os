@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { HistoryChart } from "../components/HistoryChart";
 import { PageLayout } from "../components/PageLayout";
+import { buildMachineDetailBreadcrumbs } from "../adminBreadcrumbs";
 import {
   fahAcquisitionLabel,
   fahAcquisitionTitle,
@@ -110,7 +111,7 @@ export function MachineDetail() {
 
   return (
     <PageLayout
-      backLink={{ href: "/dashboard", label: "← Farm dashboard" }}
+      breadcrumbs={buildMachineDetailBreadcrumbs(hostname)}
       eyebrow="Node history"
       title={hostname || "Unknown"}
       badge={

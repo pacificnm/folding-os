@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AlertBanner } from "../components/AlertBanner";
 import { MachineCard } from "../components/MachineCard";
 import { PageLayout } from "../components/PageLayout";
+import { buildDashboardBreadcrumbs } from "../adminBreadcrumbs";
 import { fetchAlerts, fetchMachines } from "../api";
 import { formatPpd } from "../utils/format";
 import type { ActiveAlert, MachinesResponse } from "../types";
@@ -40,7 +41,7 @@ export function Dashboard() {
     <PageLayout
       eyebrow="Folding@home Farm"
       title="FoldOps"
-      backLink={{ href: "/", label: "← Kiosk view" }}
+      breadcrumbs={buildDashboardBreadcrumbs()}
       footerNote="Auto-refresh every 30s"
       headerAside={
         <div className="hero-stats">
