@@ -84,7 +84,7 @@ export function AlertHistory() {
       backLink={{ href: "/dashboard", label: "← Farm dashboard" }}
       eyebrow="Operations"
       title="Alert history"
-      footer="Auto-refresh every 30s · Discord: one embed per event"
+      footerNote="Auto-refresh every 30s · Discord: one embed per event"
       headerAside={
         <div className="hero-stats">
           <div className="hero-stat">

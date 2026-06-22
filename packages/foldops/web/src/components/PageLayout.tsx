@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import type { ReactNode } from "react";
+import { SiteFooter } from "./SiteFooter";
 
 interface PageLayoutProps {
   eyebrow: string;
@@ -7,7 +8,7 @@ interface PageLayoutProps {
   badge?: ReactNode;
   headerAside?: ReactNode;
   backLink?: { href: string; label: string };
-  footer?: ReactNode;
+  footerNote?: ReactNode;
   children: ReactNode;
 }
 
@@ -17,7 +18,7 @@ export function PageLayout({
   badge,
   headerAside,
   backLink,
-  footer = "FoldOps · Folding@home farm monitor",
+  footerNote,
   children,
 }: PageLayoutProps) {
   return (
@@ -44,7 +45,7 @@ export function PageLayout({
 
         <main className="page-main">{children}</main>
 
-        <footer className="footer">{footer}</footer>
+        <SiteFooter note={footerNote} />
       </div>
     </div>
   );

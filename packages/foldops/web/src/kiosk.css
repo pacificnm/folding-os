@@ -243,12 +243,8 @@
   color: var(--danger);
 }
 
-.kiosk-footer {
+.kiosk-shell .site-footer {
   flex-shrink: 0;
-  margin-top: 0.35rem;
-  text-align: center;
-  font-size: 0.65rem;
-  color: var(--muted);
 }
 
 @media (max-height: 520px), (max-width: 860px) and (max-height: 600px) {

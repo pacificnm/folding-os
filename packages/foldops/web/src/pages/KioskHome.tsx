@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { AlertBanner } from "../components/AlertBanner";
 import { CompactAgentTile } from "../components/CompactAgentTile";
+import { SiteFooter } from "../components/SiteFooter";
 import { fetchAlerts, fetchMachines } from "../api";
 import type { ActiveAlert, MachinesResponse } from "../types";
 import "../kiosk.css";
@@ -79,7 +80,7 @@ export function KioskHome() {
         )}
       </main>
 
-      <footer className="kiosk-footer">Updates every 30s</footer>
+      <SiteFooter compact note="Updates every 30s" />
     </div>
   );
 }
