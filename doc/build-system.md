@@ -128,6 +128,12 @@ Planned capabilities include:
 - Raspberry Pi images
 - signed manifests
 
+Raspberry Pi 5 image planning is defined by
+[ADR-0034](adr/0034-raspberry-pi-5-boot-and-image-format.md) and
+[Milestone 7 engineering specification](milestone/7-engineering-spec.md). ARM64
+runtime bundle and release-index behavior is proposed in
+[ADR-0035](adr/0035-arm64-release-artifacts-and-runtime-bundles.md).
+
 Signing capability must be available before the first stable release. Future
 release formats may evolve as project requirements change.
 

@@ -119,7 +119,16 @@ precedence or silently choose one statement.
   [milestone/4-engineering-spec.md](milestone/4-engineering-spec.md).
 - Operator build, deployment, recovery, and Folding@home runtime procedures are
   in [operations.md](operations.md).
-- Next planned platform: Raspberry Pi 5 using ARM64.
+- Next planned platform: Raspberry Pi 5 using ARM64. Milestone 7 planning is
+  proposed in [milestone/7-implementation-spec.md](milestone/7-implementation-spec.md),
+  [milestone/7-engineering-spec.md](milestone/7-engineering-spec.md),
+  [milestone/7-adr-acceptance-review.md](milestone/7-adr-acceptance-review.md),
+  [raspberry-pi-5-platform.md](raspberry-pi-5-platform.md),
+  [ADR-0034](adr/0034-raspberry-pi-5-boot-and-image-format.md), and
+  [ADR-0035](adr/0035-arm64-release-artifacts-and-runtime-bundles.md). Treat the
+  Pi boot chain, Pi network provisioning model, NVMe validation target, and
+  Folding@home ARM64 support state as unresolved until the ADRs are accepted
+  and validation evidence is committed.
 - Initial networking may be IPv4-only; IPv6 is a planned first-class
   capability.
 - v0.1.0 networking uses Ethernet DHCP; static networking is out of scope.

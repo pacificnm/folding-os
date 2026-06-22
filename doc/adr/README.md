@@ -71,6 +71,8 @@ design decisions years after they were originally made.
 - [ADR-0031: FoldOps Upgrades Dashboard And Navigation](0031-foldops-upgrades-dashboard-and-navigation.md)
 - [ADR-0032: Unified Settings Model And First-Boot Configuration Wizard](0032-unified-settings-model-and-first-boot-configuration-wizard.md)
 - [ADR-0033: Supervisor Recovery Restore Workflow In FoldOps Upgrades](0033-supervisor-recovery-restore-workflow-in-foldops-upgrades.md)
+- [ADR-0034: Raspberry Pi 5 Boot And Image Format](0034-raspberry-pi-5-boot-and-image-format.md) (proposed)
+- [ADR-0035: ARM64 Release Artifacts And Runtime Bundles](0035-arm64-release-artifacts-and-runtime-bundles.md) (proposed)
 
 ---
 
