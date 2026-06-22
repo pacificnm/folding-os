@@ -21,11 +21,6 @@ export function AdminLayout() {
       backLink={{ href: "/dashboard", label: "← Farm dashboard" }}
       eyebrow="Settings"
       title="Supervisor admin"
-      footer={
-        <>
-          <Link to="/dashboard">Farm dashboard</Link>
-        </>
-      }
     >
       <nav className="admin-nav" aria-label="Settings sections">
         {NAV.map((item) => (

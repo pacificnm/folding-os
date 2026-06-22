@@ -122,9 +122,9 @@ export function MachineDetail() {
           </span>
         ) : undefined
       }
-      footer={
+      footerNote={
         <>
-          History refreshes every 60s -{" "}
+          History refreshes every 60s ·{" "}
           <Link to={`/admin/folding/${encodeURIComponent(hostname)}`}>
             Admin details
           </Link>
