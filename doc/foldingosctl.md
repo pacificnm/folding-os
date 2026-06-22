@@ -805,6 +805,7 @@ are owned by FoldingOS; the supervisor process remains HTTP on loopback.
 
 # Related Documentation
 
+- [foldingosctl component reference](foldingosctl-components.md) — module map and FoldOps delegation (developers/agents)
 - [Operations](operations.md) — build, deploy, diagnose, recover
 - [Deployment and provisioning](installer.md) — supervisor bootstrap and PXE workflow
 - [FoldOps integration](foldops-integration.md) — fleet monitoring bootstrap
