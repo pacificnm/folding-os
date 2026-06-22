@@ -25,6 +25,7 @@ import type {
   SoftwareInstallLogResponse,
   SoftwareUpdatesResponse,
   SnapshotsResponse,
+  WorkUnitHistoryResponse,
   SupervisorLogSource,
   SupervisorLogsResponse,
   AllowBootDevicesResponse,
@@ -206,6 +207,19 @@ export async function fetchSnapshots(
     throw new Error(`Failed to load history (${res.status})`);
   }
   return res.json() as Promise<SnapshotsResponse>;
+}
+
+export async function fetchWorkUnitHistory(
+  hostname: string,
+  limit = 50,
+): Promise<WorkUnitHistoryResponse> {
+  const res = await fetch(
+    `/api/machines/${encodeURIComponent(hostname)}/work-units?limit=${limit}`,
+  );
+  if (!res.ok) {
+    throw new Error(`Failed to load work unit history (${res.status})`);
+  }
+  return res.json() as Promise<WorkUnitHistoryResponse>;
 }
 
 async function fetchFahProjectDirect(
