@@ -9,20 +9,29 @@ import type { ManagedService, ServicesResponse } from "../../types";
 function statusClass(status: string): string {
   switch (status) {
     case "active":
+    case "activating":
+    case "reloading":
       return "status-active";
     case "failed":
       return "status-failed";
     case "inactive":
     case "dead":
+    case "deactivating":
       return "status-inactive";
-    default:
+    case "":
+    case "unknown":
       return "status-unknown";
+    default:
+      return "status-inactive";
   }
 }
 
 function formatStatus(status: string, loaded: boolean): string {
   if (!loaded) {
     return "not loaded";
+  }
+  if (!status || status === "unknown") {
+    return "unknown";
   }
   return status;
 }
