@@ -185,10 +185,18 @@ async fn run_systemctl(action: &str, unit: &str) -> Result<(String, String), Str
         .await
         .map_err(|e| e.to_string())?;
 
-    Ok((
-        String::from_utf8_lossy(&output.stdout).trim().to_string(),
-        String::from_utf8_lossy(&output.stderr).trim().to_string(),
-    ))
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    if output.status.success() {
+        return Ok((stdout, stderr));
+    }
+
+    let message = if stderr.is_empty() {
+        format!("systemctl {action} {unit} failed ({})", output.status)
+    } else {
+        stderr.clone()
+    };
+    Err(message)
 }
 
 pub async fn execute_control_action(action: ControlAction, ctx: &ControlContext) -> ControlResult {

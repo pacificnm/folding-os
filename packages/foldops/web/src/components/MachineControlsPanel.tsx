@@ -3,6 +3,10 @@ import {
   fetchMachineControlStatus,
   runMachineControl,
 } from "../api";
+import {
+  controlActionState,
+  optimisticControlStatus,
+} from "../machineControlUi";
 import type { ControlAction, ControlStatus, MachineSummary } from "../types";
 import { formatPpd } from "../utils/format";
 
@@ -95,6 +99,7 @@ export function MachineControlsPanel({
   machine,
 }: MachineControlsPanelProps) {
   const [status, setStatus] = useState<ControlStatus | null>(null);
+  const [statusLoading, setStatusLoading] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [busy, setBusy] = useState<ControlAction | null>(null);
   const [lastResult, setLastResult] = useState<string | null>(null);
@@ -106,17 +111,22 @@ export function MachineControlsPanel({
     if (!online) {
       setStatus(null);
       setStatusError("Node offline — controls unavailable");
+      setStatusLoading(false);
       return;
     }
+
+    setStatusLoading(true);
     try {
-      const s = await fetchMachineControlStatus(hostname);
-      setStatus(s);
+      const next = await fetchMachineControlStatus(hostname);
+      setStatus(next);
       setStatusError(null);
     } catch (err) {
       setStatus(null);
       setStatusError(
         err instanceof Error ? err.message : "Failed to load status",
       );
+    } finally {
+      setStatusLoading(false);
     }
   }, [hostname, online]);
 
@@ -143,11 +153,16 @@ export function MachineControlsPanel({
       const result = await runMachineControl(hostname, action);
       if (result.ok) {
         setLastResult(result.message);
+        if (status) {
+          setStatus(optimisticControlStatus(status, action));
+        }
       } else {
-        setLastError(result.message || "Command failed");
-        if (result.stderr) setLastError(`${result.message}\n${result.stderr}`);
+        const message = result.stderr
+          ? `${result.message}\n${result.stderr}`
+          : result.message || "Command failed";
+        setLastError(message);
       }
-      setTimeout(loadStatus, 2000);
+      window.setTimeout(loadStatus, 2_000);
     } catch (err) {
       setLastError(err instanceof Error ? err.message : "Control failed");
     } finally {
@@ -161,11 +176,16 @@ export function MachineControlsPanel({
     <div className="machine-controls">
       <p className="machine-controls-intro">
         Remote actions run on the node via the agent HTTP API (same as live logs).
-        Requires <code>CONTROLS_ENABLED=true</code> on the agent.
+        Requires <code>CONTROL_ENABLED=true</code> on the supervisor and{" "}
+        <code>CONTROLS_ENABLED=true</code> on the agent.
       </p>
 
       {statusError && (
         <p className="message error">{statusError}</p>
+      )}
+
+      {online && statusLoading && !status && (
+        <p className="admin-muted">Loading control status…</p>
       )}
 
       {status && (
@@ -182,9 +202,10 @@ export function MachineControlsPanel({
             <button
               type="button"
               className="machine-controls-refresh"
+              disabled={statusLoading || busy !== null}
               onClick={loadStatus}
             >
-              Refresh status
+              {statusLoading ? "Refreshing…" : "Refresh status"}
             </button>
           </div>
           <div className="machine-controls-folding">
@@ -223,17 +244,26 @@ export function MachineControlsPanel({
           <h3 className="machine-controls-group-title">{group.title}</h3>
           <p className="machine-controls-group-desc">{group.description}</p>
           <div className="machine-controls-buttons">
-            {group.buttons.map((btn) => (
-              <button
-                key={btn.action}
-                type="button"
-                className={`machine-controls-btn${btn.variant === "danger" ? " machine-controls-btn--danger" : ""}`}
-                disabled={!online || busy !== null}
-                onClick={() => run(btn.action)}
-              >
-                {busy === btn.action ? "Running…" : btn.label}
-              </button>
-            ))}
+            {group.buttons.map((btn) => {
+              const actionState = controlActionState(btn.action, status);
+              const disabled =
+                !online ||
+                busy !== null ||
+                statusLoading ||
+                actionState.disabled;
+              return (
+                <button
+                  key={btn.action}
+                  type="button"
+                  className={`machine-controls-btn${btn.variant === "danger" ? " machine-controls-btn--danger" : ""}`}
+                  disabled={disabled}
+                  title={actionState.reason}
+                  onClick={() => run(btn.action)}
+                >
+                  {busy === btn.action ? "Running…" : btn.label}
+                </button>
+              );
+            })}
           </div>
         </section>
       ))}
