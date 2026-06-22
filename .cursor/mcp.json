@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "foldingos-memory": {
+      "command": "/home/jaimie/folding-os/.venv/bin/python",
+      "args": [
+        "/home/jaimie/folding-os/tools/mcp_memory_server.py"
+      ],
+      "cwd": "/home/jaimie/folding-os"
+    },
+    "foldingos-context-memory": {
+      "command": "/home/jaimie/folding-os/.venv/bin/python",
+      "args": [
+        "/home/jaimie/folding-os/tools/mcp_context_memory_server.py"
+      ],
+      "cwd": "/home/jaimie/folding-os"
+    }
+  }
+}

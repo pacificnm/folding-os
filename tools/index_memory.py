@@ -11,6 +11,7 @@ PATHS = [
     "KNOWN_ISSUES.md",
     "BUILD_COMMANDS.md",
     "README.md",
+    "PRINCIPLES.md",
     "doc",
     "docs",
 ]

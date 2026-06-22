@@ -37,6 +37,17 @@ project memory for:
 If `search_project_memory` is not available, do not stop. Fall back to local
 repository search and read the relevant documents directly.
 
+If the context-memory MCP tools are available, use them to preserve and recover
+session state across context compaction:
+
+- Before compaction or at major task boundaries, call `save_context_memory`
+  with a short `title`, optional `session_key`, and the decisions, file paths,
+  blockers, and next steps the next agent turn will need.
+- After compaction or when prior chat detail is missing, call
+  `search_context_memory` or `list_context_memory`, then `get_context_memory`
+  for full entries.
+- Use the same `session_key` within one task thread when possible.
+
 Recommended fallback searches:
 
 ```bash

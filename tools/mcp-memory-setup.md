@@ -1,5 +1,8 @@
 # FoldingOS Memory MCP Setup
 
+For the full setup guide, including Cursor configuration, see
+[`MCP-SETUP.md`](MCP-SETUP.md).
+
 This document describes the local setup for the FoldingOS project-memory MCP
 server in `tools/mcp_memory_server.py`.
 
@@ -225,3 +228,62 @@ the remaining project notes and existing code behavior.
 | Authentication or peer errors | The local PostgreSQL role does not match the OS user or lacks grants. | Create/grant the role or set `DATABASE_URL` to a connection string with explicit credentials. |
 | OpenAI authentication errors | `OPENAI_API_KEY` is missing or invalid. | Set the key in `.env` or the MCP client's environment configuration. |
 | Empty search results | The database is empty. | Run `.venv/bin/python tools/index_memory.py`. |
+| `permission denied for schema public` during context setup | The app user can write rows but cannot create tables. | Run `sudo -u postgres psql foldingos_memory -f tools/setup_context_memory.sql`. |
+| `relation "agent_context_memory" does not exist` | Context table setup has not been run. | Run `tools/setup_context_memory.py` or the postgres SQL setup above. |
+
+## Agent Context Memory
+
+The context-memory MCP stores agent session notes in the same PostgreSQL
+database. Use it to survive Cursor context compaction and to search prior work.
+
+### Schema Setup
+
+Create the context table once:
+
+```bash
+.venv/bin/python tools/setup_context_memory.py
+```
+
+If the current database user cannot create tables, run the one-time SQL setup
+as postgres:
+
+```bash
+sudo -u postgres psql foldingos_memory -f tools/setup_context_memory.sql
+```
+
+This creates the `agent_context_memory` table and indexes in the configured
+database.
+
+### Run The Context MCP Server
+
+```bash
+.venv/bin/python tools/mcp_context_memory_server.py
+```
+
+Tools:
+
+| Tool | Arguments | Result |
+| --- | --- | --- |
+| `save_context_memory` | `content: str`, `title: str = ""`, `session_key: str = ""`, `tags: list[str] = []` | Stores one context entry and returns its id. |
+| `search_context_memory` | `query: str`, `limit: int = 8`, `session_key: str = ""` | Semantic search over saved context. |
+| `list_context_memory` | `limit: int = 20`, `session_key: str = ""` | Recent saved entries, newest first. |
+| `get_context_memory` | `entry_id: int` | Full content for one entry. |
+
+Example MCP client configuration is in `.cursor/mcp.json` under
+`foldingos-context-memory`.
+
+### Agent Usage
+
+Save context when:
+
+- a multi-step task reaches a stable checkpoint
+- important decisions, file paths, or commands would be lost after compaction
+- you are handing off to a later agent turn on the same task
+
+Search or list context when:
+
+- earlier chat detail is missing after compaction
+- you need prior decisions, blockers, or verification results for the task
+
+Use a stable `session_key` such as the branch name, issue number, or task slug
+so related entries stay grouped.

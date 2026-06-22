@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+VENV_PYTHON="${PROJECT_ROOT}/.venv/bin/python"
+INDEX_SCRIPT="${PROJECT_ROOT}/tools/index_memory.py"
+
+usage() {
+  echo "Usage: ./scripts/index-memory"
+  echo
+  echo "Index FoldingOS project docs into PostgreSQL for MCP project memory search."
+  echo "Requires repo-local .venv, .env, and a configured foldingos_memory database."
+}
+
+if [ "$#" -gt 0 ]; then
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "ERROR: Unknown option: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+fi
+
+if [ ! -x "${VENV_PYTHON}" ]; then
+  echo "ERROR: Missing virtualenv Python at ${VENV_PYTHON}" >&2
+  echo "Create it with: python3 -m venv .venv && .venv/bin/pip install openai psycopg \"mcp[cli]\"" >&2
+  exit 1
+fi
+
+if [ ! -f "${INDEX_SCRIPT}" ]; then
+  echo "ERROR: Missing indexer at ${INDEX_SCRIPT}" >&2
+  exit 1
+fi
+
+cd "${PROJECT_ROOT}"
+exec "${VENV_PYTHON}" "${INDEX_SCRIPT}"
