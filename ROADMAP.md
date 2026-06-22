@@ -140,3 +140,23 @@ for the issue closure matrix and validation evidence.
 - Validate IPv4-only, IPv6-only, and dual-stack networking
 - Verify stable release signatures
 - Publish release images
+
+---
+
+# GitHub Milestone Tracking
+
+GitHub issue and pull request milestones are numbered to match the roadmap
+sections above:
+
+| GitHub milestone | Roadmap section |
+| --- | --- |
+| 1 | Milestone 1: Bootable Base System |
+| 2 | Milestone 2: Folding@home Integration |
+| 3 | Milestone 3: Network Fleet Provisioning |
+| 4 | Milestone 4: FoldOps Integration |
+| 5 | Milestone 5: Update and Recovery System |
+| 6 | Milestone 6: FoldOps Upgrades |
+| 7 | Milestone 7: Raspberry Pi Support |
+| 8 | Milestone 8: v1.0 Release |
+
+Milestone 7 planning umbrella: [issue #153](https://github.com/pacificnm/folding-os/issues/153).
