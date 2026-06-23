@@ -398,12 +398,6 @@ body {
   gap: 0.55rem;
 }
 
-.site-footer-brand {
-  margin: 0;
-  font-size: 0.8rem;
-  color: var(--muted);
-}
-
 .site-footer-nav {
   display: flex;
   flex-wrap: wrap;
@@ -436,7 +430,6 @@ body {
   gap: 0.35rem;
 }
 
-.site-footer--compact .site-footer-brand,
 .site-footer--compact .site-footer-nav,
 .site-footer--compact .site-footer-note {
   font-size: 0.65rem;
