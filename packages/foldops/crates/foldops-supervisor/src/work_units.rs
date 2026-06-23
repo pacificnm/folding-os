@@ -399,6 +399,7 @@ mod tests {
                 configTeam: None,
                 configPasskeyConfigured: None,
                 configCpus: None,
+                effectiveCpus: None,
             },
             maintenance: Maintenance {
                 aptUpdatesAvailable: 0,

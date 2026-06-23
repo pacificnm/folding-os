@@ -176,6 +176,9 @@ async fn control_status(State(state): State<AppState>) -> Response {
     Json(
         get_control_status(&ControlContext {
             allow_reboot: state.config.controls_allow_reboot,
+            fah_log_path: state.config.fah_log_path.clone(),
+            fah_db_path: state.config.fah_db_path.clone(),
+            fah_work_dir: state.config.fah_work_dir.clone(),
             fah_ws_host: state.config.fah_ws_host.clone(),
             fah_ws_port: state.config.fah_ws_port,
         })
@@ -202,6 +205,9 @@ async fn control_action(State(state): State<AppState>, Json(body): Json<ControlB
 
     let ctx = ControlContext {
         allow_reboot: state.config.controls_allow_reboot,
+        fah_log_path: state.config.fah_log_path.clone(),
+        fah_db_path: state.config.fah_db_path.clone(),
+        fah_work_dir: state.config.fah_work_dir.clone(),
         fah_ws_host: state.config.fah_ws_host.clone(),
         fah_ws_port: state.config.fah_ws_port,
     };

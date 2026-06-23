@@ -23,6 +23,9 @@ const FOLDINGHOME_DEFAULTS_KEY = "foldops.foldinghome.defaults.v1";
 interface FoldinghomeSavedDefaults {
   username?: string;
   team?: string;
+  applyCpus?: boolean;
+  cpuMode?: "auto" | "manual";
+  cpuSlots?: string;
 }
 
 function loadSavedDefaults(): FoldinghomeSavedDefaults {
@@ -128,6 +131,7 @@ function mergeAppliedFahConfig(
   hostnames: Set<string>,
   username: string,
   team: number,
+  cpus?: number,
 ): MachineSummary[] {
   return machines.map((machine) => {
     if (!hostnames.has(machine.hostname) || !machine.latest?.payload) {
@@ -144,6 +148,12 @@ function mergeAppliedFahConfig(
             ...previousFah,
             configUsername: username,
             configTeam: team,
+            ...(cpus != null
+              ? {
+                  configCpus: cpus,
+                  effectiveCpus: cpus > 0 ? cpus : previousFah?.effectiveCpus,
+                }
+              : {}),
           },
         },
       },
@@ -158,6 +168,11 @@ export function AdminFoldingHome() {
   const [username, setUsername] = useState(savedDefaults.username ?? "");
   const [team, setTeam] = useState(savedDefaults.team ?? "0");
   const [passkey, setPasskey] = useState("");
+  const [applyCpus, setApplyCpus] = useState(savedDefaults.applyCpus ?? false);
+  const [cpuMode, setCpuMode] = useState<"auto" | "manual">(
+    savedDefaults.cpuMode ?? "auto",
+  );
+  const [cpuSlots, setCpuSlots] = useState(savedDefaults.cpuSlots ?? "4");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -243,9 +258,26 @@ export function AdminFoldingHome() {
       return;
     }
 
+    let cpusToApply: number | undefined;
+    if (applyCpus) {
+      if (cpuMode === "auto") {
+        cpusToApply = 0;
+      } else {
+        const slots = Number(cpuSlots);
+        if (!Number.isInteger(slots) || slots <= 0) {
+          setError("CPU slots must be a positive whole number, or choose Automatic.");
+          return;
+        }
+        cpusToApply = slots;
+      }
+    }
+
     saveDefaults({
       username: donor,
       team: String(teamNumber),
+      applyCpus,
+      cpuMode,
+      cpuSlots,
     });
 
     setBusy(true);
@@ -269,6 +301,7 @@ export function AdminFoldingHome() {
         username: donor,
         team: teamNumber,
         ...(passkeyValue ? { passkey: passkeyValue } : {}),
+        ...(cpusToApply != null ? { cpus: cpusToApply } : {}),
       });
       nextResults.push(result);
       setResults([...nextResults]);
@@ -286,6 +319,7 @@ export function AdminFoldingHome() {
         successfulHosts,
         donor,
         teamNumber,
+        cpusToApply,
       ),
     );
 
@@ -314,6 +348,7 @@ export function AdminFoldingHome() {
           successfulHosts,
           donor,
           teamNumber,
+          cpusToApply,
         ),
       );
       setError(null);
@@ -387,6 +422,50 @@ export function AdminFoldingHome() {
                 disabled={busy}
               />
             </label>
+          </div>
+          <div className="admin-assign-form admin-assign-form--cpus">
+            <label className="admin-checkbox-label">
+              <input
+                type="checkbox"
+                checked={applyCpus}
+                onChange={(event) => setApplyCpus(event.target.checked)}
+                disabled={busy}
+              />
+              Update CPU slot policy
+            </label>
+            {applyCpus && (
+              <div className="machine-controls-host-cpu-options">
+                <label className="admin-radio-label">
+                  <input
+                    type="radio"
+                    name="fleet-cpu-mode"
+                    checked={cpuMode === "auto"}
+                    onChange={() => setCpuMode("auto")}
+                    disabled={busy}
+                  />
+                  Automatic (leave one thread for the OS, prefer even slot counts)
+                </label>
+                <label className="admin-radio-label">
+                  <input
+                    type="radio"
+                    name="fleet-cpu-mode"
+                    checked={cpuMode === "manual"}
+                    onChange={() => setCpuMode("manual")}
+                    disabled={busy}
+                  />
+                  Fixed slots
+                  <input
+                    className="admin-input mono machine-controls-host-cpu-input"
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={cpuSlots}
+                    onChange={(event) => setCpuSlots(event.target.value)}
+                    disabled={busy || cpuMode !== "manual"}
+                  />
+                </label>
+              </div>
+            )}
           </div>
           <p className="admin-muted">
             Leave blank only for machines that already show Token set. Paste the

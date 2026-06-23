@@ -11,5 +11,3 @@ pub use status::collect_fah_status;
 pub use work_log::get_newest_work_log_path;
 
 mod state;
-
-pub use websocket::{query_fah_websocket_activity, FahWsActivity};

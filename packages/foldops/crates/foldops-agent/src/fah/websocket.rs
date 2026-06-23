@@ -3,6 +3,7 @@ use std::time::Duration;
 use futures_util::{SinkExt, StreamExt};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
+use super::client_db::extract_project;
 use super::state::FahLogState;
 
 const WS_PATH: &str = "/api/websocket";
@@ -28,6 +29,12 @@ struct WsUnitState {
 #[derive(Debug, serde::Deserialize)]
 struct WsAssignment {
     project: Option<f64>,
+    data: Option<WsAssignmentData>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct WsAssignmentData {
+    project: Option<f64>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -49,9 +56,19 @@ fn progress_percent(unit: &WsUnitState) -> Option<f64> {
     None
 }
 
-fn unit_to_state(raw: &WsUnit) -> Option<FahLogState> {
+fn project_from_assignment(assignment: &WsAssignment) -> Option<f64> {
+    assignment
+        .project
+        .or_else(|| assignment.data.as_ref().and_then(|data| data.project))
+}
+
+fn unit_to_state(raw: &WsUnit, raw_value: &serde_json::Value) -> Option<FahLogState> {
     let inner = raw.state.as_ref()?;
-    let project = inner.assignment.as_ref().and_then(|a| a.project);
+    let project = inner
+        .assignment
+        .as_ref()
+        .and_then(project_from_assignment)
+        .or_else(|| extract_project(raw_value).and_then(|p| p.parse().ok()));
     let ppd = raw.ppd.or(inner.ppd).filter(|&p| p > 0.0);
     let progress = progress_percent(inner);
     let eta = inner.eta.as_deref().unwrap_or("").trim();
@@ -95,9 +112,9 @@ fn empty_fah_log_state() -> FahLogState {
     }
 }
 
-fn folding_state_from_unit(unit_state: &str, state: &FahLogState) -> String {
+pub(crate) fn folding_state_from_unit(unit_state: &str, state: &FahLogState) -> String {
     match unit_state.trim().to_uppercase().as_str() {
-        "RUN" if state.project.is_some() => "folding".into(),
+        "RUN" if active_work_evidence_present(state) => "folding".into(),
         "RUN" => "waiting".into(),
         "PAUSE" => "paused".into(),
         "FINISH" => "finishing".into(),
@@ -146,6 +163,23 @@ fn format_ppd(ppd: f64) -> String {
     }
 }
 
+pub(crate) fn finalize_fah_activity_state(state: &mut FahLogState) {
+    let mut unit_state = state.unit_state.as_deref().unwrap_or("").trim().to_uppercase();
+    if unit_state.is_empty() && active_work_evidence_present(state) {
+        unit_state = "RUN".into();
+        state.unit_state = Some(unit_state.clone());
+    }
+    state.folding_state = Some(folding_state_from_unit(&unit_state, state));
+    state.folding_detail = if active_work_evidence_present(state) {
+        format_activity_detail(state, &unit_state)
+    } else {
+        state
+            .folding_detail
+            .take()
+            .or_else(|| format_activity_detail(state, &unit_state))
+    };
+}
+
 fn enrich_state_with_activity(
     mut state: FahLogState,
     unit_state: String,
@@ -186,12 +220,13 @@ fn score_ws_unit(parsed: &FahLogState, status: &str) -> f64 {
     score
 }
 
-fn pick_best_unit(units: &[WsUnit]) -> Option<(FahLogState, String)> {
+fn pick_best_unit(units: &[serde_json::Value]) -> Option<(FahLogState, String)> {
     let mut best: Option<(FahLogState, String, f64)> = None;
 
-    for raw in units {
-        let parsed = unit_to_state(raw)?;
-        let status = unit_status(raw);
+    for raw_value in units {
+        let raw: WsUnit = serde_json::from_value(raw_value.clone()).ok()?;
+        let parsed = unit_to_state(&raw, raw_value)?;
+        let status = unit_status(&raw);
         let score = score_ws_unit(&parsed, &status);
 
         if best.as_ref().is_none_or(|(_, _, s)| score > *s) {
@@ -202,15 +237,16 @@ fn pick_best_unit(units: &[WsUnit]) -> Option<(FahLogState, String)> {
     best.map(|(state, status, _)| (state, status))
 }
 
-fn pick_best_unit_relaxed(units: &[WsUnit]) -> Option<(FahLogState, String)> {
+fn pick_best_unit_relaxed(units: &[serde_json::Value]) -> Option<(FahLogState, String)> {
     let mut best: Option<(FahLogState, String, f64)> = None;
 
-    for raw in units {
-        let status = unit_status(raw);
+    for raw_value in units {
+        let raw: WsUnit = serde_json::from_value(raw_value.clone()).ok()?;
+        let status = unit_status(&raw);
         if status.is_empty() {
             continue;
         }
-        let parsed = unit_to_state(raw).unwrap_or_else(|| empty_fah_log_state());
+        let parsed = unit_to_state(&raw, raw_value).unwrap_or_else(|| empty_fah_log_state());
         let score = score_ws_unit(&parsed, &status);
 
         if best.as_ref().is_none_or(|(_, _, s)| score > *s) {
@@ -221,7 +257,7 @@ fn pick_best_unit_relaxed(units: &[WsUnit]) -> Option<(FahLogState, String)> {
     best.map(|(state, status, _)| (state, status))
 }
 
-fn activity_from_groups(
+fn activity_from_groups_definitive(
     parsed: &serde_json::Value,
 ) -> Option<(FahLogState, String, Option<String>)> {
     let groups = parsed.get("groups")?.as_object()?;
@@ -268,53 +304,59 @@ fn activity_from_groups(
                 None,
             ));
         }
-
-        return Some((empty_fah_log_state(), "RUN".into(), None));
     }
 
     None
+}
+
+fn activity_from_groups_idle(
+    parsed: &serde_json::Value,
+) -> Option<(FahLogState, String, Option<String>)> {
+    let groups = parsed.get("groups")?.as_object()?;
+    if groups.is_empty() {
+        return None;
+    }
+
+    for group in groups.values() {
+        let config = group.get("config")?;
+        let paused = config
+            .get("paused")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let finish = config
+            .get("finish")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        if paused || finish {
+            return None;
+        }
+    }
+
+    Some((empty_fah_log_state(), "RUN".into(), None))
 }
 
 fn activity_from_websocket_message(
     parsed: &serde_json::Value,
 ) -> Option<(FahLogState, String, Option<String>)> {
     let units = parsed.get("units")?.as_array()?;
-    let typed: Vec<WsUnit> = units
-        .iter()
-        .filter_map(|u| serde_json::from_value(u.clone()).ok())
-        .collect();
 
-    if let Some((state, status)) = pick_best_unit(&typed).or_else(|| pick_best_unit_relaxed(&typed))
+    if let Some((state, status)) =
+        pick_best_unit(units).or_else(|| pick_best_unit_relaxed(units))
     {
         return Some((state, status, None));
     }
 
-    if typed.is_empty() {
-        return activity_from_groups(parsed);
+    if units.is_empty() {
+        return activity_from_groups_definitive(parsed);
     }
 
     None
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct FahWsActivity {
-    pub unit_state: String,
-    pub project: Option<String>,
-    pub progress: Option<f64>,
-    pub ppd: Option<f64>,
-    pub detail: Option<String>,
-}
-
-pub async fn query_fah_websocket_activity(host: &str, port: u16) -> Option<FahWsActivity> {
-    parse_fah_websocket_with_unit_state(host, port)
-        .await
-        .map(|(state, unit_state, detail)| FahWsActivity {
-            unit_state,
-            project: state.project,
-            progress: state.progress,
-            ppd: state.ppd,
-            detail,
-        })
+fn activity_from_websocket_fallback(
+    parsed: &serde_json::Value,
+) -> Option<(FahLogState, String, Option<String>)> {
+    activity_from_websocket_message(parsed).or_else(|| activity_from_groups_idle(parsed))
 }
 
 pub async fn parse_fah_websocket(host: &str, port: u16) -> Option<FahLogState> {
@@ -335,6 +377,7 @@ async fn parse_fah_websocket_with_unit_state(
     };
 
     let read = tokio::time::timeout(DEFAULT_TIMEOUT, async {
+        let mut last_parsed: Option<serde_json::Value> = None;
         while let Some(msg) = ws.next().await {
             let Ok(msg) = msg else { break };
             let text = match msg {
@@ -355,12 +398,13 @@ async fn parse_fah_websocket_with_unit_state(
             let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&text) else {
                 continue;
             };
+            last_parsed = Some(parsed.clone());
             if let Some(state) = activity_from_websocket_message(&parsed) {
                 let _ = ws.close(None).await;
                 return Some(state);
             }
         }
-        None
+        last_parsed.and_then(|parsed| activity_from_websocket_fallback(&parsed))
     })
     .await;
 
@@ -390,13 +434,29 @@ mod tests {
     }
 
     #[test]
-    fn running_with_empty_units_reports_run_state() {
+    fn running_with_empty_units_defers_run_until_fallback() {
         let msg = json!({
             "groups": { "": { "config": { "paused": false, "finish": false } } },
             "units": []
         });
-        let (_, unit_state, _) = activity_from_websocket_message(&msg).unwrap();
+        assert!(activity_from_websocket_message(&msg).is_none());
+        let (_, unit_state, _) = activity_from_groups_idle(&msg).unwrap();
         assert_eq!(unit_state, "RUN");
+    }
+
+    #[test]
+    fn run_unit_with_ppd_reports_folding_state() {
+        let msg = json!({
+            "groups": { "": { "config": { "paused": false, "finish": false } } },
+            "units": [{
+                "ppd": 250000.0,
+                "state": { "state": "RUN", "wu_progress": 0.125 }
+            }]
+        });
+        let (state, unit_state, _) = activity_from_websocket_message(&msg).unwrap();
+        let enriched = enrich_state_with_activity(state, unit_state, None);
+        assert_eq!(enriched.folding_state.as_deref(), Some("folding"));
+        assert_eq!(enriched.unit_state.as_deref(), Some("RUN"));
     }
 
     #[test]

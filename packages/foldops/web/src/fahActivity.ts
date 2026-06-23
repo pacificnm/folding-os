@@ -20,7 +20,12 @@ export function machineFoldingActivityState(
   const direct = latest?.payload?.fah?.foldingState?.trim().toLowerCase();
 
   if (direct) {
-    if (direct === "core" && hasActiveWorkEvidence(machine)) return "folding";
+    if (
+      (direct === "core" || direct === "waiting") &&
+      hasActiveWorkEvidence(machine)
+    ) {
+      return "folding";
+    }
     return direct;
   }
 

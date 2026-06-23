@@ -105,7 +105,7 @@ fn json_num(v: &Value) -> Option<f64> {
     v.as_f64()
 }
 
-fn extract_project(unit: &Value) -> Option<String> {
+pub(crate) fn extract_project(unit: &Value) -> Option<String> {
     let obj = unit.as_object()?;
     let candidates = [
         obj.get("assignment")
@@ -181,7 +181,11 @@ fn unit_to_state(unit: &FahUnitState) -> Option<FahLogState> {
         ppd: unit.ppd.filter(|p| *p > 0.0),
         tpf,
         folding_state: None,
-        unit_state: None,
+        unit_state: unit
+            .state
+            .as_deref()
+            .map(|value| value.trim().to_uppercase())
+            .filter(|value| !value.is_empty()),
         folding_detail: None,
         recent_errors: vec![],
     })

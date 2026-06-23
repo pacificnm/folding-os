@@ -1,7 +1,7 @@
 use super::client_db::parse_fah_client_db;
 use super::log::parse_fah_log;
 use super::state::FahLogState;
-use super::websocket::parse_fah_websocket;
+use super::websocket::{finalize_fah_activity_state, parse_fah_websocket};
 use super::work_log::parse_fah_work_log;
 use std::path::Path;
 
@@ -66,6 +66,7 @@ pub async fn collect_fah_status(
         &[Some(from_log.clone()), from_ws, db_result.state.clone()],
     );
     state.recent_errors = from_log.recent_errors;
+    finalize_fah_activity_state(&mut state);
 
     FahCollectResult {
         state,
@@ -92,5 +93,29 @@ mod tests {
         let merged = merge_states(Some(a), &[Some(b)]);
         assert_eq!(merged.progress, Some(42.0));
         assert_eq!(merged.ppd, Some(100.0));
+    }
+
+    #[test]
+    fn finalize_recomputes_folding_after_db_metrics_merge() {
+        let waiting_ws = FahLogState {
+            unit_state: Some("RUN".into()),
+            folding_state: Some("waiting".into()),
+            folding_detail: Some("No work unit assigned".into()),
+            ..FahLogState::empty()
+        };
+        let from_db = FahLogState {
+            project: Some("18400".into()),
+            progress: Some(42.0),
+            ppd: Some(100_000.0),
+            unit_state: Some("RUN".into()),
+            ..FahLogState::empty()
+        };
+        let mut merged = merge_states(None, &[Some(waiting_ws), Some(from_db)]);
+        finalize_fah_activity_state(&mut merged);
+        assert_eq!(merged.folding_state.as_deref(), Some("folding"));
+        assert_eq!(
+            merged.folding_detail.as_deref(),
+            Some("project 18400 - 42.0% - 100k PPD")
+        );
     }
 }

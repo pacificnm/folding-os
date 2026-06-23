@@ -130,6 +130,7 @@ mod tests {
                 configTeam: None,
                 configPasskeyConfigured: None,
                 configCpus: Some(4),
+                effectiveCpus: Some(4),
             },
             maintenance: Maintenance {
                 aptUpdatesAvailable: 0,

@@ -3,6 +3,7 @@ export interface FahConfigSnapshot {
   configTeam?: number | null;
   configPasskeyConfigured?: boolean | null;
   configCpus?: number | null;
+  effectiveCpus?: number | null;
   statsDonor?: string | null;
   statsTeam?: string | null;
 }
@@ -62,8 +63,37 @@ export function displayConfiguredToken(
 export function displayConfiguredCpus(
   fah: FahConfigSnapshot | null | undefined,
 ): string {
+  if (fah?.configCpus == null) {
+    return "—";
+  }
+  if (fah.configCpus === 0) {
+    return "Automatic";
+  }
+  if (fah.configCpus > 0) {
+    return String(fah.configCpus);
+  }
+  return "—";
+}
+
+export function displayEffectiveCpus(
+  fah: FahConfigSnapshot | null | undefined,
+): string {
+  if (fah?.effectiveCpus != null && fah.effectiveCpus > 0) {
+    return String(fah.effectiveCpus);
+  }
   if (fah?.configCpus != null && fah.configCpus > 0) {
     return String(fah.configCpus);
   }
   return "—";
+}
+
+export function fahCpuPolicyDrift(
+  fah: FahConfigSnapshot | null | undefined,
+): boolean {
+  const configured = fah?.configCpus;
+  const effective = fah?.effectiveCpus;
+  if (configured == null || effective == null || configured <= 0 || effective <= 0) {
+    return false;
+  }
+  return configured !== effective;
 }

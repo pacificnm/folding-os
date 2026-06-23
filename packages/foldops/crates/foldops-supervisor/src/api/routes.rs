@@ -560,6 +560,15 @@ async fn foldinghome_config(
         )
             .into_response();
     }
+    if let Some(cpus) = body.cpus {
+        if cpus < 0 {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": "cpus must be zero (automatic) or a positive integer" })),
+            )
+                .into_response();
+        }
+    }
 
     let passkey = match normalize_passkey_input(&body.passkey) {
         Ok(value) => value,
@@ -590,11 +599,18 @@ async fn foldinghome_config(
             .and_then(|snapshot| parse_payload(&snapshot))
             .and_then(|payload| payload.fah.configPasskeyConfigured)
             .unwrap_or(false);
+        let configured_cpus = db::get_latest_snapshot(&conn, &machine.hostname)
+            .ok()
+            .flatten()
+            .and_then(|snapshot| parse_payload(&snapshot))
+            .and_then(|payload| payload.fah.configCpus)
+            .unwrap_or(0);
         (
             machine.hostname.clone(),
             state.config.agent_http_port,
             state.config.ingest_token.clone(),
             passkey_configured,
+            configured_cpus,
         )
     };
 
@@ -608,12 +624,15 @@ async fn foldinghome_config(
         passkey_secret = "fah-passkey".to_string();
     }
 
+    let cpus = body.cpus.unwrap_or(proxy.4);
+
     let validation_secret = if passkey.is_empty() && !preserving_existing_passkey {
         passkey_secret.as_str()
     } else {
         ""
     };
-    let validation_toml = build_foldinghome_candidate_toml(username, body.team, validation_secret);
+    let validation_toml =
+        build_foldinghome_candidate_toml(username, body.team, validation_secret, cpus);
     let candidate_path = match write_supervisor_candidate(&validation_toml) {
         Ok(path) => path,
         Err(error) => {
@@ -635,7 +654,7 @@ async fn foldinghome_config(
     let _ = std::fs::remove_file(&candidate_path);
 
     let config_toml =
-        build_foldinghome_candidate_toml(username, body.team, passkey_secret.as_str());
+        build_foldinghome_candidate_toml(username, body.team, passkey_secret.as_str(), cpus);
 
     tracing::info!(hostname = %proxy.0, "proxying foldinghome config push to agent");
 
