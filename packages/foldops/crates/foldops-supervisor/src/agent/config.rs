@@ -49,9 +49,14 @@ fn passkey_format_error(length: usize) -> String {
     )
 }
 
-pub fn build_foldinghome_candidate_toml(username: &str, team: i64, passkey_secret: &str) -> String {
+pub fn build_foldinghome_candidate_toml(
+    username: &str,
+    team: i64,
+    passkey_secret: &str,
+    cpus: i64,
+) -> String {
     format!(
-        "schema_version = 1\n\n[identity]\nusername = {}\nteam = {team}\npasskey_secret = {}\n\n[resources]\ncpus = 0\ngpus = false\n",
+        "schema_version = 1\n\n[identity]\nusername = {}\nteam = {team}\npasskey_secret = {}\n\n[resources]\ncpus = {cpus}\ngpus = false\n",
         toml_string(username),
         toml_string(passkey_secret),
     )
@@ -70,6 +75,8 @@ pub struct FoldinghomeConfigRequest {
     pub passkey_secret: String,
     #[serde(default)]
     pub passkey: String,
+    #[serde(default)]
+    pub cpus: Option<i64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -205,11 +212,18 @@ gpus = false
 
     #[test]
     fn build_foldinghome_candidate_toml_quotes_strings() {
-        let toml = build_foldinghome_candidate_toml("Test User", 123, "");
+        let toml = build_foldinghome_candidate_toml("Test User", 123, "", 0);
         assert!(toml.contains("username = \"Test User\""));
         assert!(toml.contains("team = 123"));
         assert!(toml.contains("passkey_secret = \"\""));
+        assert!(toml.contains("cpus = 0"));
         assert!(toml.contains("gpus = false"));
+    }
+
+    #[test]
+    fn build_foldinghome_candidate_toml_includes_explicit_cpus() {
+        let toml = build_foldinghome_candidate_toml("Test User", 123, "", 12);
+        assert!(toml.contains("cpus = 12"));
     }
 
     #[test]

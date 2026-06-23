@@ -17,6 +17,8 @@ import {
   displayConfiguredDonor,
   displayConfiguredTeam,
   displayConfiguredToken,
+  displayEffectiveCpus,
+  fahCpuPolicyDrift,
 } from "../../fahConfig";
 import { snapshotsToHistory } from "../../history";
 import type { FahProjectInfo, HistoryPoint, MachineSummary, WorkUnitHistoryResponse } from "../../types";
@@ -311,6 +313,11 @@ export function AdminFoldingMachineDetail() {
       mono: true,
     },
     {
+      label: "Effective FAH CPUs",
+      value: displayEffectiveCpus(fah),
+      mono: true,
+    },
+    {
       label: "Memory total",
       value: formatBytes(system?.memory?.total),
       mono: true,
@@ -406,6 +413,12 @@ export function AdminFoldingMachineDetail() {
               <span className="label">Assigned CPUs</span>
               <span className="value mono">{displayConfiguredCpus(fah)}</span>
             </div>
+            {fahCpuPolicyDrift(fah) && (
+              <div className="detail-stat">
+                <span className="label">Effective CPUs</span>
+                <span className="value mono">{displayEffectiveCpus(fah)}</span>
+              </div>
+            )}
           </div>
 
           <Tabs

@@ -189,6 +189,7 @@ fn fah_log_to_payload(state: FahLogState, systemd: FahSystemdStatus, stats: &Fah
         configTeam: None,
         configPasskeyConfigured: None,
         configCpus: None,
+        effectiveCpus: None,
     }
 }
 

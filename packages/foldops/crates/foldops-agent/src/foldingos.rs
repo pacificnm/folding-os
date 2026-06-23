@@ -329,6 +329,10 @@ struct InspectFahConfiguration {
     username: String,
     team: i64,
     passkey_configured: bool,
+    #[serde(default)]
+    configured_cpus: Option<i64>,
+    #[serde(default)]
+    effective_cpus: Option<i64>,
     cpus: Option<i64>,
 }
 
@@ -504,7 +508,15 @@ fn fah_to_payload(data: InspectFahData, stats: &FahStats) -> Fah {
         configCpus: data
             .configuration
             .as_ref()
-            .and_then(|configuration| configuration.cpus),
+            .and_then(|configuration| configuration.configured_cpus.or(configuration.cpus)),
+        effectiveCpus: data
+            .configuration
+            .as_ref()
+            .and_then(|configuration| {
+                configuration
+                    .effective_cpus
+                    .or(configuration.cpus)
+            }),
     }
 }
 
@@ -537,6 +549,7 @@ fn empty_fah_payload(stats: &FahStats) -> Fah {
         configTeam: None,
         configPasskeyConfigured: None,
         configCpus: None,
+        effectiveCpus: None,
     }
 }
 

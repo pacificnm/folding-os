@@ -1,7 +1,9 @@
+use std::path::PathBuf;
+
 use foldops_types::ControlAction;
 use serde::Serialize;
 
-use crate::fah::query_fah_websocket_activity;
+use crate::fah::collect_fah_status;
 use crate::fah::{send_fah_finish, send_fah_pause, send_fah_resume};
 use crate::foldingos::{FAH_CLIENT_UNIT, FOLDOPS_AGENT_UNIT};
 
@@ -27,6 +29,9 @@ pub struct ControlStatus {
 
 pub struct ControlContext {
     pub allow_reboot: bool,
+    pub fah_log_path: PathBuf,
+    pub fah_db_path: PathBuf,
+    pub fah_work_dir: PathBuf,
     pub fah_ws_host: String,
     pub fah_ws_port: u16,
 }
@@ -35,7 +40,15 @@ pub async fn get_control_status(ctx: &ControlContext) -> ControlStatus {
     let foldops_agent = systemd_is_active(FOLDOPS_AGENT_UNIT).await;
     let fah_client = systemd_is_active(FAH_CLIENT_UNIT).await;
     let (fah_folding_state, fah_unit_state, fah_folding_detail) = if fah_client == "active" {
-        summarize_fah_folding(query_fah_websocket_activity(&ctx.fah_ws_host, ctx.fah_ws_port).await)
+        let collected = collect_fah_status(
+            &ctx.fah_log_path,
+            &ctx.fah_db_path,
+            &ctx.fah_work_dir,
+            &ctx.fah_ws_host,
+            ctx.fah_ws_port,
+        )
+        .await;
+        folding_status_from_collected_state(collected.state)
     } else {
         (
             "stopped".into(),
@@ -53,118 +66,16 @@ pub async fn get_control_status(ctx: &ControlContext) -> ControlStatus {
     }
 }
 
-fn summarize_fah_folding(
-    activity: Option<crate::fah::FahWsActivity>,
+fn folding_status_from_collected_state(
+    state: crate::fah::FahLogState,
 ) -> (String, Option<String>, Option<String>) {
-    let Some(activity) = activity else {
-        return (
-            "unreachable".into(),
-            None,
-            Some("FAH WebSocket unavailable on port 7396".into()),
-        );
-    };
-
-    let unit_state = activity.unit_state.trim().to_uppercase();
-    let detail = activity
-        .detail
-        .clone()
-        .or_else(|| format_fah_activity_detail(&activity));
-    let fah_folding_state = match unit_state.as_str() {
-        "RUN" if activity.project.is_some() => "folding".to_string(),
-        "RUN" => "waiting".to_string(),
-        "PAUSE" => "paused".to_string(),
-        "FINISH" => "finishing".to_string(),
-        "CORE" if activity_has_work_evidence(&activity) => "folding".to_string(),
-        "DOWNLOAD" | "UPLOAD" | "READY" | "CORE" => unit_state.to_lowercase(),
-        "" => "idle".to_string(),
-        other => other.to_lowercase(),
-    };
-
     (
-        fah_folding_state,
-        if unit_state.is_empty() {
-            None
-        } else {
-            Some(unit_state)
-        },
-        detail,
+        state
+            .folding_state
+            .unwrap_or_else(|| "unknown".into()),
+        state.unit_state,
+        state.folding_detail,
     )
-}
-
-fn activity_has_work_evidence(activity: &crate::fah::FahWsActivity) -> bool {
-    activity.project.is_some()
-        || activity.progress.is_some_and(|value| value > 0.0)
-        || activity.ppd.is_some_and(|value| value > 0.0)
-}
-
-fn format_fah_activity_detail(activity: &crate::fah::FahWsActivity) -> Option<String> {
-    let mut parts = Vec::new();
-    if let Some(project) = activity.project.as_deref() {
-        parts.push(format!("project {project}"));
-    }
-    if let Some(progress) = activity.progress {
-        parts.push(format!("{progress:.1}%"));
-    }
-    if let Some(ppd) = activity.ppd {
-        parts.push(format!("{} PPD", format_ppd(ppd)));
-    }
-    if parts.is_empty() {
-        if activity.unit_state.eq_ignore_ascii_case("RUN") {
-            Some("No work unit assigned".into())
-        } else {
-            None
-        }
-    } else {
-        Some(parts.join(" · "))
-    }
-}
-
-fn format_ppd(ppd: f64) -> String {
-    if ppd >= 1_000_000.0 {
-        format!("{:.2}M", ppd / 1_000_000.0)
-    } else if ppd >= 1_000.0 {
-        format!("{:.0}k", ppd / 1_000.0)
-    } else {
-        format!("{ppd:.0}")
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn core_activity_with_work_metrics_reports_folding() {
-        let activity = crate::fah::FahWsActivity {
-            unit_state: "CORE".into(),
-            project: Some("18400".into()),
-            progress: Some(12.5),
-            ppd: Some(250_000.0),
-            detail: None,
-        };
-
-        let (state, unit_state, detail) = summarize_fah_folding(Some(activity));
-
-        assert_eq!(state, "folding");
-        assert_eq!(unit_state.as_deref(), Some("CORE"));
-        assert_eq!(detail.as_deref(), Some("project 18400 · 12.5% · 250k PPD"));
-    }
-
-    #[test]
-    fn core_activity_without_work_metrics_reports_core() {
-        let activity = crate::fah::FahWsActivity {
-            unit_state: "CORE".into(),
-            project: None,
-            progress: None,
-            ppd: None,
-            detail: None,
-        };
-
-        let (state, unit_state, _) = summarize_fah_folding(Some(activity));
-
-        assert_eq!(state, "core");
-        assert_eq!(unit_state.as_deref(), Some("CORE"));
-    }
 }
 
 async fn systemd_is_active(unit: &str) -> String {

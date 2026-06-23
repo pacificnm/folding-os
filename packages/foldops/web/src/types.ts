@@ -125,6 +125,7 @@ export interface MachineSummary {
         configTeam?: number | null;
         configPasskeyConfigured?: boolean | null;
         configCpus?: number | null;
+        effectiveCpus?: number | null;
       };
       logs?: NodeLogs;
       system: {
@@ -485,6 +486,7 @@ export interface FoldinghomeConfigRequest {
   team: number;
   passkey?: string;
   passkey_secret?: string;
+  cpus?: number;
 }
 
 export interface FoldinghomeConfigResponse {

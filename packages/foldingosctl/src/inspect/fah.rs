@@ -143,21 +143,25 @@ fn foldinghome_configuration(
     let secret_file_configured =
         !passkey_secret.is_empty() && paths.secrets_dir().join(passkey_secret).is_file();
     let passkey_configured = runtime.passkey_configured || secret_file_configured;
-    let cpus = runtime
-        .cpus
-        .or_else(|| {
-            merged
-                .as_ref()
-                .and_then(|config| config.get("resources.cpus"))
-                .map(|value| value.ival)
-                .filter(|value| *value > 0)
-        })
-        .or(db_cpus);
+    let configured_cpus = merged
+        .as_ref()
+        .and_then(|config| config.get("resources.cpus"))
+        .map(|value| value.ival)
+        .unwrap_or(0);
+    let effective_cpus = runtime.cpus.or(db_cpus).or_else(|| {
+        if configured_cpus > 0 {
+            Some(configured_cpus)
+        } else {
+            None
+        }
+    });
     Some(serde_json::json!({
         "username": username,
         "team": team,
         "passkey_configured": passkey_configured,
-        "cpus": cpus,
+        "configured_cpus": configured_cpus,
+        "effective_cpus": effective_cpus,
+        "cpus": effective_cpus,
     }))
 }
 

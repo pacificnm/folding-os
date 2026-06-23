@@ -167,7 +167,7 @@ fn normalize_auto_cpus(threads: usize) -> i64 {
     if cpus > 1 && cpus % 2 == 1 {
         cpus -= 1;
     }
-    cpus.min(4) as i64
+    cpus as i64
 }
 
 fn reconcile_fah_default_group(paths: &AppliancePaths, cpus: i64) -> Result<bool, String> {
@@ -398,8 +398,8 @@ gpus = false
         assert_eq!(normalize_auto_cpus(1), 1);
         assert_eq!(normalize_auto_cpus(2), 1);
         assert_eq!(normalize_auto_cpus(4), 2);
-        assert_eq!(normalize_auto_cpus(12), 4);
-        assert_eq!(normalize_auto_cpus(16), 4);
+        assert_eq!(normalize_auto_cpus(12), 10);
+        assert_eq!(normalize_auto_cpus(16), 14);
     }
 
     #[test]

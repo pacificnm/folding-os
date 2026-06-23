@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   fetchMachineControlStatus,
+  pushFoldinghomeConfig,
   runMachineControl,
 } from "../api";
+import {
+  displayConfiguredCpus,
+  displayEffectiveCpus,
+  fahCpuPolicyDrift,
+} from "../fahConfig";
 import {
   controlActionState,
   optimisticControlStatus,
@@ -60,7 +66,7 @@ interface ControlGroup {
   buttons: { action: ControlAction; label: string; variant?: "danger" }[];
 }
 
-const GROUPS: ControlGroup[] = [
+const SERVICE_GROUPS: ControlGroup[] = [
   {
     title: "FoldOps agent",
     description: "foldingos-foldops-agent.service",
@@ -82,11 +88,6 @@ const GROUPS: ControlGroup[] = [
       { action: "fah.finish", label: "Finish WU" },
     ],
   },
-  {
-    title: "Host",
-    description: "Reboots the entire machine",
-    buttons: [{ action: "host.reboot", label: "Reboot server", variant: "danger" }],
-  },
 ];
 
 interface MachineControlsPanelProps {
@@ -104,8 +105,28 @@ export function MachineControlsPanel({
   const [busy, setBusy] = useState<ControlAction | null>(null);
   const [lastResult, setLastResult] = useState<string | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
+  const [cpuMode, setCpuMode] = useState<"auto" | "manual">("auto");
+  const [cpuSlots, setCpuSlots] = useState("4");
+  const [cpuBusy, setCpuBusy] = useState(false);
+  const [cpuMessage, setCpuMessage] = useState<string | null>(null);
+  const [cpuError, setCpuError] = useState<string | null>(null);
 
   const online = machine?.online ?? false;
+  const fah = machine?.latest?.payload?.fah;
+  const cpuDrift = fahCpuPolicyDrift(fah);
+
+  useEffect(() => {
+    const configured = fah?.configCpus;
+    if (configured == null) {
+      return;
+    }
+    if (configured === 0) {
+      setCpuMode("auto");
+      return;
+    }
+    setCpuMode("manual");
+    setCpuSlots(String(configured));
+  }, [fah?.configCpus, hostname]);
 
   const loadStatus = useCallback(async () => {
     if (!online) {
@@ -167,6 +188,48 @@ export function MachineControlsPanel({
       setLastError(err instanceof Error ? err.message : "Control failed");
     } finally {
       setBusy(null);
+    }
+  };
+
+  const applyCpuPolicy = async () => {
+    const donor =
+      fah?.configUsername?.trim() ||
+      fah?.statsDonor?.trim() ||
+      "Anonymous";
+    const team = fah?.configTeam ?? 0;
+    let cpus = 0;
+    if (cpuMode === "manual") {
+      const slots = Number(cpuSlots);
+      if (!Number.isInteger(slots) || slots <= 0) {
+        setCpuError("Enter a positive whole number of CPU slots, or choose Automatic.");
+        setCpuMessage(null);
+        return;
+      }
+      cpus = slots;
+    }
+
+    setCpuBusy(true);
+    setCpuMessage(null);
+    setCpuError(null);
+    try {
+      const result = await pushFoldinghomeConfig(hostname, {
+        username: donor,
+        team,
+        cpus,
+      });
+      if (result.ok) {
+        setCpuMessage(
+          cpus === 0
+            ? "CPU policy set to automatic."
+            : `CPU policy set to ${cpus} slot${cpus === 1 ? "" : "s"}.`,
+        );
+      } else {
+        setCpuError(result.error ?? "Failed to apply CPU policy.");
+      }
+    } catch (err) {
+      setCpuError(err instanceof Error ? err.message : "Failed to apply CPU policy.");
+    } finally {
+      setCpuBusy(false);
     }
   };
 
@@ -239,7 +302,7 @@ export function MachineControlsPanel({
         <p className="message error">{lastError}</p>
       )}
 
-      {GROUPS.map((group) => (
+      {SERVICE_GROUPS.map((group) => (
         <section key={group.title} className="machine-controls-group">
           <h3 className="machine-controls-group-title">{group.title}</h3>
           <p className="machine-controls-group-desc">{group.description}</p>
@@ -249,6 +312,7 @@ export function MachineControlsPanel({
               const disabled =
                 !online ||
                 busy !== null ||
+                cpuBusy ||
                 statusLoading ||
                 actionState.disabled;
               return (
@@ -267,6 +331,90 @@ export function MachineControlsPanel({
           </div>
         </section>
       ))}
+
+      <section className="machine-controls-group">
+        <h3 className="machine-controls-group-title">Host</h3>
+        <p className="machine-controls-group-desc">
+          Folding@home CPU policy from <span className="mono">foldinghome.toml</span>{" "}
+          and host power controls.
+        </p>
+        <dl className="machine-controls-host-cpu-status">
+          <div>
+            <dt>Configured CPUs</dt>
+            <dd className="mono">{displayConfiguredCpus(fah)}</dd>
+          </div>
+          <div>
+            <dt>Effective CPUs</dt>
+            <dd className="mono">{displayEffectiveCpus(fah)}</dd>
+          </div>
+        </dl>
+        {cpuDrift && (
+          <p className="message error machine-controls-host-cpu-drift">
+            Configured and effective CPU counts differ. Apply CPU policy below or
+            wait for the next config activate to reconcile.
+          </p>
+        )}
+        <div className="machine-controls-host-cpu-options">
+          <label className="admin-radio-label">
+            <input
+              type="radio"
+              name={`${hostname}-cpu-mode`}
+              checked={cpuMode === "auto"}
+              onChange={() => setCpuMode("auto")}
+              disabled={!online || cpuBusy || busy !== null}
+            />
+            Automatic
+          </label>
+          <label className="admin-radio-label">
+            <input
+              type="radio"
+              name={`${hostname}-cpu-mode`}
+              checked={cpuMode === "manual"}
+              onChange={() => setCpuMode("manual")}
+              disabled={!online || cpuBusy || busy !== null}
+            />
+            Fixed slots
+            <input
+              className="admin-input mono machine-controls-host-cpu-input"
+              type="number"
+              min={1}
+              step={1}
+              value={cpuSlots}
+              onChange={(event) => setCpuSlots(event.target.value)}
+              disabled={!online || cpuBusy || busy !== null || cpuMode !== "manual"}
+            />
+          </label>
+        </div>
+        <div className="machine-controls-buttons">
+          <button
+            type="button"
+            className="machine-controls-btn"
+            disabled={!online || cpuBusy || busy !== null}
+            onClick={applyCpuPolicy}
+          >
+            {cpuBusy ? "Applying…" : "Apply CPU policy"}
+          </button>
+          <button
+            type="button"
+            className="machine-controls-btn machine-controls-btn--danger"
+            disabled={
+              !online ||
+              busy !== null ||
+              cpuBusy ||
+              statusLoading ||
+              controlActionState("host.reboot", status).disabled
+            }
+            title={controlActionState("host.reboot", status).reason}
+            onClick={() => run("host.reboot")}
+          >
+            {busy === "host.reboot" ? "Running…" : "Reboot server"}
+          </button>
+        </div>
+        {cpuMessage && (
+          <p className="message machine-controls-ok">{cpuMessage}</p>
+        )}
+        {cpuError && <p className="message error">{cpuError}</p>}
+      </section>
     </div>
   );
 }
