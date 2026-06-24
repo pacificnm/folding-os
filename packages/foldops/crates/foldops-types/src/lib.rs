@@ -8,7 +8,9 @@ mod validate;
 
 pub use control::{is_control_action, ControlAction, CONTROL_ACTIONS};
 pub use ingest::{
-    Disk, Fah, FahSystemdStatus, IngestPayload, Maintenance, Memory, Network, NodeLogs, System,
+    Disk, Fah, FahSystemdStatus, HostHardwareCpu, HostHardwareMemory, HostHardwareMemoryModule,
+    HostHardwareNamedBlock, HostHardwareNetwork, HostHardwarePciDevice, HostHardwareProfile,
+    HostHardwareStorage, IngestPayload, Maintenance, Memory, Network, NodeLogs, System,
 };
 pub use validate::{
     parse_ingest_json, validate_ingest_payload, IngestJsonError, IngestValidationError,

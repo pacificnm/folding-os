@@ -21,7 +21,7 @@ import {
   fahCpuPolicyDrift,
 } from "../../fahConfig";
 import { snapshotsToHistory } from "../../history";
-import type { FahProjectInfo, HistoryPoint, MachineSummary, WorkUnitHistoryResponse } from "../../types";
+import type { FahProjectInfo, HistoryPoint, HostHardwareProfile, MachineSummary, WorkUnitHistoryResponse } from "../../types";
 import {
   formatChartDate,
   formatLastSeen,
@@ -135,6 +135,72 @@ function formatWorkUnitAssignment(
   gen: number,
 ): string {
   return `Project ${project} R${run}/C${clone}/G${gen}`;
+}
+
+function formatNamedBlock(parts: Array<string | null | undefined>): string {
+  const values = parts
+    .map((part) => part?.trim())
+    .filter((part): part is string => Boolean(part));
+  return values.length > 0 ? values.join(" / ") : "-";
+}
+
+function formatStorageSummary(storage: HostHardwareProfile["storage"]): string {
+  if (!storage?.length) return "-";
+  return storage
+    .map((device) => {
+      const model = device.model?.trim();
+      const size = formatBytes(device.sizeBytes);
+      const kind =
+        device.rotational == null
+          ? null
+          : device.rotational
+            ? "HDD"
+            : "SSD";
+      return [device.name, model, size, kind].filter(Boolean).join(" - ");
+    })
+    .join("; ");
+}
+
+function formatNetworkSummary(network: HostHardwareProfile["network"]): string {
+  if (!network?.length) return "-";
+  return network
+    .map((adapter) => {
+      const speed =
+        adapter.speedMbps != null ? `${adapter.speedMbps} Mbps` : null;
+      return [adapter.name, adapter.macAddress, speed, adapter.operstate]
+        .filter(Boolean)
+        .join(" / ");
+    })
+    .join("; ");
+}
+
+function formatMemoryModules(
+  modules: HostHardwareProfile["memory"]["modules"],
+): string {
+  if (!modules?.length) return "-";
+  return modules
+    .map((module) => {
+      const parts = [formatBytes(module.sizeBytes)];
+      if (module.speedMts != null) parts.push(`${module.speedMts} MT/s`);
+      if (module.manufacturer) parts.push(module.manufacturer);
+      if (module.locator) parts.push(module.locator);
+      return parts.join(" - ");
+    })
+    .join("; ");
+}
+
+function formatPciSummary(
+  devices: HostHardwareProfile["pciDevices"],
+): string {
+  if (!devices?.length) return "-";
+  return devices
+    .slice(0, 6)
+    .map((device) =>
+      [device.address, device.classId, device.vendorId, device.deviceId]
+        .filter(Boolean)
+        .join(" "),
+    )
+    .join("; ");
 }
 
 function InfoCard({
@@ -296,16 +362,20 @@ export function AdminFoldingMachineDetail() {
     },
   ];
 
+  const hardware = machine?.hardware_profile ?? null;
+
   const hardwareItems: InfoItem[] = [
     {
       label: "CPU model",
-      value: "Pending hardware inventory collector",
-      muted: true,
+      value: hardware?.cpu.model ?? "-",
+      mono: Boolean(hardware?.cpu.model),
     },
     {
       label: "CPU threads",
-      value: "Pending hardware inventory collector",
-      muted: true,
+      value: hardware
+        ? `${hardware.cpu.logicalThreads} logical / ${hardware.cpu.physicalCores} physical`
+        : "-",
+      mono: true,
     },
     {
       label: "Assigned FAH CPUs",
@@ -319,7 +389,7 @@ export function AdminFoldingMachineDetail() {
     },
     {
       label: "Memory total",
-      value: formatBytes(system?.memory?.total),
+      value: formatBytes(hardware?.memory.totalBytes ?? system?.memory?.total),
       mono: true,
     },
     {
@@ -329,8 +399,55 @@ export function AdminFoldingMachineDetail() {
     },
     {
       label: "Board / chassis",
-      value: "Pending hardware inventory collector",
-      muted: true,
+      value: hardware
+        ? formatNamedBlock([
+            hardware.board?.vendor,
+            hardware.board?.product ?? hardware.system?.product,
+            hardware.chassis?.vendor,
+            hardware.chassis?.typeCode,
+          ])
+        : "-",
+    },
+  ];
+
+  const hardwareDetailItems: InfoItem[] = [
+    {
+      label: "System product",
+      value: formatNamedBlock([
+        hardware?.system?.vendor,
+        hardware?.system?.product,
+        hardware?.system?.sku,
+      ]),
+    },
+    {
+      label: "BIOS",
+      value: formatNamedBlock([
+        hardware?.bios?.vendor,
+        hardware?.bios?.version,
+        hardware?.bios?.date,
+      ]),
+    },
+    {
+      label: "Architecture",
+      value: hardware?.cpu.architecture ?? "-",
+      mono: true,
+    },
+    {
+      label: "Memory modules",
+      value: formatMemoryModules(hardware?.memory.modules),
+    },
+    {
+      label: "Storage devices",
+      value: formatStorageSummary(hardware?.storage),
+    },
+    {
+      label: "Network adapters",
+      value: formatNetworkSummary(hardware?.network),
+    },
+    {
+      label: "PCI inventory",
+      value: formatPciSummary(hardware?.pciDevices),
+      mono: true,
     },
   ];
 
@@ -505,14 +622,20 @@ export function AdminFoldingMachineDetail() {
                   <InfoCard title="Hardware inventory" items={hardwareItems} />
                   <InfoCard title="Health and capacity" items={healthItems} />
                 </div>
-                <section className="admin-detail-placeholder">
-                  <h3>Future collection targets</h3>
-                  <p>
-                    CPU model, core/thread topology, memory module layout, disk
-                    model, NIC speed, motherboard, firmware, and accelerator
-                    inventory are not collected yet.
-                  </p>
-                </section>
+                {hardware ? (
+                  <div className="admin-detail-grid">
+                    <InfoCard title="Platform details" items={hardwareDetailItems} />
+                  </div>
+                ) : (
+                  <section className="admin-detail-placeholder">
+                    <h3>Hardware profile pending</h3>
+                    <p>
+                      The node has not reported a persisted hardware profile yet.
+                      Inventory is collected by foldingosctl inspect hardware during
+                      agent ingest on FoldingOS nodes.
+                    </p>
+                  </section>
+                )}
               </>
             )}
 

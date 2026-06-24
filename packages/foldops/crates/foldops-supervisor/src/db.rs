@@ -30,6 +30,7 @@ pub struct MachineRow {
     pub node_id: Option<String>,
     pub installation_role: Option<String>,
     pub foldingos_version: Option<String>,
+    pub hardware_profile: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -124,6 +125,9 @@ fn migrate_schema(conn: &Connection) -> rusqlite::Result<()> {
              ALTER TABLE machines ADD COLUMN foldingos_version TEXT;",
         )?;
     }
+    if !machine_names.iter().any(|n| n == "hardware_profile") {
+        conn.execute_batch("ALTER TABLE machines ADD COLUMN hardware_profile TEXT")?;
+    }
     Ok(())
 }
 
@@ -138,21 +142,27 @@ pub fn systemd_status_str(status: &FahSystemdStatus) -> &'static str {
 
 pub fn ingest_snapshot(conn: &Connection, payload: &IngestPayload) -> rusqlite::Result<()> {
     let now = payload.timestamp.clone();
+    let hardware_profile = payload
+        .hardware
+        .as_ref()
+        .and_then(|profile| serde_json::to_string(profile).ok());
     let tx = conn.unchecked_transaction()?;
     tx.execute(
-        "INSERT INTO machines (hostname, first_seen, last_seen, node_id, installation_role, foldingos_version)
-         VALUES (?1, ?2, ?2, ?3, ?4, ?5)
+        "INSERT INTO machines (hostname, first_seen, last_seen, node_id, installation_role, foldingos_version, hardware_profile)
+         VALUES (?1, ?2, ?2, ?3, ?4, ?5, ?6)
          ON CONFLICT(hostname) DO UPDATE SET
             last_seen = ?2,
             node_id = COALESCE(excluded.node_id, machines.node_id),
             installation_role = COALESCE(excluded.installation_role, machines.installation_role),
-            foldingos_version = COALESCE(excluded.foldingos_version, machines.foldingos_version)",
+            foldingos_version = COALESCE(excluded.foldingos_version, machines.foldingos_version),
+            hardware_profile = COALESCE(excluded.hardware_profile, machines.hardware_profile)",
         params![
             payload.hostname,
             now,
             payload.nodeId,
             payload.installationRole,
             payload.foldingosVersion,
+            hardware_profile,
         ],
     )?;
     tx.execute(
@@ -190,8 +200,9 @@ pub fn ingest_snapshot(conn: &Connection, payload: &IngestPayload) -> rusqlite::
 }
 
 pub fn list_machines(conn: &Connection) -> rusqlite::Result<Vec<MachineRow>> {
-    let mut stmt =
-        conn.prepare("SELECT hostname, first_seen, last_seen, node_id, installation_role, foldingos_version FROM machines ORDER BY hostname")?;
+    let mut stmt = conn.prepare(
+        "SELECT hostname, first_seen, last_seen, node_id, installation_role, foldingos_version, hardware_profile FROM machines ORDER BY hostname",
+    )?;
     let rows = stmt
         .query_map([], |row| {
             Ok(MachineRow {
@@ -201,6 +212,7 @@ pub fn list_machines(conn: &Connection) -> rusqlite::Result<Vec<MachineRow>> {
                 node_id: row.get(3)?,
                 installation_role: row.get(4)?,
                 foldingos_version: row.get(5)?,
+                hardware_profile: row.get(6)?,
             })
         })?
         .filter_map(|r| r.ok())
@@ -210,7 +222,7 @@ pub fn list_machines(conn: &Connection) -> rusqlite::Result<Vec<MachineRow>> {
 
 pub fn get_machine(conn: &Connection, hostname: &str) -> rusqlite::Result<Option<MachineRow>> {
     let mut stmt = conn.prepare(
-        "SELECT hostname, first_seen, last_seen, node_id, installation_role, foldingos_version FROM machines WHERE hostname = ?1",
+        "SELECT hostname, first_seen, last_seen, node_id, installation_role, foldingos_version, hardware_profile FROM machines WHERE hostname = ?1",
     )?;
     let mut rows = stmt.query(params![hostname])?;
     if let Some(row) = rows.next()? {
@@ -221,6 +233,7 @@ pub fn get_machine(conn: &Connection, hostname: &str) -> rusqlite::Result<Option
             node_id: row.get(3)?,
             installation_role: row.get(4)?,
             foldingos_version: row.get(5)?,
+            hardware_profile: row.get(6)?,
         }));
     }
     Ok(None)
@@ -231,7 +244,7 @@ pub fn get_machine_by_node_id(
     node_id: &str,
 ) -> rusqlite::Result<Option<MachineRow>> {
     let mut stmt = conn.prepare(
-        "SELECT hostname, first_seen, last_seen, node_id, installation_role, foldingos_version FROM machines WHERE node_id = ?1",
+        "SELECT hostname, first_seen, last_seen, node_id, installation_role, foldingos_version, hardware_profile FROM machines WHERE node_id = ?1",
     )?;
     let mut rows = stmt.query(params![node_id])?;
     if let Some(row) = rows.next()? {
@@ -242,6 +255,7 @@ pub fn get_machine_by_node_id(
             node_id: row.get(3)?,
             installation_role: row.get(4)?,
             foldingos_version: row.get(5)?,
+            hardware_profile: row.get(6)?,
         }));
     }
     Ok(None)

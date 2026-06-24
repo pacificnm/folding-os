@@ -405,6 +405,7 @@ mod tests {
                 aptUpdatesAvailable: 0,
                 rebootRequired: false,
             },
+            hardware: None,
         }
     }
 

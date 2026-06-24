@@ -245,6 +245,10 @@ async fn get_machine(State(state): State<AppState>, Path(name): Path<String>) ->
         "first_seen": machine.first_seen,
         "last_seen": machine.last_seen,
         "online": db::is_online(&machine.last_seen, state.config.offline_threshold_ms),
+        "hardware_profile": machine
+            .hardware_profile
+            .as_deref()
+            .and_then(|json| serde_json::from_str::<Value>(json).ok()),
         "latest": snapshot_summary(latest.as_ref()),
     }))
     .into_response()
