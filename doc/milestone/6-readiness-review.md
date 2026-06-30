@@ -72,7 +72,7 @@ overall **PASS** verdict.
 | #125 | Implement unified settings model and first-boot configuration wizard | Open | Alert settings shipped (#137); canonical settings wizard not present |
 | #126 | Validate Milestone 6 FoldOps Upgrades on live hardware | Open | Partial validation recorded below |
 | #127 | Fix admin machine controls that do not behave as expected | Open | — |
-| #128 | Collect and persist full host hardware profile for admin machine details | Open | — |
+| #128 | Collect and persist full host hardware profile for admin machine details | Open | Packages path shipped: `inspect hardware`, ingest, DB, admin Hardware tab; DMI platform fields blocked on running agents until OS image with `CONFIG_DMI*` — see [hardware-profile-rollout.md](../hardware-profile-rollout.md) |
 | #129 | Implement breadcrumb navigation in FoldOps Upgrades | Closed | PR #145, `Breadcrumbs.tsx`, `adminBreadcrumbs.ts` |
 | #130 | Persist completed work-unit history with start and stop times | Open | — |
 | #131 | Create GitHub Wiki-backed help system and FoldingOS Manual | Open | Footer links to wiki; no in-app help surface |
@@ -138,7 +138,7 @@ Validation host: lab supervisor **`folding-test`** (physical x86_64 appliance).
 | First-boot / settings wizard | #125 not implemented | End-to-end settings entry without SSH |
 | Recovery restore | #123 not implemented | Upload test archive, validate, confirm, restore, verify state |
 | Admin machine controls | #127 open | Control actions match remote operator state |
-| Host hardware profile | #128 open | Profile capture and display on machine detail |
+| Host hardware profile | #128 partial | CPU/storage/network via packages channel validated; full DMI platform inventory requires agent OS image rollout (`roll-agent-os-update-lab`) |
 | Work-unit history | #130 open | Completed WU records with start/stop timestamps |
 | Help / manual | #131 open | Wiki-backed help entry beyond footer link |
 
