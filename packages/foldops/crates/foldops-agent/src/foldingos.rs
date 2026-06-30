@@ -2,7 +2,9 @@ use std::path::{Path, PathBuf};
 
 use chrono::Utc;
 use foldops_types::{
-    Disk, Fah, FahSystemdStatus, IngestPayload, Maintenance, Memory, Network, System,
+    Disk, Fah, FahSystemdStatus, HostHardwareCpu, HostHardwareMemory, HostHardwareMemoryModule,
+    HostHardwareNamedBlock, HostHardwareNetwork, HostHardwarePciDevice, HostHardwareProfile,
+    HostHardwareStorage, IngestPayload, Maintenance, Memory, Network, System,
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -63,6 +65,13 @@ pub async fn collect_delegated_snapshot(config: DelegatedCollectConfig<'_>) -> I
             None
         }
     };
+    let hardware = match run_inspect(config.foldingosctl_path, "hardware").await {
+        Ok(data) => parse_inspect_hardware(data),
+        Err(error) => {
+            warnings.push(format!("inspect hardware failed: {error}"));
+            None
+        }
+    };
     let update = match run_inspect(config.foldingosctl_path, "update").await {
         Ok(data) => Some(parse_inspect_update(data)),
         Err(error) => {
@@ -111,6 +120,7 @@ pub async fn collect_delegated_snapshot(config: DelegatedCollectConfig<'_>) -> I
         fah: fah_payload,
         maintenance,
         logs: None,
+        hardware,
     }
 }
 
@@ -361,6 +371,190 @@ struct InspectFahData {
 #[derive(Debug, Default, Deserialize)]
 struct InspectUpdateData {
     reboot_required: bool,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct InspectHardwareCpu {
+    model: String,
+    #[serde(default)]
+    vendor: Option<String>,
+    physical_cores: u32,
+    logical_threads: u32,
+    architecture: String,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct InspectHardwareMemoryModule {
+    size_bytes: u64,
+    #[serde(default)]
+    speed_mts: Option<u16>,
+    #[serde(default)]
+    manufacturer: Option<String>,
+    #[serde(default)]
+    locator: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct InspectHardwareMemory {
+    total_bytes: u64,
+    #[serde(default)]
+    module_slots_detected: Option<u32>,
+    #[serde(default)]
+    modules: Option<Vec<InspectHardwareMemoryModule>>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct InspectHardwareNamedBlock {
+    #[serde(default)]
+    vendor: Option<String>,
+    #[serde(default)]
+    product: Option<String>,
+    #[serde(default)]
+    family: Option<String>,
+    #[serde(default)]
+    version: Option<String>,
+    #[serde(default)]
+    sku: Option<String>,
+    #[serde(default)]
+    type_code: Option<String>,
+    #[serde(default)]
+    date: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct InspectHardwareStorage {
+    name: String,
+    size_bytes: u64,
+    #[serde(default)]
+    model: Option<String>,
+    #[serde(default)]
+    rotational: Option<bool>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct InspectHardwareNetwork {
+    name: String,
+    #[serde(default)]
+    mac_address: Option<String>,
+    #[serde(default)]
+    operstate: Option<String>,
+    #[serde(default)]
+    speed_mbps: Option<u64>,
+    #[serde(default)]
+    pci_address: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct InspectHardwarePciDevice {
+    address: String,
+    #[serde(default)]
+    vendor_id: Option<String>,
+    #[serde(default)]
+    device_id: Option<String>,
+    #[serde(default)]
+    class_id: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct InspectHardwareData {
+    cpu: InspectHardwareCpu,
+    memory: InspectHardwareMemory,
+    #[serde(default)]
+    board: Option<InspectHardwareNamedBlock>,
+    #[serde(default)]
+    system: Option<InspectHardwareNamedBlock>,
+    #[serde(default)]
+    chassis: Option<InspectHardwareNamedBlock>,
+    #[serde(default)]
+    bios: Option<InspectHardwareNamedBlock>,
+    #[serde(default)]
+    storage: Option<Vec<InspectHardwareStorage>>,
+    #[serde(default)]
+    network: Option<Vec<InspectHardwareNetwork>>,
+    #[serde(default)]
+    pci_devices: Option<Vec<InspectHardwarePciDevice>>,
+}
+
+fn parse_inspect_hardware(value: Value) -> Option<HostHardwareProfile> {
+    let data: InspectHardwareData = serde_json::from_value(value).ok()?;
+    Some(hardware_to_payload(data))
+}
+
+fn hardware_to_payload(data: InspectHardwareData) -> HostHardwareProfile {
+    HostHardwareProfile {
+        cpu: HostHardwareCpu {
+            model: data.cpu.model,
+            vendor: data.cpu.vendor,
+            physicalCores: data.cpu.physical_cores,
+            logicalThreads: data.cpu.logical_threads,
+            architecture: data.cpu.architecture,
+        },
+        memory: HostHardwareMemory {
+            totalBytes: data.memory.total_bytes,
+            moduleSlotsDetected: data.memory.module_slots_detected,
+            modules: data.memory.modules.map(|modules| {
+                modules
+                    .into_iter()
+                    .map(|module| HostHardwareMemoryModule {
+                        sizeBytes: module.size_bytes,
+                        speedMts: module.speed_mts,
+                        manufacturer: module.manufacturer,
+                        locator: module.locator,
+                    })
+                    .collect()
+            }),
+        },
+        board: data.board.map(map_named_block),
+        system: data.system.map(map_named_block),
+        chassis: data.chassis.map(map_named_block),
+        bios: data.bios.map(map_named_block),
+        storage: data.storage.map(|devices| {
+            devices
+                .into_iter()
+                .map(|device| HostHardwareStorage {
+                    name: device.name,
+                    sizeBytes: device.size_bytes,
+                    model: device.model,
+                    rotational: device.rotational,
+                })
+                .collect()
+        }),
+        network: data.network.map(|adapters| {
+            adapters
+                .into_iter()
+                .map(|adapter| HostHardwareNetwork {
+                    name: adapter.name,
+                    macAddress: adapter.mac_address,
+                    operstate: adapter.operstate,
+                    speedMbps: adapter.speed_mbps,
+                    pciAddress: adapter.pci_address,
+                })
+                .collect()
+        }),
+        pciDevices: data.pci_devices.map(|devices| {
+            devices
+                .into_iter()
+                .map(|device| HostHardwarePciDevice {
+                    address: device.address,
+                    vendorId: device.vendor_id,
+                    deviceId: device.device_id,
+                    classId: device.class_id,
+                })
+                .collect()
+        }),
+    }
+}
+
+fn map_named_block(block: InspectHardwareNamedBlock) -> HostHardwareNamedBlock {
+    HostHardwareNamedBlock {
+        vendor: block.vendor,
+        product: block.product,
+        family: block.family,
+        version: block.version,
+        sku: block.sku,
+        typeCode: block.type_code,
+        date: block.date,
+    }
 }
 
 async fn run_inspect(

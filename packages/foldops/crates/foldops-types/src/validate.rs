@@ -137,6 +137,7 @@ mod tests {
                 rebootRequired: false,
             },
             logs: None,
+            hardware: None,
         }
     }
 

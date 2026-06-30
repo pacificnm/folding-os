@@ -1,0 +1,294 @@
+#!/usr/bin/env bash
+# Load a local OS build into the supervisor registry and assign it to enrolled agents.
+# Preserves agent /data — this is staged in-place update, not USB reflash.
+set -euo pipefail
+export LC_ALL=C
+
+usage() {
+  cat <<'EOF'
+Usage: ./scripts/roll-agent-os-update-lab [options] <supervisor-host> <ssh-private-key> [registry-version]
+
+Automates the lab workflow for rolling a new FoldingOS disk image to enrolled
+agents without reflash:
+
+  1. Verify local build/output/images/foldingos-x86_64-0.1.0.img exists
+  2. Copy the image into the supervisor registry under registry-version
+  3. Run foldingosctl provision assign on the supervisor
+  4. Print operator next steps (reboot agents, verify DMI / inspect hardware)
+
+Options:
+  --all                 Assign to all enrolled agents (default)
+  --node <uuid>         Assign to one enrolled node UUID
+  --source-image <path> Local image file (default: build/output/images/foldingos-x86_64-0.1.0.img)
+  --registry-only       Load registry entry only; do not assign
+  --assign-only         Skip registry load when the version entry already exists
+  --preflight           Validate inputs and connectivity only
+  --list-enrollments    Print enrollments on the supervisor and exit
+
+Defaults for registry-version: 0.1.1-lab
+
+The registry version label must differ from the agents' installed VERSION_ID
+(usually 0.1.0) or check-version will report current and skip staging.
+
+Examples:
+  ./scripts/roll-agent-os-update-lab --preflight 192.168.88.251 ~/.ssh/id_ed25519
+  ./scripts/roll-agent-os-update-lab --all 192.168.88.251 ~/.ssh/id_ed25519 0.1.1-lab
+  ./scripts/roll-agent-os-update-lab --node 550e8400-e29b-41d4-a716-446655440000 \
+    192.168.88.251 ~/.ssh/id_ed25519 0.1.1-lab
+
+After assignment, reboot each targeted agent. For full single-agent validation
+including apply-update reboots, use ./scripts/validate-agent-update-lab.
+
+See doc/hardware-profile-rollout.md
+EOF
+}
+
+ASSIGN_SCOPE="all"
+ASSIGN_NODE=""
+SOURCE_IMAGE=""
+REGISTRY_ONLY=0
+ASSIGN_ONLY=0
+PREFLIGHT=0
+LIST_ENROLLMENTS=0
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --all)
+      ASSIGN_SCOPE="all"
+      shift
+      ;;
+    --node)
+      ASSIGN_NODE="${2:?missing value for --node}"
+      ASSIGN_SCOPE="node"
+      shift 2
+      ;;
+    --source-image)
+      SOURCE_IMAGE="${2:?missing value for --source-image}"
+      shift 2
+      ;;
+    --registry-only)
+      REGISTRY_ONLY=1
+      shift
+      ;;
+    --assign-only)
+      ASSIGN_ONLY=1
+      shift
+      ;;
+    --preflight)
+      PREFLIGHT=1
+      shift
+      ;;
+    --list-enrollments)
+      LIST_ENROLLMENTS=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
+  usage >&2
+  exit 2
+fi
+
+SUPERVISOR="$1"
+IDENTITY="$2"
+REGISTRY_VERSION="${3:-0.1.1-lab}"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [ -z "${SOURCE_IMAGE}" ]; then
+  SOURCE_IMAGE="${PROJECT_ROOT}/build/output/images/foldingos-x86_64-0.1.0.img"
+fi
+SOURCE_SHA="${SOURCE_IMAGE}.sha256"
+
+if [ ! -f "${IDENTITY}" ]; then
+  echo "ERROR: SSH private key does not exist: ${IDENTITY}" >&2
+  exit 1
+fi
+if [ ! -f "${SOURCE_IMAGE}" ]; then
+  echo "ERROR: Missing build image: ${SOURCE_IMAGE}" >&2
+  echo "Run ./scripts/build first." >&2
+  exit 1
+fi
+
+SSH=(ssh
+  -F /dev/null
+  -i "${IDENTITY}"
+  -o BatchMode=yes
+  -o ConnectTimeout=15
+  -o LogLevel=ERROR
+  -o StrictHostKeyChecking=no
+  -o UserKnownHostsFile=/dev/null
+)
+
+supervisor_ssh() {
+  "${SSH[@]}" "foldingos-admin@${SUPERVISOR}" "$@"
+}
+
+IMAGE_SHA256="$(
+  if [ -f "${SOURCE_SHA}" ]; then
+    awk '{print $1}' "${SOURCE_SHA}"
+  else
+    sha256sum "${SOURCE_IMAGE}" | awk '{print $1}'
+  fi
+)"
+
+IMAGE_BYTES="$(stat -c '%s' "${SOURCE_IMAGE}")"
+
+echo "FoldingOS agent OS update rollout (lab)"
+echo "Supervisor: ${SUPERVISOR}"
+echo "Registry version label: ${REGISTRY_VERSION}"
+echo "Source image: ${SOURCE_IMAGE}"
+echo "Image SHA-256: ${IMAGE_SHA256}"
+echo "Image size: ${IMAGE_BYTES} bytes"
+echo
+
+if [ "${REGISTRY_VERSION}" = "0.1.0" ]; then
+  echo "WARNING: registry-version 0.1.0 usually matches installed VERSION_ID on running agents."
+  echo "         check-version will skip staging when desired equals current."
+  echo "         Prefer a new label such as 0.1.1-lab unless you intend to replace registry metadata only."
+  echo
+fi
+
+echo "Checking SSH connectivity to supervisor..."
+supervisor_ssh true
+supervisor_ssh foldingosctl registry list
+
+if [ "${LIST_ENROLLMENTS}" -eq 1 ]; then
+  supervisor_ssh foldingosctl provision list-enrollments --format json
+  exit 0
+fi
+
+if [ "${PREFLIGHT}" -eq 1 ]; then
+  echo "Preflight OK."
+  exit 0
+fi
+
+registry_exists=0
+if supervisor_ssh "test -f /data/registry/entries/${REGISTRY_VERSION}.json"; then
+  registry_exists=1
+  echo "Registry already contains ${REGISTRY_VERSION}."
+  supervisor_ssh foldingosctl registry show "${REGISTRY_VERSION}"
+fi
+
+if [ "${registry_exists}" -eq 0 ] || [ "${ASSIGN_ONLY}" -eq 0 ]; then
+  if [ "${registry_exists}" -eq 1 ] && [ "${ASSIGN_ONLY}" -eq 1 ]; then
+    echo "Skipping registry load (--assign-only)."
+  else
+    if [ "${registry_exists}" -eq 1 ]; then
+      echo "Replacing existing registry entry ${REGISTRY_VERSION} from local build output..."
+    else
+      echo "Registering ${REGISTRY_VERSION} on supervisor from local build output..."
+    fi
+    echo "Copying image to supervisor (typically 5-15 minutes over SSH)..."
+    supervisor_ssh 'rm -f /tmp/foldingos-roll-update.img' || true
+    (
+      while true; do
+        if supervisor_ssh 'test -f /tmp/foldingos-roll-update.img' 2>/dev/null; then
+          supervisor_ssh 'stat -c %s /tmp/foldingos-roll-update.img' 2>/dev/null \
+            | awk -v expected="${IMAGE_BYTES}" \
+              '{printf "\rCopy progress: %d / %d MiB (%d%%)", int($1/1048576), int(expected/1048576), int(100*$1/expected); fflush()}'
+        else
+          printf '\rCopy progress: starting...'
+        fi
+        sleep 10
+      done
+    ) &
+    progress_pid=$!
+    copy_ok=0
+    if cat "${SOURCE_IMAGE}" | supervisor_ssh "cat > /tmp/foldingos-roll-update.img"; then
+      copy_ok=1
+    fi
+    kill "${progress_pid}" 2>/dev/null || true
+    wait "${progress_pid}" 2>/dev/null || true
+    printf '\n'
+    if [ "${copy_ok}" -ne 1 ]; then
+      echo "ERROR: failed to copy image to supervisor over SSH." >&2
+      exit 1
+    fi
+    echo "Image copy complete."
+    supervisor_ssh sh -s "${REGISTRY_VERSION}" "${IMAGE_SHA256}" "${IMAGE_BYTES}" <<'EOF'
+set -eux
+REGISTRY_VERSION="$1"
+IMAGE_SHA256="$2"
+IMAGE_BYTES="$3"
+TARGET="/data/registry/images/foldingos-x86_64-${REGISTRY_VERSION}.img"
+sudo install -D -m 0644 /tmp/foldingos-roll-update.img "${TARGET}"
+sudo rm -f /tmp/foldingos-roll-update.img
+GIT_REVISION="$(tr -d '\n' </usr/share/foldingos/build-revision)"
+sudo tee "/data/registry/entries/${REGISTRY_VERSION}.json" >/dev/null <<JSON
+{
+  "schema_version": 1,
+  "foldingos_version": "${REGISTRY_VERSION}",
+  "git_revision": "${GIT_REVISION}",
+  "image_sha256": "${IMAGE_SHA256}",
+  "image_size_bytes": ${IMAGE_BYTES},
+  "verification_method": "sha256",
+  "import_timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "rollout_state": "ready",
+  "local_image_path": "${TARGET}"
+}
+JSON
+CURRENT_INDEX="$(cat /data/registry/index.json 2>/dev/null || printf '%s\n' '{"schema_version":1,"versions":[]}')"
+UPDATED_INDEX="$(printf '%s' "${CURRENT_INDEX}" | python3 - "${REGISTRY_VERSION}" <<'PY'
+import json
+import sys
+
+version = sys.argv[1]
+index = json.loads(sys.stdin.read() or '{"schema_version":1,"versions":[]}')
+if version not in index.get("versions", []):
+    index.setdefault("versions", []).append(version)
+    index["versions"] = sorted(index["versions"])
+print(json.dumps(index, indent=2) + "\n")
+PY
+)"
+printf '%s' "${UPDATED_INDEX}" | sudo tee /data/registry/index.json >/dev/null
+foldingosctl registry show "${REGISTRY_VERSION}"
+EOF
+  fi
+fi
+
+if [ "${REGISTRY_ONLY}" -eq 1 ]; then
+  echo
+  echo "Registry load complete (--registry-only). Assign manually:"
+  echo "  foldingosctl provision assign --version ${REGISTRY_VERSION} --all"
+  exit 0
+fi
+
+echo
+echo "Assigning ${REGISTRY_VERSION} on supervisor..."
+if [ "${ASSIGN_SCOPE}" = "all" ]; then
+  supervisor_ssh sudo foldingosctl provision assign --version "${REGISTRY_VERSION}" --all
+else
+  supervisor_ssh sudo foldingosctl provision assign --version "${REGISTRY_VERSION}" --node "${ASSIGN_NODE}"
+fi
+
+supervisor_ssh foldingosctl provision list-enrollments
+
+cat <<EOF
+
+Assignment complete.
+
+Operator next steps (each assigned agent):
+  1. Reboot the agent (check-version runs at boot, not on a timer)
+  2. Wait for the ~4 GiB image download and staging to finish
+  3. Expect up to two reboots (apply-update schedules the update boot, then offline apply)
+  4. Verify on the agent:
+       test -r /sys/class/dmi/id/product_name && echo DMI present
+       foldingosctl inspect hardware --format json
+       foldingosctl inspect update --format json
+  5. Confirm the admin Hardware tab shows platform fields after ingest
+
+This workflow preserves /data (identity, FAH work, FoldOps state). Do not USB
+reflash enrolled agents for routine updates.
+
+For automated single-agent validation through apply-update, run:
+  ./scripts/validate-agent-update-lab ${SUPERVISOR} <agent-host> ${IDENTITY} ${REGISTRY_VERSION}
+
+Documentation: doc/hardware-profile-rollout.md
+EOF

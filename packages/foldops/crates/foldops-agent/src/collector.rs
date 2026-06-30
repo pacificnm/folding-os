@@ -157,6 +157,7 @@ pub async fn collect_snapshot(paths: CollectPaths<'_>) -> IngestPayload {
             fahPath: fah_tail.map(|t| t.path),
             workPath: work_tail.map(|t| t.path),
         }),
+        hardware: None,
     }
 }
 

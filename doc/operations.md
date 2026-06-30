@@ -267,6 +267,18 @@ Validate staged update behavior on physical lab hardware:
 ./scripts/validate-agent-update-lab <supervisor-host> <agent-host> <ssh-private-key>
 ```
 
+Roll a local build into the supervisor registry and assign it to enrolled agents
+without USB reflash (preserves agent `/data`):
+
+```bash
+./scripts/roll-agent-os-update-lab --all <supervisor-host> <ssh-private-key> 0.1.1-lab
+```
+
+Use a registry version label that differs from the agents' installed `VERSION_ID`
+(typically `0.1.0`). Reboot each assigned agent after assignment. See
+[hardware-profile-rollout.md](hardware-profile-rollout.md) for the host hardware
+profile packages-versus-OS channel split.
+
 ## Automated QEMU acceptance
 
 ```bash

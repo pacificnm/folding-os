@@ -1,6 +1,7 @@
 mod commissioning;
 mod fah;
 mod foldops;
+mod hardware;
 mod services;
 mod system;
 pub(crate) mod tools;
@@ -27,6 +28,7 @@ pub fn run(
     require_inspectable_role(paths)?;
     match subcommand {
         "node" => read_node_identity(paths),
+        "hardware" => hardware::inspect_hardware(paths),
         "system" => system::inspect_system(paths),
         "fah" => fah::inspect_fah(paths),
         "commissioning" => commissioning::inspect_commissioning(paths),

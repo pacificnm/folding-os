@@ -74,6 +74,67 @@ export interface MachineLogsResponse {
   live_url?: string;
 }
 
+export interface HostHardwareProfile {
+  cpu: {
+    model: string;
+    vendor?: string | null;
+    physicalCores: number;
+    logicalThreads: number;
+    architecture: string;
+  };
+  memory: {
+    totalBytes: number;
+    moduleSlotsDetected?: number | null;
+    modules?: Array<{
+      sizeBytes: number;
+      speedMts?: number | null;
+      manufacturer?: string | null;
+      locator?: string | null;
+    }> | null;
+  };
+  board?: {
+    vendor?: string | null;
+    product?: string | null;
+    version?: string | null;
+  } | null;
+  system?: {
+    vendor?: string | null;
+    product?: string | null;
+    family?: string | null;
+    version?: string | null;
+    sku?: string | null;
+  } | null;
+  chassis?: {
+    vendor?: string | null;
+    typeCode?: string | null;
+    version?: string | null;
+  } | null;
+  bios?: {
+    vendor?: string | null;
+    version?: string | null;
+    date?: string | null;
+  } | null;
+  storage?: Array<{
+    name: string;
+    sizeBytes: number;
+    model?: string | null;
+    rotational?: boolean | null;
+  }> | null;
+  network?: Array<{
+    name: string;
+    macAddress?: string | null;
+    operstate?: string | null;
+    speedMbps?: number | null;
+    pciAddress?: string | null;
+  }> | null;
+  pciDevices?: Array<{
+    address: string;
+    vendorId?: string | null;
+    deviceId?: string | null;
+    classId?: string | null;
+  }> | null;
+}
+
 export interface MachineSummary {
   hostname: string;
   first_seen: string;
@@ -82,6 +143,7 @@ export interface MachineSummary {
   node_id?: string | null;
   installation_role?: string | null;
   foldingos_version?: string | null;
+  hardware_profile?: HostHardwareProfile | null;
   latest: {
     created_at: string;
     fah_status: string;

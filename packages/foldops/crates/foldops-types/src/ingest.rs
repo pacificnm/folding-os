@@ -115,6 +115,108 @@ pub struct NodeLogs {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HostHardwareCpu {
+    pub model: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vendor: Option<String>,
+    pub physicalCores: u32,
+    pub logicalThreads: u32,
+    pub architecture: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HostHardwareMemoryModule {
+    pub sizeBytes: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub speedMts: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub manufacturer: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub locator: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HostHardwareMemory {
+    pub totalBytes: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub moduleSlotsDetected: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub modules: Option<Vec<HostHardwareMemoryModule>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HostHardwareNamedBlock {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vendor: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub product: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub family: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sku: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub typeCode: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub date: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HostHardwareStorage {
+    pub name: String,
+    pub sizeBytes: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rotational: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HostHardwareNetwork {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub macAddress: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub operstate: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub speedMbps: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pciAddress: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HostHardwarePciDevice {
+    pub address: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vendorId: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deviceId: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub classId: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HostHardwareProfile {
+    pub cpu: HostHardwareCpu,
+    pub memory: HostHardwareMemory,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub board: Option<HostHardwareNamedBlock>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub system: Option<HostHardwareNamedBlock>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chassis: Option<HostHardwareNamedBlock>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bios: Option<HostHardwareNamedBlock>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub storage: Option<Vec<HostHardwareStorage>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub network: Option<Vec<HostHardwareNetwork>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pciDevices: Option<Vec<HostHardwarePciDevice>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct IngestPayload {
     pub hostname: String,
     pub timestamp: String,
@@ -131,4 +233,6 @@ pub struct IngestPayload {
     pub primaryIpv4: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub logs: Option<NodeLogs>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hardware: Option<HostHardwareProfile>,
 }
